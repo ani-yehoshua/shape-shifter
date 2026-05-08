@@ -1,4 +1,4 @@
-import { spellInterval, spellNote } from "@/lib/ChordSpelling";
+import { spellInterval, spellNote } from "@/lib/MusicTheory";
 import * as React from "react";
 import type { NotePosition } from "@/lib/fretboardMap";
 

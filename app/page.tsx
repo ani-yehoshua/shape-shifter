@@ -27,7 +27,7 @@ type ChordLevel = {
     rootString?: number;
 };
 import { allChordShapes, useCycleList } from "@/lib/API";
-import { spellInterval, MAJOR_SCALE_OFFSETS } from "@/lib/ChordSpelling";
+import { spellInterval, MAJOR_SCALE_OFFSETS } from "@/lib/MusicTheory";
 import useChordLibrary from "@/lib/hooks/useChordLibrary";
 import { useSubscription } from "@/lib/hooks/useSubscription";
 

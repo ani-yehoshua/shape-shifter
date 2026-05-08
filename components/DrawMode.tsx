@@ -4,7 +4,7 @@ import * as React from "react";
 import FretboardHorizontal from "@/components/FretboardHorizontal";
 import FretboardVertical from "@/components/FretboardVertical";
 import NotesIntervalsToggle from "@/components/NotesIntervalsToggle";
-import { noteNameToSemitone } from "@/lib/ChordSpelling";
+import { noteNameToSemitone } from "@/lib/MusicTheory";
 import {
     useDrawModeIndex,
     keyFromSelection,
