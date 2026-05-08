@@ -1,5 +1,4 @@
-import { BEGINNER_CHORD_SHAPES } from '@/lib/ChordShapes/Beginner';
-import { INTERMEDIATE_CHORD_SHAPES } from '@/lib/ChordShapes/Intermediate';
+import { CHORD_SHAPES } from '@/lib/Shapes/Chords';
 import createClient from '@/lib/supabaseBrowserClient';
 
 const supabase = createClient();
@@ -120,10 +119,10 @@ export function toInitials(
 }
 
 export const allChordShapes = {
-    CAGED: (BEGINNER_CHORD_SHAPES as any).CAGED,
-    Triads: (BEGINNER_CHORD_SHAPES as any).Triads,
-    Sevenths: (INTERMEDIATE_CHORD_SHAPES as any).Sevenths,
-    Shells: (INTERMEDIATE_CHORD_SHAPES as any).Shells,
+    CAGED: (CHORD_SHAPES as any).CAGED,
+    Triads: (CHORD_SHAPES as any).Triads,
+    Sevenths: (CHORD_SHAPES as any).Sevenths,
+    Shells: (CHORD_SHAPES as any).Shells,
 };
 
 // Helpers for +/- position cycling buttons

@@ -11,8 +11,7 @@ import {
     toShellQuality,
     STANDARD_TUNING_SEMITONES,
 } from '../lib/chordQualities.js';
-import { INTERMEDIATE_CHORD_SHAPES } from '../lib/ChordShapes/Intermediate.js';
-import { BEGINNER_CHORD_SHAPES } from '../lib/ChordShapes/Beginner.js';
+import { CHORD_SHAPES } from '../lib/Shapes/Chords.js';
 
 const MAX_SPAN = 12;
 
@@ -109,7 +108,7 @@ function addPosition(
 
 // Beginner — Triads (skip CAGED: those are multi-string forms, not string-set voicings)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const triads = (BEGINNER_CHORD_SHAPES as any).Triads.options;
+const triads = (CHORD_SHAPES as any).Triads.options;
 for (const [ssKey, ssVal] of Object.entries(triads) as [string, any][]) {
     for (const [qualKey, qualVal] of Object.entries(ssVal.options) as [string, any][]) {
         for (const [posKey, posVal] of Object.entries(qualVal.options) as [string, any][]) {
@@ -125,7 +124,7 @@ for (const [ssKey, ssVal] of Object.entries(triads) as [string, any][]) {
 
 // Intermediate — Sevenths
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const sevenths = (INTERMEDIATE_CHORD_SHAPES as any).Sevenths.options;
+const sevenths = (CHORD_SHAPES as any).Sevenths.options;
 for (const [vtKey, vtVal] of Object.entries(sevenths) as [string, any][]) {
     if (vtVal.levelName === 'String Sets') {
         for (const [ssKey, ssVal] of Object.entries(vtVal.options) as [string, any][]) {
@@ -157,7 +156,7 @@ for (const [vtKey, vtVal] of Object.entries(sevenths) as [string, any][]) {
 
 // Intermediate — Shells
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const shells = (INTERMEDIATE_CHORD_SHAPES as any).Shells.options;
+const shells = (CHORD_SHAPES as any).Shells.options;
 for (const [ssKey, ssVal] of Object.entries(shells) as [string, any][]) {
     for (const [qualKey, qualVal] of Object.entries(ssVal.options) as [string, any][]) {
         for (const [posKey, posVal] of Object.entries(qualVal.options) as [string, any][]) {
