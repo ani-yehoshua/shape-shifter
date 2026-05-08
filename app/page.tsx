@@ -28,6 +28,7 @@ type ChordLevel = {
 };
 import { allChordShapes, useCycleList } from "@/lib/API";
 import { spellInterval, MAJOR_SCALE_OFFSETS } from "@/lib/MusicTheory";
+import { SCALE_SHAPES } from "@/lib/Shapes/Scales";
 import useChordLibrary from "@/lib/hooks/useChordLibrary";
 import { useSubscription } from "@/lib/hooks/useSubscription";
 
@@ -183,6 +184,12 @@ export default function Home() {
 
     const [menuOpen, setMenuOpen] = React.useState(false);
 
+    const [selectedMode, setSelectedMode] = React.useState<"chords" | "scales">(
+        "chords",
+    );
+    const [selectedScale, setSelectedScale] = React.useState("Major");
+    const [selectedScalePosition, setSelectedScalePosition] = React.useState(0);
+
     const fretboardMap = React.useMemo(
         () => generateFretboardMap(TUNING, NUM_FRETS),
         [],
@@ -246,6 +253,7 @@ export default function Home() {
     };
 
     const handleCategoryChange = (newCategory: string) => {
+        setSelectedMode("chords");
         setSelectedCategory(newCategory);
         setSelectedPosition("All");
         setSelectedAltShape(0);
@@ -438,7 +446,32 @@ export default function Home() {
     ]);
 
     React.useEffect(() => {
+        if (selectedMode !== "scales") return;
+        const scaleEntry = SCALE_SHAPES[selectedScale];
+        if (!scaleEntry || !currentRootNote) {
+            setDisplayShape([]);
+            return;
+        }
+        const rootSemitone = NOTES.findIndex(p => p.includes(currentRootNote));
+        const rootFret = (rootSemitone - 7 + 12) % 12;
+        const position = scaleEntry.positions[selectedScalePosition];
+        if (!position) {
+            setDisplayShape([]);
+            return;
+        }
+        setDisplayShape(
+            position.notes.map(n => ({
+                string: n.string,
+                fret: n.fretOffset + rootFret,
+                semitones: n.semitones,
+                degree: n.degree + 1,
+            })),
+        );
+    }, [selectedMode, selectedScale, selectedScalePosition, currentRootNote]);
+
+    React.useEffect(() => {
         if (isDrawMode) return;
+        if (selectedMode === "scales") return;
         const formulas = selectionHierarchy.finalFormulas;
         if (!currentRootNote || !formulas) {
             setDisplayShape([]);
@@ -480,6 +513,7 @@ export default function Home() {
         }
     }, [
         isDrawMode,
+        selectedMode,
         currentRootNote,
         selectedPosition,
         selectionHierarchy.finalFormulas,
@@ -516,6 +550,13 @@ export default function Home() {
         selectedCategory === "CAGED"
             ? currentRootNote
             : `${currentRootNote} ${selectedChordQuality}`;
+
+    const scalePosition =
+        SCALE_SHAPES[selectedScale]?.positions[selectedScalePosition];
+    const scaleLabel = scalePosition?.modeName
+        ? `${currentRootNote} ${scalePosition.modeName}`
+        : `${currentRootNote} ${selectedScale} — Pos. ${selectedScalePosition + 1}`;
+    const displayLabel = selectedMode === "scales" ? scaleLabel : chordLabel;
 
     // ── sub-level value helper ─────────────────────────────────────────────────
     const getSubLevelValue = (levelName: string) => {
@@ -561,10 +602,10 @@ export default function Home() {
                     <>
                         {/* ── MOBILE layout (max-sm) ───────────────────────────────── */}
                         <div className='sm:hidden flex-1 min-h-0 flex flex-col'>
-                            {/* Chord name */}
+                            {/* Chord/scale name */}
                             <div className='shrink-0 text-center pt-3 pb-2 px-4'>
                                 <span className='text-3xl font-bold text-ink tracking-tight'>
-                                    {chordLabel}
+                                    {displayLabel}
                                 </span>
                             </div>
 
@@ -587,48 +628,93 @@ export default function Home() {
                                     Menu
                                 </button>
 
-                                {voicingInfo?.hasOctave && (
-                                    <button
-                                        onClick={() => setOctaveUp(o => !o)}
-                                        className={`px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
-                                        {octaveUp ? "-12" : "+12"}
-                                    </button>
-                                )}
+                                {selectedMode === "chords" &&
+                                    voicingInfo?.hasOctave && (
+                                        <button
+                                            onClick={() => setOctaveUp(o => !o)}
+                                            className={`px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
+                                            {octaveUp ? "-12" : "+12"}
+                                        </button>
+                                    )}
 
                                 <div className='flex-1' />
 
-                                {selectionHierarchy.positions.length > 0 && (
-                                    <div className='flex items-center gap-1'>
-                                        <button
-                                            onClick={() =>
-                                                handlePositionChange("All")
-                                            }
-                                            className={`px-2 py-1 rounded-full text-xs font-bold border transition-colors ${
-                                                selectedPosition === "All"
-                                                    ? "bg-ink text-sand-1 border-ink"
-                                                    : "text-ink border-ink/40 hover:border-ink"
-                                            }`}>
-                                            All
-                                        </button>
-                                        <button
-                                            onClick={goPrevPos}
-                                            className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
-                                            <ChevronLeft />
-                                        </button>
-                                        <span className='text-xs font-semibold text-ink min-w-[3.5rem] text-center leading-tight'>
-                                            {selectionHierarchy.finalFormulas?.[
-                                                selectedPosition
-                                            ]?.name || selectedPosition}
-                                        </span>
-                                        <button
-                                            onClick={goNextPos}
-                                            className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
-                                            <ChevronRight />
-                                        </button>
-                                    </div>
-                                )}
+                                {selectedMode === "chords" &&
+                                    selectionHierarchy.positions.length > 0 && (
+                                        <div className='flex items-center gap-1'>
+                                            <button
+                                                onClick={() =>
+                                                    handlePositionChange("All")
+                                                }
+                                                className={`px-2 py-1 rounded-full text-xs font-bold border transition-colors ${
+                                                    selectedPosition === "All"
+                                                        ? "bg-ink text-sand-1 border-ink"
+                                                        : "text-ink border-ink/40 hover:border-ink"
+                                                }`}>
+                                                All
+                                            </button>
+                                            <button
+                                                onClick={goPrevPos}
+                                                className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                                <ChevronLeft />
+                                            </button>
+                                            <span className='text-xs font-semibold text-ink min-w-[3.5rem] text-center leading-tight'>
+                                                {selectionHierarchy
+                                                    .finalFormulas?.[
+                                                    selectedPosition
+                                                ]?.name || selectedPosition}
+                                            </span>
+                                            <button
+                                                onClick={goNextPos}
+                                                className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                                <ChevronRight />
+                                            </button>
+                                        </div>
+                                    )}
 
-                                {hasAlts && (
+                                {selectedMode === "scales" &&
+                                    (() => {
+                                        const positions =
+                                            SCALE_SHAPES[selectedScale]
+                                                ?.positions ?? [];
+                                        const numPos = positions.length;
+                                        return (
+                                            <div className='flex items-center gap-1'>
+                                                <button
+                                                    onClick={() =>
+                                                        setSelectedScalePosition(
+                                                            p =>
+                                                                (p -
+                                                                    1 +
+                                                                    numPos) %
+                                                                numPos,
+                                                        )
+                                                    }
+                                                    className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                                    <ChevronLeft />
+                                                </button>
+                                                <span className='text-xs font-semibold text-ink min-w-[4rem] text-center leading-tight'>
+                                                    {positions[
+                                                        selectedScalePosition
+                                                    ]?.modeName ??
+                                                        `Pos. ${selectedScalePosition + 1}`}
+                                                </span>
+                                                <button
+                                                    onClick={() =>
+                                                        setSelectedScalePosition(
+                                                            p =>
+                                                                (p + 1) %
+                                                                numPos,
+                                                        )
+                                                    }
+                                                    className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                                    <ChevronRight />
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+
+                                {selectedMode === "chords" && hasAlts && (
                                     <div className='flex items-center gap-1 ml-1'>
                                         <button
                                             onClick={goPrevAlt}
@@ -689,7 +775,9 @@ export default function Home() {
                                 <button
                                     onClick={handleGenerateNewRoot}
                                     className='px-6 py-2.5 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all'>
-                                    New Chord
+                                    {selectedMode === "scales"
+                                        ? "New Root"
+                                        : "New Chord"}
                                 </button>
                             </div>
                         </div>
@@ -720,7 +808,7 @@ export default function Home() {
                                                                     cat,
                                                                 )
                                                             }
-                                                            className={`flex-1 py-2.5 text-sm font-medium border-r border-ink last:border-r-0 transition-colors ${
+                                                            className={`flex-1 py-2.5 text-xs font-medium border-r border-ink last:border-r-0 transition-colors ${
                                                                 selectedCategory ===
                                                                 cat
                                                                     ? "bg-sand-4 text-sand-1 font-semibold"
@@ -739,23 +827,62 @@ export default function Home() {
                                         <div>
                                             <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
                                                 Scales
-                                                <span className='ml-2 text-[9px] normal-case font-semibold text-ink/30'>
-                                                    coming soon
-                                                </span>
                                             </p>
-                                            <div className='flex rounded-xl overflow-hidden border border-ink/20 opacity-40 pointer-events-none'>
-                                                {[
-                                                    "Major",
-                                                    "Minor",
-                                                    "Pentatonic",
-                                                ].map(s => (
-                                                    <button
-                                                        key={s}
-                                                        className='flex-1 py-2.5 text-sm font-medium border-r border-ink/20 last:border-r-0 bg-sand-1 text-ink/50'>
-                                                        {s}
-                                                    </button>
-                                                ))}
+                                            <div className='flex rounded-xl overflow-hidden border border-ink'>
+                                                {Object.keys(SCALE_SHAPES).map(
+                                                    s => (
+                                                        <button
+                                                            key={s}
+                                                            onClick={() => {
+                                                                setSelectedMode(
+                                                                    "scales",
+                                                                );
+                                                                setSelectedScale(
+                                                                    s,
+                                                                );
+                                                                setSelectedScalePosition(
+                                                                    0,
+                                                                );
+                                                            }}
+                                                            className={`flex-1 py-2.5 text-xs font-medium border-r border-ink last:border-r-0 transition-colors ${
+                                                                selectedMode ===
+                                                                    "scales" &&
+                                                                selectedScale ===
+                                                                    s
+                                                                    ? "bg-sand-4 text-sand-1 font-semibold"
+                                                                    : "bg-sand-1 text-ink hover:bg-sand-2"
+                                                            }`}>
+                                                            {s}
+                                                        </button>
+                                                    ),
+                                                )}
                                             </div>
+                                            {selectedMode === "scales" && (
+                                                <div className='mt-3 flex flex-wrap gap-2'>
+                                                    {SCALE_SHAPES[
+                                                        selectedScale
+                                                    ]?.positions.map(
+                                                        (pos, i) => (
+                                                            <button
+                                                                key={i}
+                                                                onClick={() =>
+                                                                    setSelectedScalePosition(
+                                                                        i,
+                                                                    )
+                                                                }
+                                                                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                                                    selectedScalePosition ===
+                                                                    i
+                                                                        ? "bg-sand-4 text-sand-1 border-ink"
+                                                                        : "text-ink border-ink/40 hover:border-ink"
+                                                                }`}>
+                                                                {pos.modeName ??
+                                                                    `Position ${i + 1}`}
+                                                            </button>
+                                                        ),
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Sub-levels */}
@@ -969,15 +1096,17 @@ export default function Home() {
                                     </div>
                                 )}
 
-                                {/* Chord label + New Chord */}
+                                {/* Label + New Chord/Root */}
                                 <div className='flex flex-col items-center gap-3 bg-sand-4 border border-ink rounded-2xl px-10 py-4'>
                                     <span className='text-2xl font-semibold text-sand-1'>
-                                        {chordLabel}
+                                        {displayLabel}
                                     </span>
                                     <button
                                         onClick={handleGenerateNewRoot}
                                         className='px-6 py-2 bg-sand-1 text-ink text-sm font-semibold rounded-full hover:opacity-90 transition-opacity'>
-                                        New Chord
+                                        {selectedMode === "scales"
+                                            ? "New Root"
+                                            : "New Chord"}
                                     </button>
                                 </div>
 

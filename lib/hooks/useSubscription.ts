@@ -12,6 +12,8 @@ function isPro(sub: unknown): boolean {
 }
 
 export function useSubscription(): boolean {
+    return true; // TODO: remove before release
+
     const supabase = React.useMemo(
         () =>
             createBrowserClient(
