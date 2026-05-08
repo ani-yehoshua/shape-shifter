@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import { useSubscription } from "@/lib/hooks/useSubscription";
 import FormFields from "@/components/FormFields";
 import SubmitFeedback from "@/components/SubmitFeedback";
 import {
@@ -12,33 +12,7 @@ import {
     updatePassword,
     emailRegex,
     isValidPassword,
-    toInitials,
 } from "@/lib/API";
-
-const LEVELS = ["Beginner", "Intermediate", "Advanced", "Draw Mode"] as const;
-type Level = (typeof LEVELS)[number];
-
-type Props = {
-    difficulty: string;
-    onDifficultyChange: (level: string) => void;
-};
-
-function LockIcon() {
-    return (
-        <svg
-            className='w-3.5 h-3.5'
-            fill='none'
-            stroke='currentColor'
-            viewBox='0 0 24 24'>
-            <path
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth={2.5}
-                d='M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'
-            />
-        </svg>
-    );
-}
 
 function EyeIcon({ open }: { open: boolean }) {
     return open ? (
@@ -76,29 +50,22 @@ function EyeIcon({ open }: { open: boolean }) {
     );
 }
 
-export default function Header({ difficulty, onDifficultyChange }: Props) {
-    const supabase = React.useMemo(
-        () =>
-            createBrowserClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            ),
-        [],
-    );
+export default function Header() {
     const { user, signOut, isLoading: authIsLoading } = useAuth();
+    const hasPro = useSubscription();
     const router = useRouter();
     const searchParams = useSearchParams();
     const pathname = usePathname();
 
-    // Subscription
-    const [hasPro, setHasPro] = React.useState(false);
-    const lockedLevels: Level[] = hasPro ? [] : ["Advanced", "Draw Mode"];
     const userInitial = user?.email ? user.email.charAt(0).toUpperCase() : "U";
 
-    // UI state
     const [menuOpen, setMenuOpen] = React.useState(false);
-    const [mobileLevelOpen, setMobileLevelOpen] = React.useState(false);
     const [drawerOpen, setDrawerOpen] = React.useState(false);
+    const [paywallOpen, setPaywallOpen] = React.useState(
+        () =>
+            typeof window !== "undefined" &&
+            new URLSearchParams(window.location.search).get("paywall") === "1",
+    );
 
     const panelRef = React.useRef<HTMLDivElement>(null);
     const touchStartX = React.useRef(0);
@@ -136,19 +103,18 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
             setDrawerOpen(false);
         }
     };
-    const [paywallOpen, setPaywallOpen] = React.useState(
-        () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("paywall") === "1",
-    );
 
-    // Clear ?paywall=1 from the URL once the modal is open
+    // Open paywall when ?paywall=1 appears in the URL (runtime trigger from page.tsx)
     React.useEffect(() => {
         if (searchParams.get("paywall") === "1") {
+            setPaywallOpen(true);
             const params = new URLSearchParams(searchParams.toString());
             params.delete("paywall");
             const newUrl = pathname + (params.size ? `?${params}` : "");
             router.replace(newUrl, { scroll: false });
         }
     }, [searchParams, pathname, router]);
+
     const [plan, setPlan] = React.useState<"monthly" | "yearly">("monthly");
     const [signoutLoading, setSignoutLoading] = React.useState(false);
     const [paywallLoading, setPaywallLoading] = React.useState(false);
@@ -167,7 +133,6 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
             .catch(() => {});
     }, []);
 
-    // Email update
     const [email, setEmail] = React.useState("");
     const [updateEmailLoading, setUpdateEmailLoading] = React.useState(false);
     const [updateEmailAlert, setUpdateEmailAlert] = React.useState<{
@@ -175,7 +140,6 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
         ok: boolean;
     } | null>(null);
 
-    // Password update
     const [password, setPassword] = React.useState("");
     const [confirmPassword, setConfirmPassword] = React.useState("");
     const [showPassword, setShowPassword] = React.useState(false);
@@ -186,7 +150,6 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
         ok: boolean;
     } | null>(null);
 
-    // Delete account
     const [deleteOpen, setDeleteOpen] = React.useState(false);
     const [deleteLoading, setDeleteLoading] = React.useState(false);
     const [deleteAlert, setDeleteAlert] = React.useState<{
@@ -194,86 +157,10 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
         ok: boolean;
     } | null>(null);
 
-    function isPro(sub: unknown): boolean {
-        if (!sub || typeof sub !== "object") return false;
-        const s = sub as { status?: string; current_period_end?: string };
-        const active = new Set(["active", "trialing", "past_due"]);
-        return (
-            active.has(s.status ?? "") &&
-            new Date(s.current_period_end ?? "") > new Date()
-        );
-    }
-
-    // Subscription watcher
-    React.useEffect(() => {
-        let channel: ReturnType<typeof supabase.channel> | null = null;
-        let authSub: { unsubscribe: () => void } | null = null;
-
-        async function wire(uid: string) {
-            if (channel) {
-                supabase.removeChannel(channel);
-                channel = null;
-            }
-
-            const { data } = await supabase
-                .from("subscriptions")
-                .select("status,current_period_end")
-                .eq("user_id", uid)
-                .maybeSingle();
-            setHasPro(isPro(data));
-
-            channel = supabase
-                .channel(`subs-${uid}`)
-                .on(
-                    "postgres_changes",
-                    {
-                        event: "*",
-                        schema: "public",
-                        table: "subscriptions",
-                        filter: `user_id=eq.${uid}`,
-                    },
-                    (payload: {
-                        new: Record<string, unknown>;
-                        old: Record<string, unknown>;
-                    }) => {
-                        const row = payload.new || payload.old || null;
-                        setHasPro(isPro(row));
-                    },
-                )
-                .subscribe();
-        }
-
-        (async () => {
-            const {
-                data: { session },
-            } = await supabase.auth.getSession();
-            const uid = session?.user?.id;
-            if (uid) await wire(uid);
-
-            authSub = supabase.auth.onAuthStateChange((_evt, newSession) => {
-                const newUid = newSession?.user?.id;
-                if (!newUid) {
-                    setHasPro(false);
-                    if (channel) supabase.removeChannel(channel);
-                    return;
-                }
-                if (channel) supabase.removeChannel(channel);
-                wire(newUid);
-            }).data.subscription;
-        })();
-
-        return () => {
-            if (channel) supabase.removeChannel(channel);
-            authSub?.unsubscribe();
-        };
-    }, [supabase]);
-
-    // Pre-fill email
     React.useEffect(() => {
         if (user) setEmail(user.email ?? "");
     }, [user]);
 
-    // Password mismatch hint
     React.useEffect(() => {
         if (confirmPassword.length > 0) {
             setUpdatePasswordAlert(
@@ -285,15 +172,6 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
             setUpdatePasswordAlert(null);
         }
     }, [password, confirmPassword]);
-
-    const handleDifficultyClick = (level: Level) => {
-        if (lockedLevels.includes(level)) {
-            setPaywallOpen(true);
-            return;
-        }
-        setMobileLevelOpen(false);
-        onDifficultyChange(level);
-    };
 
     const handleSubscribe = async () => {
         setPaywallLoading(true);
@@ -402,17 +280,9 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
         setSignoutLoading(false);
     };
 
-    // ── Shared class helpers ──────────────────────────────────
-    const levelBtnBase =
-        "relative px-3 sm:px-4 py-1.5 text-sm font-medium rounded border transition-all duration-150 select-none";
-    const levelBtnActive = "bg-sand-4 text-sand-1 border-ink font-semibold";
-    const levelBtnInactive =
-        "bg-sand-1 text-ink border-ink/40 hover:border-ink";
-
     const alertClass = (ok: boolean) =>
         `rounded-lg px-3 py-2 text-xs font-semibold ${ok ? "bg-green-100 text-green-800 border border-green-300" : "bg-red-100 text-red-700 border border-red-300"}`;
 
-    // ── Auth loading splash ───────────────────────────────────
     if (authIsLoading && !user) {
         return (
             <div className='fixed inset-0 flex items-center justify-center bg-sand-1 z-50'>
@@ -423,88 +293,13 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
 
     return (
         <>
-            {/* ── AppBar ────────────────────────────────────────── */}
-            <header className='relative flex items-center px-4 sm:px-8 sm:pt-5 pb-2 sm:pb-3'>
-                {/* Left slot (mobile: level picker; desktop: spacer) */}
-                <div className='flex-1'>
-                    {/* Mobile: compact dropdown button */}
-                    <div className='sm:hidden flex flex-col items-start gap-0.5'>
-                        <span className='text-[10px] font-bold text-ink/60 ml-0.5'>
-                            Level
-                        </span>
-                        <button
-                            onClick={() => setMobileLevelOpen(true)}
-                            className='w-10 h-10 bg-sand-4 border border-ink rounded text-sand-1 text-sm font-bold'>
-                            {toInitials(difficulty)}
-                        </button>
-
-                        {mobileLevelOpen && (
-                            <div
-                                className='fixed inset-0 z-40 flex items-start justify-start bg-black/30 pt-14 pl-3'
-                                onClick={() => setMobileLevelOpen(false)}>
-                                <div
-                                    className='bg-sand-2 rounded-xl shadow-xl overflow-hidden'
-                                    onClick={e => e.stopPropagation()}>
-                                    {LEVELS.map(level => {
-                                        const locked =
-                                            lockedLevels.includes(level);
-                                        return (
-                                            <button
-                                                key={level}
-                                                onClick={() =>
-                                                    handleDifficultyClick(level)
-                                                }
-                                                className={`relative flex items-center gap-2 w-full px-5 py-3 text-sm font-medium border-b border-ink/10 last:border-0 transition-colors ${
-                                                    difficulty === level
-                                                        ? "bg-sand-4 text-sand-1 font-semibold"
-                                                        : "text-ink hover:bg-sand-3"
-                                                } ${locked ? "opacity-50" : ""}`}>
-                                                {level}
-                                                {locked && <LockIcon />}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Desktop: hidden in left slot */}
-                </div>
-
-                {/* Center: Desktop level buttons */}
-                <div className='hidden sm:flex gap-0'>
-                    {LEVELS.map((level, i) => {
-                        const locked = lockedLevels.includes(level);
-                        const isFirst = i === 0;
-                        const isLast = i === LEVELS.length - 1;
-                        return (
-                            <button
-                                key={level}
-                                onClick={() => handleDifficultyClick(level)}
-                                title={
-                                    locked ? "Subscribe to unlock" : undefined
-                                }
-                                className={`
-                  ${levelBtnBase}
-                  ${difficulty === level ? levelBtnActive : levelBtnInactive}
-                  ${locked ? "opacity-50" : ""}
-                  ${isFirst ? "rounded-r-none" : isLast ? "rounded-l-none" : "rounded-none"}
-                  -ml-px first:ml-0
-                `}>
-                                <span className='flex items-center gap-1.5'>
-                                    {level}
-                                    {locked && <LockIcon />}
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Right: User menu */}
-                <div className='flex-1 flex items-center justify-end gap-2'>
+            {/* ── Fixed user avatar — top-right ─────────────────── */}
+            <div className='fixed top-3 inset-x-0 z-40 flex justify-end pr-4 pointer-events-none'>
+                <div className='pointer-events-auto'>
                     {authIsLoading ? (
-                        <div className='w-6 h-6 border-2 border-ink border-t-transparent rounded-full animate-spin' />
+                        <div className='w-10 h-10 flex items-center justify-center'>
+                            <div className='w-6 h-6 border-2 border-ink border-t-transparent rounded-full animate-spin' />
+                        </div>
                     ) : user ? (
                         <div className='relative'>
                             <button
@@ -586,17 +381,15 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
                         </button>
                     )}
                 </div>
-            </header>
+            </div>
 
             {/* ── Settings Drawer ───────────────────────────────── */}
             {user && (
                 <>
-                    {/* Backdrop */}
                     <div
                         className={`fixed inset-0 z-50 bg-black/40 transition-opacity duration-300 ${drawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
                         onClick={() => setDrawerOpen(false)}
                     />
-                    {/* Panel */}
                     <div
                         ref={panelRef}
                         onTouchStart={handleTouchStart}
@@ -626,10 +419,8 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
                         </div>
 
                         <div className='flex-1 flex flex-col gap-6 px-5'>
-                            {/* Feedback */}
                             <SubmitFeedback className='text-sand-1' />
 
-                            {/* Change email */}
                             <div className='flex flex-col gap-2'>
                                 <h3 className='text-xs font-bold text-sand-1/70 uppercase tracking-wider'>
                                     Email
@@ -679,7 +470,6 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
                                 )}
                             </div>
 
-                            {/* Change password */}
                             <div className='flex flex-col gap-2'>
                                 <h3 className='text-xs font-bold text-sand-1/70 uppercase tracking-wider'>
                                     Password
@@ -754,7 +544,6 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
                                 )}
                             </div>
 
-                            {/* Manage subscription */}
                             {hasPro && (
                                 <a
                                     href='https://billing.stripe.com/p/login/test_00waEW7qCfxn9JW60Y3ks00'
@@ -778,7 +567,6 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
                             )}
                         </div>
 
-                        {/* Danger zone */}
                         <div className='px-5 py-4 border-t border-ink/20 flex items-center justify-between'>
                             <button
                                 disabled={signoutLoading}
@@ -812,9 +600,7 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
             {paywallOpen && (
                 <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4'>
                     <div className='w-full max-w-sm bg-sand-4 rounded-3xl shadow-2xl overflow-hidden'>
-                        {/* Hero */}
                         <div className='px-6 pt-7 pb-5 flex flex-col items-center gap-2 border-b border-sand-1/10'>
-                            {/* Badge */}
                             <span className='inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-olive/20 border border-olive/40 text-olive text-xs font-bold tracking-wide uppercase'>
                                 <svg
                                     className='w-3 h-3'
@@ -824,7 +610,6 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
                                 </svg>
                                 Pro
                             </span>
-
                             <h2 className='text-2xl font-bold text-sand-1 text-center leading-tight'>
                                 Unlock your full
                                 <br />
@@ -835,13 +620,12 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
                             </p>
                         </div>
 
-                        {/* Features */}
                         <ul className='px-6 py-4 flex flex-col gap-2.5'>
                             {[
-                                "Advanced chord voicings",
+                                "All alternate voicings",
                                 "Draw Mode — build any shape",
-                                "All string sets & positions",
-                                "New shapes added regularly",
+                                "Scales (coming soon)",
+                                "New content added regularly",
                             ].map(f => (
                                 <li
                                     key={f}
@@ -867,9 +651,7 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
                             ))}
                         </ul>
 
-                        {/* Plan toggle */}
                         <div className='px-6 pb-4 flex flex-col gap-3'>
-                            {/* Badge sits above the toggle, not clipped by overflow-hidden */}
                             <div className='flex'>
                                 <div className='flex-1' />
                                 <div className='flex-1 flex justify-center'>
@@ -909,13 +691,15 @@ export default function Header({ difficulty, onDifficultyChange }: Props) {
                                 </p>
                             )}
 
-                            {/* CTA */}
                             <button
                                 disabled={paywallLoading}
                                 onClick={
                                     user
                                         ? handleSubscribe
-                                        : () => router.push("/signin?redirect=paywall")
+                                        : () =>
+                                              router.push(
+                                                  "/signin?redirect=paywall",
+                                              )
                                 }
                                 className='w-full py-3.5 rounded-full bg-sand-1 text-sand-4 text-sm font-bold tracking-wide hover:opacity-90 disabled:opacity-40 transition-all active:scale-95'>
                                 {!user

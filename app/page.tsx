@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Header from "@/components/Header";
+import { useRouter } from "next/navigation";
 import FretboardHorizontal from "@/components/FretboardHorizontal";
 import FretboardVertical from "@/components/FretboardVertical";
 import NotesIntervalsToggle from "@/components/NotesIntervalsToggle";
@@ -29,6 +29,7 @@ type ChordLevel = {
 import { allChordShapes, useCycleList } from "@/lib/API";
 import { spellInterval, MAJOR_SCALE_OFFSETS } from "@/lib/ChordSpelling";
 import useChordLibrary from "@/lib/hooks/useChordLibrary";
+import { useSubscription } from "@/lib/hooks/useSubscription";
 
 const TUNING = ["E", "B", "G", "D", "A", "E"];
 const NUM_FRETS = 24;
@@ -70,7 +71,7 @@ function ChevronRight() {
     );
 }
 
-function FilterIcon() {
+function MenuIcon() {
     return (
         <svg
             className='w-3.5 h-3.5'
@@ -81,14 +82,58 @@ function FilterIcon() {
                 strokeLinecap='round'
                 strokeLinejoin='round'
                 strokeWidth={2}
-                d='M4 6h16M7 12h10M10 18h4'
+                d='M4 6h16M4 12h16M4 18h16'
             />
         </svg>
     );
 }
 
+function LockIcon() {
+    return (
+        <svg
+            className='w-3.5 h-3.5'
+            fill='none'
+            stroke='currentColor'
+            viewBox='0 0 24 24'>
+            <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2.5}
+                d='M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'
+            />
+        </svg>
+    );
+}
+
+function PencilIcon() {
+    return (
+        <svg
+            aria-hidden='true'
+            className='w-5 h-5'
+            fill='currentColor'
+            focusable='false'
+            viewBox='0 0 640 640'>
+            <path d='M100.4 417.2C104.5 402.6 112.2 389.3 123 378.5L304.2 197.3L338.1 163.4C354.7 180 389.4 214.7 442.1 267.4L476 301.3L442.1 335.2L260.9 516.4C250.2 527.1 236.8 534.9 222.2 539L94.4 574.6C86.1 576.9 77.1 574.6 71 568.4C64.9 562.2 62.6 553.3 64.9 545L100.4 417.2zM156 413.5C151.6 418.2 148.4 423.9 146.7 430.1L122.6 517L209.5 492.9C215.9 491.1 221.7 487.8 226.5 483.2L155.9 413.5zM510 267.4C493.4 250.8 458.7 216.1 406 163.4L372 129.5C398.5 103 413.4 88.1 416.9 84.6C430.4 71 448.8 63.4 468 63.4C487.2 63.4 505.6 71 519.1 84.6L554.8 120.3C568.4 133.9 576 152.3 576 171.4C576 190.5 568.4 209 554.8 222.5C551.3 226 536.4 240.9 509.9 267.4z' />
+        </svg>
+    );
+}
+
+function HandIcon({ flipped = false }: { flipped?: boolean }) {
+    return (
+        <svg
+            className='w-5 h-5'
+            viewBox='0 0 640 640'
+            fill='currentColor'
+            style={flipped ? { transform: "scaleX(-1)" } : undefined}>
+            <path d='M352 96C352 78.3 337.7 64 320 64C302.3 64 288 78.3 288 96L288 304C288 312.8 280.8 320 272 320C263.2 320 256 312.8 256 304L256 128C256 110.3 241.7 96 224 96C206.3 96 192 110.3 192 128L192 400C192 401.5 192 403.1 192.1 404.6L131.6 347C115.6 331.8 90.3 332.4 75 348.4C59.7 364.4 60.4 389.7 76.4 405L188.8 512C231.9 553.1 289.2 576 348.8 576L368 576C465.2 576 544 497.2 544 400L544 192C544 174.3 529.7 160 512 160C494.3 160 480 174.3 480 192L480 304C480 312.8 472.8 320 464 320C455.2 320 448 312.8 448 304L448 128C448 110.3 433.7 96 416 96C398.3 96 384 110.3 384 128L384 304C384 312.8 376.8 320 368 320C359.2 320 352 312.8 352 304L352 96z' />
+        </svg>
+    );
+}
+
 function voicingFretRange(v: NotePosition[]) {
-    const frets = v.map(n => n.fret).filter((f): f is number => f != null && f >= 0);
+    const frets = v
+        .map(n => n.fret)
+        .filter((f): f is number => f != null && f >= 0);
     if (!frets.length) return null;
     return { min: Math.min(...frets), max: Math.max(...frets) };
 }
@@ -113,8 +158,11 @@ function ShuffleIcon() {
 // ─── main page ────────────────────────────────────────────────────────────────
 
 export default function Home() {
+    const router = useRouter();
+    const hasPro = useSubscription();
+
     // ── state ──────────────────────────────────────────────────────────────────
-    const [difficulty, setDifficulty] = React.useState("Beginner");
+    const [isDrawMode, setIsDrawMode] = React.useState(false);
     const [selectedCategory, setSelectedCategory] = React.useState("");
     const [selectedVoicingType, setSelectedVoicingType] =
         React.useState("Drop 2");
@@ -133,17 +181,15 @@ export default function Home() {
     const [octaveUp, setOctaveUp] = React.useState(false);
     const handedness = isRight ? "right" : "left";
 
-    const [filtersOpen, setFiltersOpen] = React.useState(false);
+    const [menuOpen, setMenuOpen] = React.useState(false);
 
     const fretboardMap = React.useMemo(
         () => generateFretboardMap(TUNING, NUM_FRETS),
         [],
     );
-    const isDrawMode = difficulty === "Draw Mode";
 
     const { selectionHierarchy, availableAlts } = useChordLibrary({
         allChordShapes,
-        difficulty,
         selectedCategory,
         selectedVoicingType,
         selectedStringSet,
@@ -155,11 +201,20 @@ export default function Home() {
     const getSetterForLevel = (levelName: string): ((v: string) => void) => {
         switch (levelName) {
             case "Voicing Types":
-                return (v: string) => { setSelectedVoicingType(v); setOctaveUp(false); };
+                return (v: string) => {
+                    setSelectedVoicingType(v);
+                    setOctaveUp(false);
+                };
             case "String Sets":
-                return (v: string) => { setSelectedStringSet(v); setOctaveUp(false); };
+                return (v: string) => {
+                    setSelectedStringSet(v);
+                    setOctaveUp(false);
+                };
             case "Chord Qualities":
-                return (v: string) => { setSelectedChordQuality(v); setOctaveUp(false); };
+                return (v: string) => {
+                    setSelectedChordQuality(v);
+                    setOctaveUp(false);
+                };
             default:
                 return () => {};
         }
@@ -190,37 +245,26 @@ export default function Home() {
         setSelectedChordQuality(newChordQuality);
     };
 
-    const handleDifficultyChange = (newDifficulty: string) => {
-        setDifficulty(newDifficulty);
-        if (newDifficulty === "Draw Mode") {
-            setSelectedCategory("");
-            setSelectedPosition("All");
-            setSelectedAltShape(0);
-            setOctaveUp(false);
-            return;
-        }
-        const difficultyData =
-            (allChordShapes as Record<string, Record<string, ChordLevel>>)[
-                newDifficulty
-            ] ?? {};
-        const firstCategory = Object.keys(difficultyData)[0] || "";
-        setSelectedCategory(firstCategory);
-        setSelectedPosition("All");
-        setSelectedAltShape(0);
-        setOctaveUp(false);
-        drillDownAndSetDefaults(difficultyData[firstCategory]);
-    };
-
     const handleCategoryChange = (newCategory: string) => {
         setSelectedCategory(newCategory);
         setSelectedPosition("All");
         setSelectedAltShape(0);
         setOctaveUp(false);
         drillDownAndSetDefaults(
-            (allChordShapes as Record<string, Record<string, ChordLevel>>)[
-                difficulty
-            ]?.[newCategory],
+            (allChordShapes as Record<string, ChordLevel>)[newCategory],
         );
+    };
+
+    const handleToggleDrawMode = () => {
+        if (!isDrawMode) {
+            if (!hasPro) {
+                router.replace("?paywall=1", { scroll: false });
+                return;
+            }
+            setIsDrawMode(true);
+        } else {
+            setIsDrawMode(false);
+        }
     };
 
     const octaveFromDisplay = React.useCallback(() => {
@@ -261,8 +305,8 @@ export default function Home() {
             altShape: 0,
         };
         let cursor: ChordLevel | undefined = (
-            allChordShapes as Record<string, Record<string, ChordLevel>>
-        )[difficulty]?.[selectedCategory];
+            allChordShapes as Record<string, ChordLevel>
+        )[selectedCategory];
         while (cursor && cursor.options && cursor.levelName !== "Positions") {
             const levelName = cursor.levelName;
             const options: Record<string, ChordLevel> = cursor.options;
@@ -281,10 +325,12 @@ export default function Home() {
         newSelections.position =
             posKeys[Math.floor(Math.random() * posKeys.length)];
         const pd = cursor.options[newSelections.position];
-        newSelections.altShape =
+        const alts =
             Array.isArray(pd.altShapes) && pd.altShapes.length
-                ? Math.floor(Math.random() * pd.altShapes.length)
-                : 0;
+                ? pd.altShapes
+                : [];
+        newSelections.altShape =
+            hasPro && alts.length ? Math.floor(Math.random() * alts.length) : 0;
 
         const positionData = cursor.options[newSelections.position];
         const formula = Array.isArray(positionData.altShapes)
@@ -338,26 +384,34 @@ export default function Home() {
 
     // ── effects ────────────────────────────────────────────────────────────────
     React.useEffect(() => {
-        const difficultyData = (
-            allChordShapes as Record<string, Record<string, ChordLevel>>
-        )[difficulty];
-        const categories = Object.keys(difficultyData || {});
+        const categories = Object.keys(allChordShapes);
         if (!categories.includes(selectedCategory)) {
             const firstCategory = categories[0] || "";
             setSelectedCategory(firstCategory);
-            drillDownAndSetDefaults(difficultyData?.[firstCategory]);
+            drillDownAndSetDefaults(
+                (allChordShapes as Record<string, ChordLevel>)[firstCategory],
+            );
         }
-    }, [difficulty, selectedCategory]);
+    }, [selectedCategory]);
 
     React.useEffect(() => {
-        handleDifficultyChange("Beginner");
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+        const firstCategory = Object.keys(allChordShapes)[0] || "";
+        setSelectedCategory(firstCategory);
+        drillDownAndSetDefaults(
+            (allChordShapes as Record<string, ChordLevel>)[firstCategory],
+        );
+    }, []);
 
     const voicingInfo = React.useMemo(() => {
-        if (isDrawMode || selectedPosition === "All" || !currentRootNote) return null;
+        if (isDrawMode || selectedPosition === "All" || !currentRootNote)
+            return null;
         const formula = availableAlts[selectedAltShape];
         if (!formula) return null;
-        const all = generateAllVoicingsForShape(currentRootNote, formula, fretboardMap);
+        const all = generateAllVoicingsForShape(
+            currentRootNote,
+            formula,
+            fretboardMap,
+        );
         const low: NotePosition[][] = [];
         const crossing: NotePosition[][] = [];
         const high: NotePosition[][] = [];
@@ -368,8 +422,20 @@ export default function Home() {
             else if (range.min >= 12) high.push(v);
             else crossing.push(v);
         }
-        return { low, crossing, high, hasOctave: low.length > 0 && high.length > 0 };
-    }, [isDrawMode, selectedPosition, currentRootNote, selectedAltShape, availableAlts, fretboardMap]);
+        return {
+            low,
+            crossing,
+            high,
+            hasOctave: low.length > 0 && high.length > 0,
+        };
+    }, [
+        isDrawMode,
+        selectedPosition,
+        currentRootNote,
+        selectedAltShape,
+        availableAlts,
+        fretboardMap,
+    ]);
 
     React.useEffect(() => {
         if (isDrawMode) return;
@@ -404,7 +470,10 @@ export default function Home() {
             }
             setDisplayShape(finalShapes.flat());
         } else {
-            if (!voicingInfo) { setDisplayShape([]); return; }
+            if (!voicingInfo) {
+                setDisplayShape([]);
+                return;
+            }
             const { low, crossing, high, hasOctave } = voicingInfo;
             const active = octaveUp && hasOctave ? high : [...low, ...crossing];
             setDisplayShape(active.flat());
@@ -427,10 +496,19 @@ export default function Home() {
         { allToken: "All" },
     );
 
+    const handleAltChange = (i: number) => {
+        if (i > 0 && !hasPro) {
+            router.replace("?paywall=1", { scroll: false });
+            return;
+        }
+        setSelectedAltShape(i);
+        setOctaveUp(octaveFromDisplay());
+    };
+
     const { prev: goPrevAlt, next: goNextAlt } = useCycleList(
         availableAlts,
         selectedAltShape,
-        (i: number) => { setSelectedAltShape(i); setOctaveUp(octaveFromDisplay()); },
+        handleAltChange,
     );
 
     // ── chord label ─────────────────────────────────────────────────────────────
@@ -446,22 +524,39 @@ export default function Home() {
         return selectedChordQuality;
     };
 
-    // ── mobile sub-level compact labels ───────────────────────────────────────
     const firstWord = (s: string) => (s ?? "").trim().split(/\s+/, 1)[0];
+
+    const hasAlts = availableAlts.length > 1;
+    const altsLocked = hasAlts && !hasPro;
 
     // ─────────────────────────────────────────────────────────────────────────
     return (
         <>
-            <React.Suspense>
-                <Header
-                    difficulty={difficulty}
-                    onDifficultyChange={handleDifficultyChange}
-                />
-            </React.Suspense>
-
             <main className='flex-1 min-h-0 flex flex-col'>
                 {isDrawMode ? (
-                    <DrawMode />
+                    <>
+                        {/* Exit bar — visible on both mobile and desktop when in Draw Mode */}
+                        <div className='flex items-center justify-between px-4 pt-3 pb-1 shrink-0'>
+                            <button
+                                onClick={handleToggleDrawMode}
+                                className='flex items-center gap-2 px-4 py-1.5 rounded-full border border-ink/40 text-ink text-xs font-semibold hover:border-ink transition-colors'>
+                                <svg
+                                    className='w-3.5 h-3.5'
+                                    fill='none'
+                                    stroke='currentColor'
+                                    viewBox='0 0 24 24'>
+                                    <path
+                                        strokeLinecap='round'
+                                        strokeLinejoin='round'
+                                        strokeWidth={2}
+                                        d='M15 19l-7-7 7-7'
+                                    />
+                                </svg>
+                                Exit Draw Mode
+                            </button>
+                        </div>
+                        <DrawMode />
+                    </>
                 ) : (
                     <>
                         {/* ── MOBILE layout (max-sm) ───────────────────────────────── */}
@@ -483,13 +578,13 @@ export default function Home() {
                                 />
                             </div>
 
-                            {/* Control strip — position / alt navigation */}
+                            {/* Control strip */}
                             <div className='shrink-0 border-t border-ink/20 bg-sand-1 px-3 py-2 flex items-center gap-1.5 min-h-[2.75rem]'>
                                 <button
-                                    onClick={() => setFiltersOpen(true)}
+                                    onClick={() => setMenuOpen(true)}
                                     className='flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-ink/40 text-ink text-xs font-semibold hover:border-ink transition-colors'>
-                                    <FilterIcon />
-                                    Filters
+                                    <MenuIcon />
+                                    Menu
                                 </button>
 
                                 {voicingInfo?.hasOctave && (
@@ -533,16 +628,20 @@ export default function Home() {
                                     </div>
                                 )}
 
-                                {availableAlts.length > 1 && (
+                                {hasAlts && (
                                     <div className='flex items-center gap-1 ml-1'>
                                         <button
                                             onClick={goPrevAlt}
                                             className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                             <ChevronLeft />
                                         </button>
-                                        <span className='text-xs font-semibold text-ink w-8 text-center'>
-                                            {selectedAltShape + 1}/
-                                            {availableAlts.length}
+                                        <span
+                                            className={`text-xs font-semibold text-ink w-8 text-center flex items-center justify-center gap-0.5 ${altsLocked ? "opacity-50" : ""}`}>
+                                            {altsLocked ? (
+                                                <LockIcon />
+                                            ) : (
+                                                `${selectedAltShape + 1}/${availableAlts.length}`
+                                            )}
                                         </span>
                                         <button
                                             onClick={goNextAlt}
@@ -574,8 +673,15 @@ export default function Home() {
                                 <button
                                     onClick={() => setIsRight(h => !h)}
                                     title={isRight ? "Right hand" : "Left hand"}
-                                    className='w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink text-sm font-bold hover:border-ink transition-colors'>
-                                    {isRight ? "R" : "L"}
+                                    className='w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                    <HandIcon flipped={!isRight} />
+                                </button>
+
+                                <button
+                                    onClick={handleToggleDrawMode}
+                                    title='Draw Mode'
+                                    className='w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                    <PencilIcon />
                                 </button>
 
                                 <div className='flex-1' />
@@ -588,44 +694,67 @@ export default function Home() {
                             </div>
                         </div>
 
-                        {/* Filters bottom sheet (mobile only) */}
-                        {filtersOpen && (
+                        {/* ── Mobile Menu Sheet ───────────────────────────────── */}
+                        {menuOpen && (
                             <div className='sm:hidden fixed inset-0 z-50 flex flex-col justify-end'>
                                 <div
                                     className='flex-1 bg-black/40'
-                                    onClick={() => setFiltersOpen(false)}
+                                    onClick={() => setMenuOpen(false)}
                                 />
                                 <div className='bg-sand-1 rounded-t-2xl shadow-2xl px-4 pt-3 pb-8'>
                                     <div className='w-10 h-1 bg-ink/20 rounded-full mx-auto mb-4' />
 
                                     <div className='flex flex-col gap-5'>
-                                        {/* Type */}
+                                        {/* Chords section */}
                                         <div>
                                             <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
-                                                Type
+                                                Chords
                                             </p>
                                             <div className='flex rounded-xl overflow-hidden border border-ink'>
                                                 {selectionHierarchy.categories.map(
-                                                    type => (
+                                                    cat => (
                                                         <button
-                                                            key={type}
+                                                            key={cat}
                                                             onClick={() =>
                                                                 handleCategoryChange(
-                                                                    type,
+                                                                    cat,
                                                                 )
                                                             }
                                                             className={`flex-1 py-2.5 text-sm font-medium border-r border-ink last:border-r-0 transition-colors ${
                                                                 selectedCategory ===
-                                                                type
+                                                                cat
                                                                     ? "bg-sand-4 text-sand-1 font-semibold"
                                                                     : "bg-sand-1 text-ink hover:bg-sand-2"
                                                             }`}>
-                                                            {type === "Sevenths"
+                                                            {cat === "Sevenths"
                                                                 ? "7ths"
-                                                                : type}
+                                                                : cat}
                                                         </button>
                                                     ),
                                                 )}
+                                            </div>
+                                        </div>
+
+                                        {/* Scales section */}
+                                        <div>
+                                            <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
+                                                Scales
+                                                <span className='ml-2 text-[9px] normal-case font-semibold text-ink/30'>
+                                                    coming soon
+                                                </span>
+                                            </p>
+                                            <div className='flex rounded-xl overflow-hidden border border-ink/20 opacity-40 pointer-events-none'>
+                                                {[
+                                                    "Major",
+                                                    "Minor",
+                                                    "Pentatonic",
+                                                ].map(s => (
+                                                    <button
+                                                        key={s}
+                                                        className='flex-1 py-2.5 text-sm font-medium border-r border-ink/20 last:border-r-0 bg-sand-1 text-ink/50'>
+                                                        {s}
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
 
@@ -690,7 +819,7 @@ export default function Home() {
                                     </div>
 
                                     <button
-                                        onClick={() => setFiltersOpen(false)}
+                                        onClick={() => setMenuOpen(false)}
                                         className='w-full mt-6 py-3 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 transition-opacity'>
                                         Done
                                     </button>
@@ -699,8 +828,8 @@ export default function Home() {
                         )}
 
                         {/* ── DESKTOP layout (sm+) ─────────────────────────────────── */}
-                        <div className='hidden sm:flex flex-col items-center gap-4 pt-4 pb-8 w-full'>
-                            {/* Fretboard — full viewport width with padding */}
+                        <div className='hidden sm:flex flex-col items-center justify-center gap-4 py-8 w-full min-h-0 flex-1'>
+                            {/* Fretboard */}
                             <div className='w-full px-4 xl:px-8'>
                                 <FretboardHorizontal
                                     chordShape={displayShape}
@@ -710,22 +839,22 @@ export default function Home() {
                                 />
                             </div>
 
-                            {/* Controls — centered below fretboard */}
+                            {/* Controls */}
                             <div className='flex flex-col items-center gap-4 w-full max-w-4xl mx-auto px-4'>
                                 {/* Category buttons */}
                                 <div className='flex rounded overflow-hidden border border-ink'>
-                                    {selectionHierarchy.categories.map(type => (
+                                    {selectionHierarchy.categories.map(cat => (
                                         <button
-                                            key={type}
+                                            key={cat}
                                             onClick={() =>
-                                                handleCategoryChange(type)
+                                                handleCategoryChange(cat)
                                             }
                                             className={`px-4 py-1.5 text-sm font-medium border-r border-ink last:border-r-0 transition-colors ${
-                                                selectedCategory === type
+                                                selectedCategory === cat
                                                     ? "bg-sand-4 text-sand-1 font-semibold"
                                                     : "bg-sand-1 text-ink hover:bg-sand-2"
                                             }`}>
-                                            {type}
+                                            {cat}
                                         </button>
                                     ))}
                                 </div>
@@ -799,9 +928,9 @@ export default function Home() {
                                 )}
 
                                 {/* Alternate positions */}
-                                {(availableAlts.length > 1 || voicingInfo?.hasOctave) && (
+                                {(hasAlts || voicingInfo?.hasOctave) && (
                                     <div className='flex items-center gap-3'>
-                                        {availableAlts.length > 1 && (
+                                        {hasAlts && (
                                             <div className='flex flex-col items-center gap-1'>
                                                 <span className='text-xs font-semibold text-ink'>
                                                     Alternate Positions
@@ -812,9 +941,13 @@ export default function Home() {
                                                         className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-r border-ink'>
                                                         <ChevronLeft />
                                                     </button>
-                                                    <span className='px-3 text-sm font-bold text-ink'>
-                                                        {selectedAltShape + 1}/
-                                                        {availableAlts.length}
+                                                    <span
+                                                        className={`px-3 text-sm font-bold text-ink flex items-center gap-1 ${altsLocked ? "opacity-50" : ""}`}>
+                                                        {altsLocked ? (
+                                                            <LockIcon />
+                                                        ) : (
+                                                            `${selectedAltShape + 1}/${availableAlts.length}`
+                                                        )}
                                                     </span>
                                                     <button
                                                         onClick={goNextAlt}
@@ -826,7 +959,9 @@ export default function Home() {
                                         )}
                                         {voicingInfo?.hasOctave && (
                                             <button
-                                                onClick={() => setOctaveUp(o => !o)}
+                                                onClick={() =>
+                                                    setOctaveUp(o => !o)
+                                                }
                                                 className={`px-4 py-1.5 rounded border text-sm font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "bg-sand-1 text-ink border-ink hover:bg-sand-2"}`}>
                                                 {octaveUp ? "-12" : "+12"}
                                             </button>
@@ -846,7 +981,7 @@ export default function Home() {
                                     </button>
                                 </div>
 
-                                {/* Shuffle + Handedness + Notes/Intervals */}
+                                {/* Actions */}
                                 <div className='flex items-center gap-6'>
                                     <button
                                         onClick={() =>
@@ -860,18 +995,24 @@ export default function Home() {
                                         <ShuffleIcon />
                                         Shuffle
                                     </button>
-                                    <button
-                                        onClick={() => setIsRight(h => !h)}
-                                        className='flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
-                                        {isRight ? "Right hand" : "Left hand"}
-                                    </button>
                                     <NotesIntervalsToggle
                                         showIntervals={showIntervals}
                                         onToggle={setShowIntervals}
                                     />
+                                    <button
+                                        onClick={() => setIsRight(h => !h)}
+                                        className='flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
+                                        <HandIcon flipped={!isRight} />
+                                        {isRight ? "Right hand" : "Left hand"}
+                                    </button>
+                                    <button
+                                        onClick={handleToggleDrawMode}
+                                        className='flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
+                                        <PencilIcon />
+                                        Draw Mode
+                                    </button>
                                 </div>
                             </div>
-                            {/* end controls wrapper */}
                         </div>
                     </>
                 )}
