@@ -2,7 +2,6 @@ import * as React from 'react';
 
 type ChordLibraryParams = {
     allChordShapes: Record<string, any>;
-    difficulty: string;
     selectedCategory: string;
     selectedVoicingType: string;
     selectedStringSet: string;
@@ -12,7 +11,6 @@ type ChordLibraryParams = {
 
 export default function useChordLibrary({
     allChordShapes,
-    difficulty,
     selectedCategory,
     selectedVoicingType,
     selectedStringSet,
@@ -26,16 +24,15 @@ export default function useChordLibrary({
             finalFormulas: Record<string, any> | null;
             positions: string[];
         } = {
-            categories: Object.keys(allChordShapes[difficulty] || {}),
+            categories: Object.keys(allChordShapes),
             subLevels: [],
             finalFormulas: null,
             positions: [],
         };
 
         if (!selectedCategory) return hierarchy;
-        let currentLevel: any = allChordShapes[difficulty]?.[selectedCategory];
+        let currentLevel: any = allChordShapes[selectedCategory];
 
-        // If the category is already at the pattern level, grab immediately
         if (
             currentLevel?.options &&
             Object.values(currentLevel.options)[0] != null &&
@@ -81,7 +78,6 @@ export default function useChordLibrary({
         return hierarchy;
     }, [
         allChordShapes,
-        difficulty,
         selectedCategory,
         selectedVoicingType,
         selectedStringSet,
