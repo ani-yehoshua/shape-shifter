@@ -72,7 +72,7 @@ const FretboardVertical = ({
     return (
         <div
             ref={containerRef}
-            className='h-full w-full mt-2 overflow-y-auto no-scrollbar'>
+            className='h-[calc(100%-1rem)] w-full my-2 overflow-y-auto no-scrollbar'>
             <svg
                 style={{
                     display: "block",
