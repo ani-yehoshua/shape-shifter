@@ -191,6 +191,11 @@ export default function Home() {
 
     const [menuOpen, setMenuOpen] = React.useState(false);
 
+    const openPaywall = React.useCallback(() => {
+        setMenuOpen(false);
+        router.replace("?paywall=1", { scroll: false });
+    }, [router]);
+
     const [selectedMode, setSelectedMode] = React.useState<"chords" | "scales">(
         "chords",
     );
@@ -291,7 +296,7 @@ export default function Home() {
     const handleToggleDrawMode = () => {
         if (!isDrawMode) {
             if (!hasPro) {
-                router.replace("?paywall=1", { scroll: false });
+                openPaywall();
                 return;
             }
             setIsDrawMode(true);
@@ -599,7 +604,7 @@ export default function Home() {
 
     const handleAltChange = (i: number) => {
         if (i > 0 && !hasPro) {
-            router.replace("?paywall=1", { scroll: false });
+            openPaywall();
             return;
         }
         setSelectedAltShape(i);
@@ -614,7 +619,7 @@ export default function Home() {
 
     const handleScalePatternChange = (pattern: string) => {
         if (!hasPro && pattern !== SCALE_SHAPES[selectedNoteGroup]?.[selectedScale]?.defaultPattern) {
-            router.replace("?paywall=1", { scroll: false });
+            openPaywall();
             return;
         }
         setSelectedScalePattern(pattern);
@@ -624,7 +629,7 @@ export default function Home() {
 
     const handleScaleVariantChange = (variant: number) => {
         if (!hasPro && variant > 0) {
-            router.replace("?paywall=1", { scroll: false });
+            openPaywall();
             return;
         }
         setSelectedScaleVariant(variant);
