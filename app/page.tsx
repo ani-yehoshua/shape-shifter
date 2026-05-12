@@ -699,8 +699,37 @@ export default function Home() {
     const altsLocked = hasAlts && !hasPro;
 
     // ─────────────────────────────────────────────────────────────────────────
+    const jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: "Shape Shifter",
+        url: "https://shapeshifter.djoshware.com",
+        description:
+            "Explore guitar chords and scales across every key and position. Interactive fretboard diagrams for chord voicings, scale patterns, and modes.",
+        applicationCategory: "MusicApplication",
+        operatingSystem: "Web",
+        offers: [
+            {
+                "@type": "Offer",
+                price: "0",
+                priceCurrency: "USD",
+                name: "Free",
+            },
+            {
+                "@type": "Offer",
+                price: "14.99",
+                priceCurrency: "USD",
+                name: "Pro",
+            },
+        ],
+    };
+
     return (
         <>
+            <script
+                type='application/ld+json'
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            />
             <main className='flex-1 min-h-0 flex flex-col'>
                 {isDrawMode ? (
                     <>

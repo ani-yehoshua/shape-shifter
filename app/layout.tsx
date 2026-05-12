@@ -13,9 +13,50 @@ const montserrat = Montserrat({
     display: "swap",
 });
 
+const BASE_URL = "https://shapeshifter.djoshware.com";
+
 export const metadata: Metadata = {
-    title: "Shape Shifter",
-    description: "Everything you could ever learn about chords and scales.",
+    metadataBase: new URL(BASE_URL),
+    title: {
+        default: "Shape Shifter — Guitar Chords & Scales",
+        template: "%s | Shape Shifter",
+    },
+    description:
+        "Explore guitar chords and scales across every key and position. Interactive fretboard diagrams for chord voicings, scale patterns, and modes.",
+    keywords: [
+        "guitar chords",
+        "guitar scales",
+        "fretboard",
+        "chord voicings",
+        "scale positions",
+        "guitar modes",
+        "music theory",
+        "interactive guitar",
+    ],
+    authors: [{ name: "dJoshware", url: BASE_URL }],
+    creator: "dJoshware",
+    publisher: "dJoshware",
+    applicationName: "Shape Shifter",
+    referrer: "origin-when-cross-origin",
+    alternates: { canonical: BASE_URL },
+    openGraph: {
+        type: "website",
+        url: BASE_URL,
+        siteName: "Shape Shifter",
+        title: "Shape Shifter — Guitar Chords & Scales",
+        description:
+            "Explore guitar chords and scales across every key and position. Interactive fretboard diagrams for chord voicings, scale patterns, and modes.",
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "Shape Shifter — Guitar Chords & Scales",
+        description:
+            "Explore guitar chords and scales across every key and position. Interactive fretboard diagrams for chord voicings, scale patterns, and modes.",
+    },
+    icons: {
+        icon: "/favicon.ico",
+        apple: "/logo.png",
+    },
 };
 
 export const viewport: Viewport = {
