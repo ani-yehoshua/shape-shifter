@@ -700,10 +700,10 @@ export default function Header() {
                                 onClick={
                                     user
                                         ? handleSubscribe
-                                        : () =>
-                                              router.push(
-                                                  "/signin?redirect=paywall",
-                                              )
+                                        : () => {
+                                              setPaywallOpen(false);
+                                              router.push("/signin?redirect=paywall");
+                                          }
                                 }
                                 className='w-full py-3.5 rounded-full bg-sand-1 text-sand-4 text-sm font-bold tracking-wide hover:opacity-90 disabled:opacity-40 transition-all active:scale-95'>
                                 {!user
