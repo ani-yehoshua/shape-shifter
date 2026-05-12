@@ -20,13 +20,38 @@ import type { NotePosition } from "@/lib/fretboardMap";
 const STANDARD_TUNING = ["E", "B", "G", "D", "A", "E"];
 const NUM_FRETS = 24;
 const NOTES = [
-    "C", "C#", "Db", "D", "D#", "Eb", "E",
-    "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B",
+    "C",
+    "C#",
+    "Db",
+    "D",
+    "D#",
+    "Eb",
+    "E",
+    "F",
+    "F#",
+    "Gb",
+    "G",
+    "G#",
+    "Ab",
+    "A",
+    "A#",
+    "Bb",
+    "B",
 ];
 
 const DEGREE_INDEX_BY_SEMITONES: Record<number, number> = {
-    0: 0, 1: 1, 2: 1, 3: 2, 4: 2, 5: 3,
-    6: 4, 7: 4, 8: 5, 9: 5, 10: 6, 11: 6,
+    0: 0,
+    1: 1,
+    2: 1,
+    3: 2,
+    4: 2,
+    5: 3,
+    6: 4,
+    7: 4,
+    8: 5,
+    9: 5,
+    10: 6,
+    11: 6,
 };
 
 function semitonesToDegreeNumber(semi: number): number {
@@ -37,7 +62,9 @@ function semitonesToDegreeNumber(semi: number): number {
 const wrap12 = (n: number) => ((n % 12) + 12) % 12;
 
 function intervalSemitones(rootName: string, targetName: string): number {
-    return wrap12(noteNameToSemitone(targetName) - noteNameToSemitone(rootName));
+    return wrap12(
+        noteNameToSemitone(targetName) - noteNameToSemitone(rootName),
+    );
 }
 
 function firstEnharmonic(cell: string): string {
@@ -46,16 +73,34 @@ function firstEnharmonic(cell: string): string {
 
 function ChevronLeft() {
     return (
-        <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 19l-7-7 7-7' />
+        <svg
+            className='w-5 h-5'
+            fill='none'
+            stroke='currentColor'
+            viewBox='0 0 24 24'>
+            <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M15 19l-7-7 7-7'
+            />
         </svg>
     );
 }
 
 function ChevronRight() {
     return (
-        <svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5l7 7-7 7' />
+        <svg
+            className='w-5 h-5'
+            fill='none'
+            stroke='currentColor'
+            viewBox='0 0 24 24'>
+            <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M9 5l7 7-7 7'
+            />
         </svg>
     );
 }
@@ -81,7 +126,9 @@ export default function DrawMode() {
     const [matchInfo, setMatchInfo] = React.useState<any>(null);
     const [selectedPosition, setSelectedPosition] = React.useState("");
     const [selectedAltShape, setSelectedAltShape] = React.useState(0);
-    const [browsedVoicing, setBrowsedVoicing] = React.useState<NotePosition[] | null>(null);
+    const [browsedVoicing, setBrowsedVoicing] = React.useState<
+        NotePosition[] | null
+    >(null);
 
     const handedness = isRight ? "right" : "left";
 
@@ -100,7 +147,8 @@ export default function DrawMode() {
     const toggle = React.useCallback((string: number, fret: number) => {
         setSelected(prev => {
             const next = new Map(prev);
-            if (next.has(string) && next.get(string) === fret) next.delete(string);
+            if (next.has(string) && next.get(string) === fret)
+                next.delete(string);
             else next.set(string, fret);
             return next;
         });
@@ -113,20 +161,29 @@ export default function DrawMode() {
             if (!finalFormulas || !finalFormulas[posKeyToUse]) return null;
             const posData = finalFormulas[posKeyToUse] as any;
             const formula =
-                (Number.isInteger(altIdxToUse) && posData.altShapes?.[altIdxToUse]) || posData;
+                (Number.isInteger(altIdxToUse) &&
+                    posData.altShapes?.[altIdxToUse]) ||
+                posData;
             if (!formula) return null;
-            const raw = generateAllVoicingsForShape(root, formula, fretboardMap) || [];
+            const raw =
+                generateAllVoicingsForShape(root, formula, fretboardMap) || [];
             const voicings = Array.isArray(raw[0]) ? raw : [raw];
             const targetSize = selected.size;
             const drawStrings = new Set(Array.from(selected.keys()));
             const best =
                 voicings.find(
-                    v => Array.isArray(v) && v.length === targetSize && v.every((n: any) => drawStrings.has(n.string)),
+                    v =>
+                        Array.isArray(v) &&
+                        v.length === targetSize &&
+                        v.every((n: any) => drawStrings.has(n.string)),
                 ) || voicings[0];
             if (!best) return null;
-            return (best as NotePosition[]).slice().sort(
-                (a, b) => a.string - b.string || (a.fret ?? 0) - (b.fret ?? 0),
-            );
+            return (best as NotePosition[])
+                .slice()
+                .sort(
+                    (a, b) =>
+                        a.string - b.string || (a.fret ?? 0) - (b.fret ?? 0),
+                );
         },
         [finalFormulas, root, fretboardMap, selected],
     );
@@ -139,13 +196,23 @@ export default function DrawMode() {
             if (!cell) continue;
             const name = firstEnharmonic(cell);
             const semis = intervalSemitones(root, name);
-            shape.push({ string, fret, semitones: semis, degree: semitonesToDegreeNumber(semis) });
+            shape.push({
+                string,
+                fret,
+                semitones: semis,
+                degree: semitonesToDegreeNumber(semis),
+            });
         }
-        return shape.sort((a, b) => a.string - b.string || (a.fret ?? 0) - (b.fret ?? 0));
+        return shape.sort(
+            (a, b) => a.string - b.string || (a.fret ?? 0) - (b.fret ?? 0),
+        );
     }, [selected, fretboardMap, root, browsedVoicing]);
 
     React.useEffect(() => {
-        if (!selected?.size) { setMatchInfo(null); return; }
+        if (!selected?.size) {
+            setMatchInfo(null);
+            return;
+        }
         const hit = index.get(`${root}::${keyFromSelection(selected)}`) || null;
         setMatchInfo(hit);
     }, [selected, index, root]);
@@ -163,9 +230,13 @@ export default function DrawMode() {
         }
         const keys = Object.keys(finalFormulas);
         if (!selectedPosition || !finalFormulas[selectedPosition]) {
-            setSelectedPosition(posKey && finalFormulas[posKey] ? posKey : keys[0] || "");
+            setSelectedPosition(
+                posKey && finalFormulas[posKey] ? posKey : keys[0] || "",
+            );
         }
-        const posData = finalFormulas[selectedPosition || posKey || keys[0]] as any;
+        const posData = finalFormulas[
+            selectedPosition || posKey || keys[0]
+        ] as any;
         const altCount = 1 + (posData?.altShapes?.length || 0);
         if (selectedAltShape >= altCount) setSelectedAltShape(0);
     }, [matchInfo, finalFormulas, posKey, selectedPosition, selectedAltShape]);
@@ -190,44 +261,64 @@ export default function DrawMode() {
                     ? matchInfo.posKey
                     : keys[0] || "";
             setSelectedPosition(nextPos);
-            const altCount = 1 + ((finalFormulas[nextPos] as any)?.altShapes?.length || 0);
+            const altCount =
+                1 + ((finalFormulas[nextPos] as any)?.altShapes?.length || 0);
             setSelectedAltShape(Math.min(matchInfo.altIdx ?? 0, altCount - 1));
         }
     }, [familyKey, matchInfo, finalFormulas, root]);
 
-    React.useEffect(() => { setBrowsedVoicing(null); }, [selected]);
-    React.useEffect(() => { setBrowsedVoicing(null); }, [familyKey]);
+    React.useEffect(() => {
+        setBrowsedVoicing(null);
+    }, [selected]);
+    React.useEffect(() => {
+        setBrowsedVoicing(null);
+    }, [familyKey]);
 
     const availableAltsForUI = React.useMemo(() => {
-        if (!finalFormulas || !selectedPosition || !finalFormulas[selectedPosition]) return [];
+        if (
+            !finalFormulas ||
+            !selectedPosition ||
+            !finalFormulas[selectedPosition]
+        )
+            return [];
         const base = finalFormulas[selectedPosition] as any;
         return [base, ...(Array.isArray(base.altShapes) ? base.altShapes : [])];
     }, [finalFormulas, selectedPosition]);
 
-    const safeCurrent = positions.includes(selectedPosition) ? selectedPosition : positions[0] || "";
-    const { prev: goPrevPos, next: goNextPos } = useCycleList(positions, safeCurrent, p => {
-        setSelectedPosition(p);
-        setBrowsedVoicing(pickVoicingFor(p, selectedAltShape));
-    });
+    const safeCurrent = positions.includes(selectedPosition)
+        ? selectedPosition
+        : positions[0] || "";
+    const { prev: goPrevPos, next: goNextPos } = useCycleList(
+        positions,
+        safeCurrent,
+        p => {
+            setSelectedPosition(p);
+            setBrowsedVoicing(pickVoicingFor(p, selectedAltShape));
+        },
+    );
     const { prev: goPrevAlt, next: goNextAlt } = useCycleList(
         availableAltsForUI,
         selectedAltShape,
         idx => {
             setSelectedAltShape(idx as unknown as number);
-            setBrowsedVoicing(pickVoicingFor(selectedPosition, idx as unknown as number));
+            setBrowsedVoicing(
+                pickVoicingFor(selectedPosition, idx as unknown as number),
+            );
         },
     );
 
     const getQuality = (info: any) =>
-        Array.isArray(info?.trail) && info.trail.length ? info.trail[info.trail.length - 1] : "";
+        Array.isArray(info?.trail) && info.trail.length
+            ? info.trail[info.trail.length - 1]
+            : "";
 
     const chordLabel = matchInfo ? `${root} ${getQuality(matchInfo)}` : "";
 
-    const cycleBtn = "w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors";
+    const cycleBtn =
+        "w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors";
 
     return (
         <div className='flex-1 min-h-0 flex flex-col text-ink'>
-
             {/* ── MOBILE (max-sm) ─────────────────────────────────────── */}
             <div className='sm:hidden flex-1 min-h-0 flex flex-col'>
                 {/* Chord label */}
@@ -243,7 +334,9 @@ export default function DrawMode() {
                         chordShape={chordShape}
                         handedness={handedness}
                         interactive
-                        onTogglePosition={({ string, fret }) => toggle(string, fret)}
+                        onTogglePosition={({ string, fret }) =>
+                            toggle(string, fret)
+                        }
                         rootNote={root}
                         showIntervals={showIntervals}
                         showConnector={chordShape.length > 0}
@@ -253,20 +346,39 @@ export default function DrawMode() {
                 {/* Position / alt strip */}
                 {positions.length > 0 && (
                     <div className='shrink-0 border-t border-ink/20 bg-sand-1 px-3 py-1.5 flex items-center justify-center gap-1'>
-                        <button onClick={goPrevPos} className={cycleBtn}><ChevronLeft /></button>
+                        <button
+                            onClick={goPrevPos}
+                            className={cycleBtn}>
+                            <ChevronLeft />
+                        </button>
                         <span className='text-xs font-semibold text-ink min-w-[5rem] text-center'>
-                            {(finalFormulas as any)?.[selectedPosition]?.name || selectedPosition || '–'}
+                            {(finalFormulas as any)?.[selectedPosition]?.name ||
+                                selectedPosition ||
+                                "–"}
                         </span>
-                        <button onClick={goNextPos} className={cycleBtn}><ChevronRight /></button>
+                        <button
+                            onClick={goNextPos}
+                            className={cycleBtn}>
+                            <ChevronRight />
+                        </button>
 
                         {availableAltsForUI.length > 1 && (
                             <>
                                 <div className='w-px h-4 bg-ink/20 mx-1' />
-                                <button onClick={goPrevAlt} className={cycleBtn}><ChevronLeft /></button>
+                                <button
+                                    onClick={goPrevAlt}
+                                    className={cycleBtn}>
+                                    <ChevronLeft />
+                                </button>
                                 <span className='text-xs font-semibold text-ink w-8 text-center'>
-                                    {selectedAltShape + 1}/{availableAltsForUI.length}
+                                    {selectedAltShape + 1}/
+                                    {availableAltsForUI.length}
                                 </span>
-                                <button onClick={goNextAlt} className={cycleBtn}><ChevronRight /></button>
+                                <button
+                                    onClick={goNextAlt}
+                                    className={cycleBtn}>
+                                    <ChevronRight />
+                                </button>
                             </>
                         )}
                     </div>
@@ -290,8 +402,11 @@ export default function DrawMode() {
                                 {NOTES.map(n => (
                                     <button
                                         key={n}
-                                        onClick={() => { setRoot(n); setRootMenuOpen(false); }}
-                                        className={`px-2 py-1 rounded text-xs font-semibold transition-colors ${n === root ? 'bg-sand-4 text-sand-1' : 'bg-sand-1 text-ink hover:bg-sand-3'}`}>
+                                        onClick={() => {
+                                            setRoot(n);
+                                            setRootMenuOpen(false);
+                                        }}
+                                        className={`px-2 py-1 rounded text-xs font-semibold transition-colors ${n === root ? "bg-sand-4 text-sand-1" : "bg-sand-1 text-ink hover:bg-sand-3"}`}>
                                         {n}
                                     </button>
                                 ))}
@@ -299,7 +414,10 @@ export default function DrawMode() {
                         </div>
                     )}
 
-                    <NotesIntervalsToggle showIntervals={showIntervals} onToggle={setShowIntervals} />
+                    <NotesIntervalsToggle
+                        showIntervals={showIntervals}
+                        onToggle={setShowIntervals}
+                    />
 
                     <button
                         onClick={() => setIsRight(h => !h)}
@@ -333,7 +451,9 @@ export default function DrawMode() {
                         chordShape={chordShape}
                         handedness={handedness}
                         interactive
-                        onTogglePosition={({ string, fret }) => toggle(string, fret)}
+                        onTogglePosition={({ string, fret }) =>
+                            toggle(string, fret)
+                        }
                         rootNote={root}
                         showIntervals={showIntervals}
                     />
@@ -341,7 +461,9 @@ export default function DrawMode() {
 
                 {/* Root grid */}
                 <div className='flex flex-col items-center gap-1.5 shrink-0'>
-                    <span className='text-xs font-semibold text-ink/60'>Root</span>
+                    <span className='text-xs font-semibold text-ink/60'>
+                        Root
+                    </span>
                     <div className='grid grid-cols-9 gap-1 max-w-2xl'>
                         {NOTES.map(n => (
                             <button
@@ -349,8 +471,8 @@ export default function DrawMode() {
                                 onClick={() => setRoot(n)}
                                 className={`px-3 py-1.5 text-sm font-semibold rounded border transition-colors ${
                                     n === root
-                                        ? 'bg-sand-4 text-sand-1 border-ink'
-                                        : 'bg-sand-1 text-ink border-ink/40 hover:border-ink'
+                                        ? "bg-sand-4 text-sand-1 border-ink"
+                                        : "bg-sand-1 text-ink border-ink/40 hover:border-ink"
                                 }`}>
                                 {n}
                             </button>
@@ -362,21 +484,29 @@ export default function DrawMode() {
                 <div className='flex flex-wrap items-end justify-center gap-4 px-4 shrink-0'>
                     {positions.length > 0 && (
                         <div className='flex flex-col items-center gap-1.5'>
-                            <span className='text-xs font-semibold text-ink/60'>Position</span>
+                            <span className='text-xs font-semibold text-ink/60'>
+                                Position
+                            </span>
                             <div className='flex rounded overflow-hidden border border-ink'>
                                 {positions.map(pos => (
                                     <button
                                         key={pos}
                                         onClick={() => {
                                             setSelectedPosition(pos);
-                                            setBrowsedVoicing(pickVoicingFor(pos, selectedAltShape));
+                                            setBrowsedVoicing(
+                                                pickVoicingFor(
+                                                    pos,
+                                                    selectedAltShape,
+                                                ),
+                                            );
                                         }}
                                         className={`px-3 py-1.5 text-sm font-medium border-r border-ink last:border-r-0 transition-colors ${
                                             selectedPosition === pos
-                                                ? 'bg-sand-4 text-sand-1 font-semibold'
-                                                : 'bg-sand-1 text-ink hover:bg-sand-2'
+                                                ? "bg-sand-4 text-sand-1 font-semibold"
+                                                : "bg-sand-1 text-ink hover:bg-sand-2"
                                         }`}>
-                                        {(finalFormulas as any)?.[pos]?.name || pos}
+                                        {(finalFormulas as any)?.[pos]?.name ||
+                                            pos}
                                     </button>
                                 ))}
                             </div>
@@ -385,7 +515,9 @@ export default function DrawMode() {
 
                     {availableAltsForUI.length > 1 && (
                         <div className='flex flex-col items-center gap-1.5'>
-                            <span className='text-xs font-semibold text-ink/60'>Alternate Positions</span>
+                            <span className='text-xs font-semibold text-ink/60'>
+                                Alternate Positions
+                            </span>
                             <div className='flex items-center gap-2 border border-ink rounded overflow-hidden'>
                                 <button
                                     onClick={goPrevAlt}
@@ -393,7 +525,8 @@ export default function DrawMode() {
                                     <ChevronLeft />
                                 </button>
                                 <span className='px-3 text-sm font-medium text-ink'>
-                                    {selectedAltShape + 1}/{availableAltsForUI.length}
+                                    {selectedAltShape + 1}/
+                                    {availableAltsForUI.length}
                                 </span>
                                 <button
                                     onClick={goNextAlt}
@@ -405,7 +538,9 @@ export default function DrawMode() {
                     )}
 
                     <div className='flex flex-col items-center gap-1.5'>
-                        <span className='text-xs font-semibold text-ink/60'>Hand</span>
+                        <span className='text-xs font-semibold text-ink/60'>
+                            Hand
+                        </span>
                         <button
                             onClick={() => setIsRight(h => !h)}
                             title={isRight ? "Right hand" : "Left hand"}
@@ -414,7 +549,10 @@ export default function DrawMode() {
                         </button>
                     </div>
 
-                    <NotesIntervalsToggle showIntervals={showIntervals} onToggle={setShowIntervals} />
+                    <NotesIntervalsToggle
+                        showIntervals={showIntervals}
+                        onToggle={setShowIntervals}
+                    />
 
                     <button
                         onClick={clearAll}
