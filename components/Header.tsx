@@ -6,11 +6,7 @@ import { useAuth } from "@/lib/contexts/AuthContext";
 import { useSubscription } from "@/lib/hooks/useSubscription";
 import FormFields from "@/components/FormFields";
 import SubmitFeedback from "@/components/SubmitFeedback";
-import {
-    deleteAccount,
-    updateEmail,
-    emailRegex,
-} from "@/lib/API";
+import { deleteAccount, updateEmail, emailRegex } from "@/lib/API";
 
 export default function Header() {
     const { user, signOut, isLoading: authIsLoading } = useAuth();
@@ -445,9 +441,7 @@ export default function Header() {
                                     onClick={() => setPlan("monthly")}
                                     className={`flex-1 py-3 flex flex-col items-center gap-0.5 text-lg font-semibold transition-colors rounded-l-xl ${plan === "monthly" ? "bg-sand-1 text-sand-4" : "text-sand-1/50 hover:text-sand-1/80"}`}>
                                     {prices.monthly && (
-                                        <span>
-                                            {prices.monthly}
-                                        </span>
+                                        <span>{prices.monthly}</span>
                                     )}
                                     <span
                                         className={`text-xs font-medium ${plan === "monthly" ? "text-sand-4/60" : "text-sand-1/30"}`}>
@@ -458,9 +452,7 @@ export default function Header() {
                                     onClick={() => setPlan("yearly")}
                                     className={`flex-1 py-3 flex flex-col items-center gap-0.5 text-lg font-semibold transition-colors rounded-r-xl ${plan === "yearly" ? "bg-sand-1 text-sand-4" : "text-sand-1/50 hover:text-sand-1/80"}`}>
                                     {prices.yearly && (
-                                        <span>
-                                            {prices.yearly}
-                                        </span>
+                                        <span>{prices.yearly}</span>
                                     )}
                                     <span
                                         className={`text-xs font-medium ${plan === "yearly" ? "text-sand-4/60" : "text-sand-1/30"}`}>
@@ -482,7 +474,9 @@ export default function Header() {
                                         ? handleSubscribe
                                         : () => {
                                               setPaywallOpen(false);
-                                              router.push("/signin?redirect=paywall");
+                                              router.push(
+                                                  "/signin?redirect=paywall",
+                                              );
                                           }
                                 }
                                 className='w-full py-3.5 rounded-full bg-sand-1 text-sand-4 text-sm font-bold tracking-wide hover:opacity-90 disabled:opacity-40 transition-all active:scale-95'>

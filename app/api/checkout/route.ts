@@ -59,6 +59,12 @@ export async function POST(req: Request) {
                 metadata: { supabase_user_id: user.id },
             });
             stripeCustomerId = customer.id;
+            await supabase
+                .from('subscriptions')
+                .upsert(
+                    { user_id: user.id, stripe_cust_id: stripeCustomerId },
+                    { onConflict: 'user_id' },
+                );
         }
 
         const siteUrl =
