@@ -180,25 +180,37 @@ const FretboardHorizontal = ({
 
                     {/* Connector line(s) */}
                     {showConnector && (chordGroups && chordGroups.length > 0 ? chordGroups : [chordShape]).map((group, gi) => {
-                        const pts = group
+                        const sorted = group
                             .filter(p => p.fret != null && p.fret >= 0 && p.fret <= numFrets)
-                            .sort((a, b) => a.string - b.string)
-                            .map(p => {
-                                const x = p.fret === 0 ? openX : xForFretMark(p.fret!);
-                                const y = yForString(p.string);
-                                return `${x},${y}`;
-                            });
-                        return pts.length > 1 ? (
-                            <polyline
-                                key={`connector-${gi}`}
-                                points={pts.join(" ")}
-                                fill='none'
-                                stroke='#1f2d3d'
-                                strokeWidth={2.5}
-                                strokeLinejoin='round'
-                                strokeLinecap='round'
-                            />
-                        ) : null;
+                            .sort((a, b) => a.string - b.string);
+                        if (sorted.length < 2) return null;
+                        const center = (p: NotePosition) => ({
+                            x: p.fret === 0 ? openX : xForFretMark(p.fret!),
+                            y: yForString(p.string),
+                            r: p.fret === 0 ? 10 : 12,
+                        });
+                        return sorted.slice(0, -1).map((p, i) => {
+                            const a = center(p);
+                            const b = center(sorted[i + 1]);
+                            const dx = b.x - a.x;
+                            const dy = b.y - a.y;
+                            const len = Math.sqrt(dx * dx + dy * dy);
+                            if (len === 0) return null;
+                            const ux = dx / len;
+                            const uy = dy / len;
+                            return (
+                                <line
+                                    key={`connector-${gi}-${i}`}
+                                    x1={a.x + ux * a.r}
+                                    y1={a.y + uy * a.r}
+                                    x2={b.x - ux * b.r}
+                                    y2={b.y - uy * b.r}
+                                    stroke='#1f2d3d'
+                                    strokeWidth={2.5}
+                                    strokeLinecap='round'
+                                />
+                            );
+                        });
                     })}
 
                     {/* Notes */}
