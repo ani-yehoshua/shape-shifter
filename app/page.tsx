@@ -10,6 +10,7 @@ import DrawMode from "@/components/DrawMode";
 import SavedChordsPanel from "@/components/SavedChordsPanel";
 import ProgressionPanel from "@/components/ProgressionPanel";
 import CapoButton from "@/components/CapoButton";
+import RootNoteButton from "@/components/RootNoteButton";
 import {
     saveChord,
     fetchSavedChords,
@@ -1445,7 +1446,7 @@ export default function Home() {
                                         </button>
                                     )}
 
-                                <div className='flex-1 min-w-0 overflow-x-auto no-scrollbar flex items-center justify-end gap-1'>
+                                <div className='flex-1 min-w-0 overflow-x-auto no-scrollbar flex items-center justify-end gap-1 pt-2.5'>
                                     {selectedMode === "chords" &&
                                         selectionHierarchy.positions.length >
                                             0 && (
@@ -1598,15 +1599,8 @@ export default function Home() {
                                                                 className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                                 <ChevronLeft />
                                                             </button>
-                                                            <span className='relative text-xs font-semibold text-ink w-6 text-center flex items-center justify-center'>
-                                                                {scaleVariantLocked && (
-                                                                    <span className='absolute -top-1 -right-1 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
-                                                                        <StarIcon />
-                                                                    </span>
-                                                                )}
-                                                                <span className={scaleVariantLocked ? "opacity-50" : ""}>
-                                                                    {`${selectedScaleVariant + 1}/${scaleNumVariants}`}
-                                                                </span>
+                                                            <span className={`text-xs font-semibold text-ink w-6 text-center flex items-center justify-center ${scaleVariantLocked ? "opacity-50" : ""}`}>
+                                                                {`${selectedScaleVariant + 1}/${scaleNumVariants}`}
                                                             </span>
                                                             <button
                                                                 onClick={() =>
@@ -1617,7 +1611,12 @@ export default function Home() {
                                                                     )
                                                                 }
                                                                 title='Next variant'
-                                                                className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                                                className='relative w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                                                {scaleVariantLocked && (
+                                                                    <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
+                                                                        <StarIcon />
+                                                                    </span>
+                                                                )}
                                                                 <ChevronRight />
                                                             </button>
                                                         </div>
@@ -1634,18 +1633,18 @@ export default function Home() {
                                             className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                             <ChevronLeft />
                                         </button>
-                                        <span className='relative text-xs font-semibold text-ink w-8 text-center flex items-center justify-center'>
-                                            {altsLocked && (
-                                                <span className='absolute -top-2 -right-2 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
-                                                    <StarIcon />
-                                                </span>
-                                            )}
+                                        <span className={`text-xs font-semibold text-ink w-8 text-center flex items-center justify-center ${altsLocked ? "opacity-50" : ""}`}>
                                             {`${selectedAltShape + 1}/${availableAlts.length}`}
                                         </span>
                                         <button
                                             onClick={goNextAlt}
                                             title='Next shape'
-                                            className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                            className='relative w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                            {altsLocked && (
+                                                <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
+                                                    <StarIcon />
+                                                </span>
+                                            )}
                                             <ChevronRight />
                                         </button>
                                     </div>
@@ -1655,8 +1654,8 @@ export default function Home() {
                             {/* Action bar */}
                             <div className='shrink-0 border-t border-ink/20 bg-sand-1 pt-2 pb-4 flex items-center gap-3 pr-4'>
                                 {/* Scrollable controls */}
-                                <div className='flex-1 overflow-x-auto no-scrollbar pt-2.5 pb-1'>
-                                    <div className='flex items-center gap-3 px-4 w-max'>
+                                <div className='flex-1 overflow-x-auto no-scrollbar'>
+                                    <div className='flex items-center gap-3 px-4 w-max py-2.5'>
                                         <button
                                             onClick={() => {
                                                 setRandomizeOn(v => !v);
@@ -1828,13 +1827,12 @@ export default function Home() {
                                             </button>
                                         </>
                                     )}
-                                    <button
-                                        onClick={handleGenerateNewRoot}
-                                        className='whitespace-nowrap px-5 py-2.5 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all'>
-                                        {selectedMode === "scales"
-                                            ? "New Root"
-                                            : "New Chord"}
-                                    </button>
+                                    <RootNoteButton
+                                        root={currentRootNote}
+                                        onSelect={setCurrentRootNote}
+                                        onRandom={handleGenerateNewRoot}
+                                        className='whitespace-nowrap px-5 py-2.5 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all'
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -2550,20 +2548,8 @@ export default function Home() {
                                                                         className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-r border-ink rounded-l'>
                                                                         <ChevronLeft />
                                                                     </button>
-                                                                    <span className='relative px-3 text-sm font-medium text-ink'>
-                                                                        {scaleVariantLocked && (
-                                                                            <span className='absolute -top-2 -right-2 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
-                                                                                <StarIcon />
-                                                                            </span>
-                                                                        )}
-                                                                        <span
-                                                                            className={
-                                                                                scaleVariantLocked
-                                                                                    ? "opacity-50"
-                                                                                    : ""
-                                                                            }>
-                                                                            {`${selectedScaleVariant + 1}/${scaleNumVariants}`}
-                                                                        </span>
+                                                                    <span className={`px-3 text-sm font-medium text-ink ${scaleVariantLocked ? "opacity-50" : ""}`}>
+                                                                        {`${selectedScaleVariant + 1}/${scaleNumVariants}`}
                                                                     </span>
                                                                     <button
                                                                         onClick={() =>
@@ -2574,7 +2560,12 @@ export default function Home() {
                                                                             )
                                                                         }
                                                                         title='Next variant'
-                                                                        className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-l border-ink rounded-r'>
+                                                                        className='relative px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-l border-ink rounded-r'>
+                                                                        {scaleVariantLocked && (
+                                                                            <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
+                                                                                <StarIcon />
+                                                                            </span>
+                                                                        )}
                                                                         <ChevronRight />
                                                                     </button>
                                                                 </div>
@@ -2613,25 +2604,18 @@ export default function Home() {
                                                             className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-r border-ink rounded-l'>
                                                             <ChevronLeft />
                                                         </button>
-                                                        <span className='relative px-3 text-sm font-medium text-ink'>
-                                                            {altsLocked && (
-                                                                <span className='absolute -top-2 -right-2 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
-                                                                    <StarIcon />
-                                                                </span>
-                                                            )}
-                                                            <span
-                                                                className={
-                                                                    altsLocked
-                                                                        ? "opacity-50"
-                                                                        : ""
-                                                                }>
-                                                                {`${selectedAltShape + 1}/${availableAlts.length}`}
-                                                            </span>
+                                                        <span className={`px-3 text-sm font-medium text-ink ${altsLocked ? "opacity-50" : ""}`}>
+                                                            {`${selectedAltShape + 1}/${availableAlts.length}`}
                                                         </span>
                                                         <button
                                                             onClick={goNextAlt}
                                                             title='Next shape'
-                                                            className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-l border-ink rounded-r'>
+                                                            className='relative px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-l border-ink rounded-r'>
+                                                            {altsLocked && (
+                                                                <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
+                                                                    <StarIcon />
+                                                                </span>
+                                                            )}
                                                             <ChevronRight />
                                                         </button>
                                                     </div>
@@ -2752,13 +2736,12 @@ export default function Home() {
                                             </button>
                                         </>
                                     )}
-                                    <button
-                                        onClick={handleGenerateNewRoot}
-                                        className='px-6 py-2 bg-ink text-sand-1 text-sm font-semibold rounded-full hover:opacity-90 transition-opacity'>
-                                        {selectedMode === "scales"
-                                            ? "New Root"
-                                            : "New Chord"}
-                                    </button>
+                                    <RootNoteButton
+                                        root={currentRootNote}
+                                        onSelect={setCurrentRootNote}
+                                        onRandom={handleGenerateNewRoot}
+                                        className='px-6 py-2 bg-ink text-sand-1 text-sm font-semibold rounded-full hover:opacity-90 transition-opacity'
+                                    />
                                 </div>
 
                                 {/* Actions */}
