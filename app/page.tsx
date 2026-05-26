@@ -1924,9 +1924,8 @@ export default function Home() {
                                         <div className='w-10 h-1 bg-ink/20 rounded-full' />
                                     </div>
 
-                                    {/* Scrollable content */}
-                                    <div className='flex-1 min-h-0 overflow-y-auto px-4 flex flex-col gap-5'>
-                                        {/* Mode toggle */}
+                                    {/* Mode toggle — always visible, never scrolls */}
+                                    <div className='shrink-0 px-4 pb-3'>
                                         <div className='flex rounded-xl overflow-hidden border border-ink'>
                                             <button
                                                 onClick={() =>
@@ -1951,7 +1950,10 @@ export default function Home() {
                                                 Scales
                                             </button>
                                         </div>
+                                    </div>
 
+                                    {/* Scrollable content */}
+                                    <div className='flex-1 min-h-0 overflow-y-auto px-4 flex flex-col gap-5'>
                                         {/* Chord controls */}
                                         {selectedMode === "chords" && (
                                             <>
