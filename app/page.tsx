@@ -110,7 +110,6 @@ function MenuIcon() {
     );
 }
 
-
 function StarIcon() {
     return (
         <svg
@@ -206,7 +205,6 @@ function ListIcon() {
         </svg>
     );
 }
-
 
 function BookmarkIcon({ filled = false }: { filled?: boolean }) {
     return (
@@ -515,7 +513,9 @@ export default function Home() {
     const [octaveUp, setOctaveUp] = React.useState(false);
     const [capo, setCapo] = React.useState(0);
     const [selectedTuning, setSelectedTuningRaw] = React.useState<Tuning>(
-        () => TUNINGS.find(t => t.name === preferences.tuningName) ?? STANDARD_TUNING,
+        () =>
+            TUNINGS.find(t => t.name === preferences.tuningName) ??
+            STANDARD_TUNING,
     );
     const setSelectedTuning = React.useCallback(
         (t: Tuning) => {
@@ -527,7 +527,8 @@ export default function Home() {
     // Sync when preference changes from the settings drawer
     React.useEffect(() => {
         setSelectedTuningRaw(
-            TUNINGS.find(t => t.name === preferences.tuningName) ?? STANDARD_TUNING,
+            TUNINGS.find(t => t.name === preferences.tuningName) ??
+                STANDARD_TUNING,
         );
     }, [preferences.tuningName]);
 
@@ -581,16 +582,23 @@ export default function Home() {
 
     // Fetch signatures whenever userId or savedRefreshKey changes
     React.useEffect(() => {
-        if (!userId) { setSavedChordKeys(new Set()); return; }
+        if (!userId) {
+            setSavedChordKeys(new Set());
+            return;
+        }
         fetchSavedChords()
             .then(chords => {
                 setSavedChordKeys(
                     new Set(
-                        chords.map(c =>
-                            `${c.context.tuningName}|${c.context.capo}|${c.notes
-                                .map((n: NotePosition) => `${n.string}:${n.fret}`)
-                                .sort()
-                                .join(",")}`,
+                        chords.map(
+                            c =>
+                                `${c.context.tuningName}|${c.context.capo}|${c.notes
+                                    .map(
+                                        (n: NotePosition) =>
+                                            `${n.string}:${n.fret}`,
+                                    )
+                                    .sort()
+                                    .join(",")}`,
                         ),
                     ),
                 );
@@ -725,34 +733,37 @@ export default function Home() {
         }
     }, [saveDialog, saveLabel, chordSignature]);
 
-    const handleLoadSaved = React.useCallback((chord: SavedChord) => {
-        const ctx = chord.context;
-        if (ctx.source === "draw") {
-            setIsDrawMode(true);
-            setDrawPreloadNotes(chord.notes);
-            return;
-        }
-        setIsDrawMode(false);
-        setSelectedMode(ctx.mode);
-        setCurrentRootNote(ctx.rootNote);
-        setCapo(ctx.capo);
-        const t = TUNINGS.find(t => t.name === ctx.tuningName);
-        if (t) setSelectedTuning(t);
-        if (ctx.mode === "chords") {
-            setSelectedCategory(ctx.category);
-            setSelectedVoicingType(ctx.voicingType);
-            setSelectedStringSet(ctx.stringSet);
-            setSelectedChordQuality(ctx.chordQuality);
-            setSelectedPosition(ctx.position);
-            setSelectedAltShape(ctx.altShape);
-        } else {
-            setSelectedNoteGroup(ctx.noteGroup);
-            setSelectedScale(ctx.scale);
-            setSelectedScalePosition(ctx.scalePosition);
-            setSelectedScalePattern(ctx.scalePattern);
-            setSelectedScaleVariant(ctx.scaleVariant);
-        }
-    }, [setSelectedTuning]);
+    const handleLoadSaved = React.useCallback(
+        (chord: SavedChord) => {
+            const ctx = chord.context;
+            if (ctx.source === "draw") {
+                setIsDrawMode(true);
+                setDrawPreloadNotes(chord.notes);
+                return;
+            }
+            setIsDrawMode(false);
+            setSelectedMode(ctx.mode);
+            setCurrentRootNote(ctx.rootNote);
+            setCapo(ctx.capo);
+            const t = TUNINGS.find(t => t.name === ctx.tuningName);
+            if (t) setSelectedTuning(t);
+            if (ctx.mode === "chords") {
+                setSelectedCategory(ctx.category);
+                setSelectedVoicingType(ctx.voicingType);
+                setSelectedStringSet(ctx.stringSet);
+                setSelectedChordQuality(ctx.chordQuality);
+                setSelectedPosition(ctx.position);
+                setSelectedAltShape(ctx.altShape);
+            } else {
+                setSelectedNoteGroup(ctx.noteGroup);
+                setSelectedScale(ctx.scale);
+                setSelectedScalePosition(ctx.scalePosition);
+                setSelectedScalePattern(ctx.scalePattern);
+                setSelectedScaleVariant(ctx.scaleVariant);
+            }
+        },
+        [setSelectedTuning],
+    );
 
     const { selectionHierarchy, availableAlts } = useChordLibrary({
         allChordShapes,
@@ -883,7 +894,9 @@ export default function Home() {
             const entry = SCALE_SHAPES[group]?.[scale];
             if (!entry) return;
             const positionCount = entry.positions.length;
-            const position = positionCount ? Math.floor(Math.random() * positionCount) : 0;
+            const position = positionCount
+                ? Math.floor(Math.random() * positionCount)
+                : 0;
             setSelectedNoteGroup(group);
             setSelectedScale(scale);
             setSelectedScalePosition(position);
@@ -918,14 +931,20 @@ export default function Home() {
             const options: Record<string, ChordLevel> = cursor.options;
             const allKeys = Object.keys(options);
             let pool: string[];
-            if (levelName === "Voicing Types") pool = cfg.voicingTypes.filter(v => allKeys.includes(v));
-            else if (levelName === "String Sets") pool = cfg.stringSets.filter(v => allKeys.includes(v));
-            else if (levelName === "Chord Qualities") pool = cfg.qualities.filter(v => allKeys.includes(v));
+            if (levelName === "Voicing Types")
+                pool = cfg.voicingTypes.filter(v => allKeys.includes(v));
+            else if (levelName === "String Sets")
+                pool = cfg.stringSets.filter(v => allKeys.includes(v));
+            else if (levelName === "Chord Qualities")
+                pool = cfg.qualities.filter(v => allKeys.includes(v));
             else pool = [];
             const chosen = pickFrom(pool, allKeys);
-            if (levelName === "Voicing Types") newSelections.voicingType = chosen;
-            else if (levelName === "String Sets") newSelections.stringSet = chosen;
-            else if (levelName === "Chord Qualities") newSelections.quality = chosen;
+            if (levelName === "Voicing Types")
+                newSelections.voicingType = chosen;
+            else if (levelName === "String Sets")
+                newSelections.stringSet = chosen;
+            else if (levelName === "Chord Qualities")
+                newSelections.quality = chosen;
             cursor = options[chosen];
         }
 
@@ -933,8 +952,12 @@ export default function Home() {
         const posKeys = Object.keys(cursor.options);
         newSelections.position = pick(posKeys);
         const pd = cursor.options[newSelections.position];
-        const alts = Array.isArray(pd.altShapes) && pd.altShapes.length ? pd.altShapes : [];
-        newSelections.altShape = hasPro && alts.length ? Math.floor(Math.random() * alts.length) : 0;
+        const alts =
+            Array.isArray(pd.altShapes) && pd.altShapes.length
+                ? pd.altShapes
+                : [];
+        newSelections.altShape =
+            hasPro && alts.length ? Math.floor(Math.random() * alts.length) : 0;
 
         setSelectedCategory(cat);
         setSelectedVoicingType(newSelections.voicingType);
@@ -952,9 +975,12 @@ export default function Home() {
             if (pattern) {
                 function isCleanRoot(root: string) {
                     if (root === "B#" || root === "E#") return false;
-                    return (pattern as Array<{ semitones: number; degree: number }>).every(({ semitones, degree }) => {
+                    return (
+                        pattern as Array<{ semitones: number; degree: number }>
+                    ).every(({ semitones, degree }) => {
                         const label = spellInterval(root, semitones, degree);
-                        return degree !== 1 && MAJOR_SCALE_OFFSETS[degree] !== semitones
+                        return degree !== 1 &&
+                            MAJOR_SCALE_OFFSETS[degree] !== semitones
                             ? /^[#b][2-7]$/.test(label)
                             : !/^[#b]/.test(label);
                     });
@@ -965,12 +991,18 @@ export default function Home() {
                 setCurrentRootNote(
                     valid.length
                         ? pick(valid)
-                        : (candidates.find(r => !r.includes("#") && !r.includes("b")) ?? candidates[0]),
+                        : (candidates.find(
+                              r => !r.includes("#") && !r.includes("b"),
+                          ) ?? candidates[0]),
                 );
             } else {
                 const sem = Math.floor(Math.random() * 12);
                 const candidates = NOTES[sem];
-                setCurrentRootNote(candidates.find(r => !r.includes("#") && !r.includes("b")) ?? candidates[0]);
+                setCurrentRootNote(
+                    candidates.find(
+                        r => !r.includes("#") && !r.includes("b"),
+                    ) ?? candidates[0],
+                );
             }
         }
     };
@@ -1364,9 +1396,20 @@ export default function Home() {
                             preloadNotes={drawPreloadNotes}
                             onPreloadConsumed={() => setDrawPreloadNotes(null)}
                             onSaveRequest={(notes, label) => {
-                                if (!userId) { setAuthGateOpen(true); return; }
+                                if (!userId) {
+                                    setAuthGateOpen(true);
+                                    return;
+                                }
                                 setSaveLabel(label);
-                                setSaveDialog({ label, notes, context: { source: "draw", tuningName: selectedTuning.name, capo } });
+                                setSaveDialog({
+                                    label,
+                                    notes,
+                                    context: {
+                                        source: "draw",
+                                        tuningName: selectedTuning.name,
+                                        capo,
+                                    },
+                                });
                             }}
                             onProgressionRequest={(notes, label) => {
                                 setProgressionPendingChord({
@@ -1446,7 +1489,7 @@ export default function Home() {
                                         </button>
                                     )}
 
-                                <div className='flex-1 min-w-0 overflow-x-auto no-scrollbar flex items-center justify-end gap-1 pt-2.5'>
+                                <div className='flex-1 min-w-0 overflow-x-auto no-scrollbar flex items-center justify-end gap-1'>
                                     {selectedMode === "chords" &&
                                         selectionHierarchy.positions.length >
                                             0 && (
@@ -1599,8 +1642,15 @@ export default function Home() {
                                                                 className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                                 <ChevronLeft />
                                                             </button>
-                                                            <span className={`text-xs font-semibold text-ink w-6 text-center flex items-center justify-center ${scaleVariantLocked ? "opacity-50" : ""}`}>
-                                                                {`${selectedScaleVariant + 1}/${scaleNumVariants}`}
+                                                            <span className='relative text-xs font-semibold text-ink w-6 text-center flex items-center justify-center'>
+                                                                {scaleVariantLocked && (
+                                                                    <span className='absolute -top-1 -right-1 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
+                                                                        <StarIcon />
+                                                                    </span>
+                                                                )}
+                                                                <span className={scaleVariantLocked ? "opacity-50" : ""}>
+                                                                    {`${selectedScaleVariant + 1}/${scaleNumVariants}`}
+                                                                </span>
                                                             </span>
                                                             <button
                                                                 onClick={() =>
@@ -1611,12 +1661,7 @@ export default function Home() {
                                                                     )
                                                                 }
                                                                 title='Next variant'
-                                                                className='relative w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
-                                                                {scaleVariantLocked && (
-                                                                    <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
-                                                                        <StarIcon />
-                                                                    </span>
-                                                                )}
+                                                                className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                                 <ChevronRight />
                                                             </button>
                                                         </div>
@@ -1633,7 +1678,8 @@ export default function Home() {
                                             className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                             <ChevronLeft />
                                         </button>
-                                        <span className={`text-xs font-semibold text-ink w-8 text-center flex items-center justify-center ${altsLocked ? "opacity-50" : ""}`}>
+                                        <span
+                                            className={`text-xs font-semibold text-ink w-8 text-center flex items-center justify-center ${altsLocked ? "opacity-50" : ""}`}>
                                             {`${selectedAltShape + 1}/${availableAlts.length}`}
                                         </span>
                                         <button
@@ -1658,10 +1704,10 @@ export default function Home() {
                                     <div className='flex items-center gap-3 px-4 w-max py-2.5'>
                                         <button
                                             onClick={() => {
-                                                setRandomizeOn(v => !v);
-                                                setRandomizeSheetOpen(true);
+                                                if (randomizeOn) setRandomizeOn(false);
+                                                else setRandomizeSheetOpen(true);
                                             }}
-                                            title='Randomize'
+                                            title={randomizeOn ? "Turn off randomize" : "Randomize"}
                                             className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-full border transition-colors ${
                                                 randomizeOn
                                                     ? "bg-ink text-sand-1 border-ink"
@@ -1717,7 +1763,11 @@ export default function Home() {
                                         {/* Progression builder */}
                                         <button
                                             onClick={() =>
-                                                hasPro ? setProgressionPanelOpen(true) : openPaywall()
+                                                hasPro
+                                                    ? setProgressionPanelOpen(
+                                                          true,
+                                                      )
+                                                    : openPaywall()
                                             }
                                             title='Progressions'
                                             className='shrink-0 relative w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
@@ -1827,12 +1877,21 @@ export default function Home() {
                                             </button>
                                         </>
                                     )}
-                                    <RootNoteButton
-                                        root={currentRootNote}
-                                        onSelect={setCurrentRootNote}
-                                        onRandom={handleGenerateNewRoot}
-                                        className='whitespace-nowrap px-5 py-2.5 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all'
-                                    />
+                                    {randomizeOn ? (
+                                        <button
+                                            onClick={handleRandomize}
+                                            title='Randomize again'
+                                            className='whitespace-nowrap w-10 h-10 flex items-center justify-center bg-ink text-sand-1 rounded-full hover:opacity-90 active:scale-95 transition-all'>
+                                            <RandomizeIcon />
+                                        </button>
+                                    ) : (
+                                        <RootNoteButton
+                                            root={currentRootNote}
+                                            onSelect={setCurrentRootNote}
+                                            onRandom={handleGenerateNewRoot}
+                                            className='whitespace-nowrap px-5 py-2.5 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all'
+                                        />
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -2548,8 +2607,15 @@ export default function Home() {
                                                                         className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-r border-ink rounded-l'>
                                                                         <ChevronLeft />
                                                                     </button>
-                                                                    <span className={`px-3 text-sm font-medium text-ink ${scaleVariantLocked ? "opacity-50" : ""}`}>
-                                                                        {`${selectedScaleVariant + 1}/${scaleNumVariants}`}
+                                                                    <span className='relative px-3 text-sm font-medium text-ink'>
+                                                                        {scaleVariantLocked && (
+                                                                            <span className='absolute -top-2 -right-2 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
+                                                                                <StarIcon />
+                                                                            </span>
+                                                                        )}
+                                                                        <span className={scaleVariantLocked ? "opacity-50" : ""}>
+                                                                            {`${selectedScaleVariant + 1}/${scaleNumVariants}`}
+                                                                        </span>
                                                                     </span>
                                                                     <button
                                                                         onClick={() =>
@@ -2560,12 +2626,7 @@ export default function Home() {
                                                                             )
                                                                         }
                                                                         title='Next variant'
-                                                                        className='relative px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-l border-ink rounded-r'>
-                                                                        {scaleVariantLocked && (
-                                                                            <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
-                                                                                <StarIcon />
-                                                                            </span>
-                                                                        )}
+                                                                        className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-l border-ink rounded-r'>
                                                                         <ChevronRight />
                                                                     </button>
                                                                 </div>
@@ -2604,7 +2665,8 @@ export default function Home() {
                                                             className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-r border-ink rounded-l'>
                                                             <ChevronLeft />
                                                         </button>
-                                                        <span className={`px-3 text-sm font-medium text-ink ${altsLocked ? "opacity-50" : ""}`}>
+                                                        <span
+                                                            className={`px-3 text-sm font-medium text-ink ${altsLocked ? "opacity-50" : ""}`}>
                                                             {`${selectedAltShape + 1}/${availableAlts.length}`}
                                                         </span>
                                                         <button
@@ -2736,12 +2798,21 @@ export default function Home() {
                                             </button>
                                         </>
                                     )}
-                                    <RootNoteButton
-                                        root={currentRootNote}
-                                        onSelect={setCurrentRootNote}
-                                        onRandom={handleGenerateNewRoot}
-                                        className='px-6 py-2 bg-ink text-sand-1 text-sm font-semibold rounded-full hover:opacity-90 transition-opacity'
-                                    />
+                                    {randomizeOn ? (
+                                        <button
+                                            onClick={handleRandomize}
+                                            title='Randomize again'
+                                            className='w-10 h-10 flex items-center justify-center bg-ink text-sand-1 rounded-full hover:opacity-90 transition-opacity'>
+                                            <RandomizeIcon />
+                                        </button>
+                                    ) : (
+                                        <RootNoteButton
+                                            root={currentRootNote}
+                                            onSelect={setCurrentRootNote}
+                                            onRandom={handleGenerateNewRoot}
+                                            className='px-6 py-2 bg-ink text-sand-1 text-sm font-semibold rounded-full hover:opacity-90 transition-opacity'
+                                        />
+                                    )}
                                 </div>
 
                                 {/* Actions */}
@@ -2752,8 +2823,8 @@ export default function Home() {
                                     />
                                     <button
                                         onClick={() => {
-                                            setRandomizeOn(v => !v);
-                                            setRandomizeSheetOpen(true);
+                                            if (randomizeOn) setRandomizeOn(false);
+                                            else setRandomizeSheetOpen(true);
                                         }}
                                         className={`whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
                                             randomizeOn
@@ -2798,7 +2869,9 @@ export default function Home() {
                                     </button>
                                     <button
                                         onClick={() =>
-                                            hasPro ? setProgressionPanelOpen(true) : openPaywall()
+                                            hasPro
+                                                ? setProgressionPanelOpen(true)
+                                                : openPaywall()
                                         }
                                         title='Progressions'
                                         className='whitespace-nowrap relative flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
@@ -2860,14 +2933,26 @@ export default function Home() {
                     ${randomizeSheetOpen ? "translate-y-0 sm:-translate-y-1/2" : "translate-y-full sm:translate-y-full sm:opacity-0 sm:pointer-events-none"}`}>
                     {/* Header */}
                     <div className='flex items-center justify-between px-5 pt-5 pb-3 border-b border-ink/10 shrink-0'>
-                        <h2 className='text-base font-bold text-ink'>Randomize</h2>
+                        <h2 className='text-base font-bold text-ink'>
+                            Randomize
+                        </h2>
                         <div className='flex items-center gap-3'>
                             <button
                                 onClick={() => {
                                     if (selectedMode === "chords") {
-                                        setChordRandomize({ categories: [], voicingTypes: [], stringSets: [], qualities: [], randomizeRoot: true });
+                                        setChordRandomize({
+                                            categories: [],
+                                            voicingTypes: [],
+                                            stringSets: [],
+                                            qualities: [],
+                                            randomizeRoot: true,
+                                        });
                                     } else {
-                                        setScaleRandomize({ noteGroups: [], scales: [], randomizeRoot: true });
+                                        setScaleRandomize({
+                                            noteGroups: [],
+                                            scales: [],
+                                            randomizeRoot: true,
+                                        });
                                     }
                                 }}
                                 className='text-xs font-semibold text-ink/40 hover:text-ink transition-colors'>
@@ -2888,82 +2973,176 @@ export default function Home() {
                                 {/* Categories */}
                                 <div>
                                     <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
-                                        Category <span className='normal-case font-normal text-ink/30'>(empty = all)</span>
+                                        Category{" "}
+                                        <span className='normal-case font-normal text-ink/30'>
+                                            (empty = all)
+                                        </span>
                                     </p>
                                     <div className='flex flex-wrap gap-2'>
-                                        {Object.keys(allChordShapes).map(cat => {
-                                            const active = chordRandomize.categories.includes(cat);
-                                            return (
-                                                <button
-                                                    key={cat}
-                                                    onClick={() =>
-                                                        setChordRandomize(c => ({
-                                                            ...c,
-                                                            categories: active
-                                                                ? c.categories.filter(x => x !== cat)
-                                                                : [...c.categories, cat],
-                                                            voicingTypes: [],
-                                                            stringSets: [],
-                                                            qualities: [],
-                                                        }))
-                                                    }
-                                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                                                    {cat}
-                                                </button>
-                                            );
-                                        })}
+                                        {Object.keys(allChordShapes).map(
+                                            cat => {
+                                                const active =
+                                                    chordRandomize.categories.includes(
+                                                        cat,
+                                                    );
+                                                return (
+                                                    <button
+                                                        key={cat}
+                                                        onClick={() =>
+                                                            setChordRandomize(
+                                                                c => ({
+                                                                    ...c,
+                                                                    categories:
+                                                                        active
+                                                                            ? c.categories.filter(
+                                                                                  x =>
+                                                                                      x !==
+                                                                                      cat,
+                                                                              )
+                                                                            : [
+                                                                                  ...c.categories,
+                                                                                  cat,
+                                                                              ],
+                                                                    voicingTypes:
+                                                                        [],
+                                                                    stringSets:
+                                                                        [],
+                                                                    qualities:
+                                                                        [],
+                                                                }),
+                                                            )
+                                                        }
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                        {cat}
+                                                    </button>
+                                                );
+                                            },
+                                        )}
                                     </div>
                                 </div>
 
                                 {/* Sub-levels — only shown when exactly one category is pinned */}
-                                {chordRandomize.categories.length === 1 && (() => {
-                                    const cat = chordRandomize.categories[0];
-                                    const levels: { label: string; key: keyof ChordRandomizeConfig; options: string[] }[] = [];
-                                    let cursor: ChordLevel | undefined = (allChordShapes as Record<string, ChordLevel>)[cat];
-                                    while (cursor?.options && cursor.levelName !== "Positions") {
-                                        const keys: string[] = Object.keys(cursor.options);
-                                        if (cursor.levelName === "Voicing Types") levels.push({ label: "Voicing", key: "voicingTypes", options: keys });
-                                        else if (cursor.levelName === "String Sets") levels.push({ label: "String Set", key: "stringSets", options: keys });
-                                        else if (cursor.levelName === "Chord Qualities") levels.push({ label: "Quality", key: "qualities", options: keys });
-                                        // drill to first option to discover next level
-                                        cursor = cursor.options[keys[0]];
-                                    }
-                                    return levels.map(({ label, key, options }) => (
-                                        <div key={key}>
-                                            <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
-                                                {label} <span className='normal-case font-normal text-ink/30'>(empty = all)</span>
-                                            </p>
-                                            <div className='flex flex-wrap gap-2'>
-                                                {options.map(opt => {
-                                                    const active = (chordRandomize[key] as string[]).includes(opt);
-                                                    return (
-                                                        <button
-                                                            key={opt}
-                                                            onClick={() =>
-                                                                setChordRandomize(c => ({
-                                                                    ...c,
-                                                                    [key]: active
-                                                                        ? (c[key] as string[]).filter(x => x !== opt)
-                                                                        : [...(c[key] as string[]), opt],
-                                                                }))
-                                                            }
-                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                                                            {opt}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    ));
-                                })()}
+                                {chordRandomize.categories.length === 1 &&
+                                    (() => {
+                                        const cat =
+                                            chordRandomize.categories[0];
+                                        const levels: {
+                                            label: string;
+                                            key: keyof ChordRandomizeConfig;
+                                            options: string[];
+                                        }[] = [];
+                                        let cursor: ChordLevel | undefined = (
+                                            allChordShapes as Record<
+                                                string,
+                                                ChordLevel
+                                            >
+                                        )[cat];
+                                        while (
+                                            cursor?.options &&
+                                            cursor.levelName !== "Positions"
+                                        ) {
+                                            const keys: string[] = Object.keys(
+                                                cursor.options,
+                                            );
+                                            if (
+                                                cursor.levelName ===
+                                                "Voicing Types"
+                                            )
+                                                levels.push({
+                                                    label: "Voicing",
+                                                    key: "voicingTypes",
+                                                    options: keys,
+                                                });
+                                            else if (
+                                                cursor.levelName ===
+                                                "String Sets"
+                                            )
+                                                levels.push({
+                                                    label: "String Set",
+                                                    key: "stringSets",
+                                                    options: keys,
+                                                });
+                                            else if (
+                                                cursor.levelName ===
+                                                "Chord Qualities"
+                                            )
+                                                levels.push({
+                                                    label: "Quality",
+                                                    key: "qualities",
+                                                    options: keys,
+                                                });
+                                            // drill to first option to discover next level
+                                            cursor = cursor.options[keys[0]];
+                                        }
+                                        return levels.map(
+                                            ({ label, key, options }) => (
+                                                <div key={key}>
+                                                    <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
+                                                        {label}{" "}
+                                                        <span className='normal-case font-normal text-ink/30'>
+                                                            (empty = all)
+                                                        </span>
+                                                    </p>
+                                                    <div className='flex flex-wrap gap-2'>
+                                                        {options.map(opt => {
+                                                            const active = (
+                                                                chordRandomize[
+                                                                    key
+                                                                ] as string[]
+                                                            ).includes(opt);
+                                                            return (
+                                                                <button
+                                                                    key={opt}
+                                                                    onClick={() =>
+                                                                        setChordRandomize(
+                                                                            c => ({
+                                                                                ...c,
+                                                                                [key]: active
+                                                                                    ? (
+                                                                                          c[
+                                                                                              key
+                                                                                          ] as string[]
+                                                                                      ).filter(
+                                                                                          x =>
+                                                                                              x !==
+                                                                                              opt,
+                                                                                      )
+                                                                                    : [
+                                                                                          ...(c[
+                                                                                              key
+                                                                                          ] as string[]),
+                                                                                          opt,
+                                                                                      ],
+                                                                            }),
+                                                                        )
+                                                                    }
+                                                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                                    {opt}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ),
+                                        );
+                                    })()}
 
                                 {/* Root note */}
                                 <div className='flex items-center justify-between'>
-                                    <p className='text-sm font-semibold text-ink'>Randomize root note</p>
+                                    <p className='text-sm font-semibold text-ink'>
+                                        Randomize root note
+                                    </p>
                                     <button
-                                        onClick={() => setChordRandomize(c => ({ ...c, randomizeRoot: !c.randomizeRoot }))}
+                                        onClick={() =>
+                                            setChordRandomize(c => ({
+                                                ...c,
+                                                randomizeRoot: !c.randomizeRoot,
+                                            }))
+                                        }
                                         className={`w-11 h-6 rounded-full transition-colors relative ${chordRandomize.randomizeRoot ? "bg-ink" : "bg-ink/20"}`}>
-                                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${chordRandomize.randomizeRoot ? "translate-x-5.5" : "translate-x-0.5"}`} />
+                                        <span
+                                            className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${chordRandomize.randomizeRoot ? "translate-x-[22px]" : "translate-x-[2px]"}`}
+                                        />
                                     </button>
                                 </div>
                             </>
@@ -2972,28 +3151,46 @@ export default function Home() {
                                 {/* Note Groups */}
                                 <div>
                                     <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
-                                        Note Group <span className='normal-case font-normal text-ink/30'>(empty = all)</span>
+                                        Note Group{" "}
+                                        <span className='normal-case font-normal text-ink/30'>
+                                            (empty = all)
+                                        </span>
                                     </p>
                                     <div className='flex flex-wrap gap-2'>
-                                        {Object.keys(SCALE_SHAPES).map(group => {
-                                            const active = scaleRandomize.noteGroups.includes(group);
-                                            return (
-                                                <button
-                                                    key={group}
-                                                    onClick={() =>
-                                                        setScaleRandomize(c => ({
-                                                            ...c,
-                                                            noteGroups: active
-                                                                ? c.noteGroups.filter(x => x !== group)
-                                                                : [...c.noteGroups, group],
-                                                            scales: [],
-                                                        }))
-                                                    }
-                                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                                                    {group}
-                                                </button>
-                                            );
-                                        })}
+                                        {Object.keys(SCALE_SHAPES).map(
+                                            group => {
+                                                const active =
+                                                    scaleRandomize.noteGroups.includes(
+                                                        group,
+                                                    );
+                                                return (
+                                                    <button
+                                                        key={group}
+                                                        onClick={() =>
+                                                            setScaleRandomize(
+                                                                c => ({
+                                                                    ...c,
+                                                                    noteGroups:
+                                                                        active
+                                                                            ? c.noteGroups.filter(
+                                                                                  x =>
+                                                                                      x !==
+                                                                                      group,
+                                                                              )
+                                                                            : [
+                                                                                  ...c.noteGroups,
+                                                                                  group,
+                                                                              ],
+                                                                    scales: [],
+                                                                }),
+                                                            )
+                                                        }
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                        {group}
+                                                    </button>
+                                                );
+                                            },
+                                        )}
                                     </div>
                                 </div>
 
@@ -3001,38 +3198,68 @@ export default function Home() {
                                 {scaleRandomize.noteGroups.length > 0 && (
                                     <div>
                                         <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
-                                            Scale <span className='normal-case font-normal text-ink/30'>(empty = all in group)</span>
+                                            Scale{" "}
+                                            <span className='normal-case font-normal text-ink/30'>
+                                                (empty = all in group)
+                                            </span>
                                         </p>
                                         <div className='flex flex-wrap gap-2'>
-                                            {scaleRandomize.noteGroups.flatMap(g => Object.keys(SCALE_SHAPES[g] ?? {})).map(s => {
-                                                const active = scaleRandomize.scales.includes(s);
-                                                return (
-                                                    <button
-                                                        key={s}
-                                                        onClick={() =>
-                                                            setScaleRandomize(c => ({
-                                                                ...c,
-                                                                scales: active
-                                                                    ? c.scales.filter(x => x !== s)
-                                                                    : [...c.scales, s],
-                                                            }))
-                                                        }
-                                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                                                        {s}
-                                                    </button>
-                                                );
-                                            })}
+                                            {scaleRandomize.noteGroups
+                                                .flatMap(g =>
+                                                    Object.keys(
+                                                        SCALE_SHAPES[g] ?? {},
+                                                    ),
+                                                )
+                                                .map(s => {
+                                                    const active =
+                                                        scaleRandomize.scales.includes(
+                                                            s,
+                                                        );
+                                                    return (
+                                                        <button
+                                                            key={s}
+                                                            onClick={() =>
+                                                                setScaleRandomize(
+                                                                    c => ({
+                                                                        ...c,
+                                                                        scales: active
+                                                                            ? c.scales.filter(
+                                                                                  x =>
+                                                                                      x !==
+                                                                                      s,
+                                                                              )
+                                                                            : [
+                                                                                  ...c.scales,
+                                                                                  s,
+                                                                              ],
+                                                                    }),
+                                                                )
+                                                            }
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                            {s}
+                                                        </button>
+                                                    );
+                                                })}
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Root note */}
                                 <div className='flex items-center justify-between'>
-                                    <p className='text-sm font-semibold text-ink'>Randomize root note</p>
+                                    <p className='text-sm font-semibold text-ink'>
+                                        Randomize root note
+                                    </p>
                                     <button
-                                        onClick={() => setScaleRandomize(c => ({ ...c, randomizeRoot: !c.randomizeRoot }))}
+                                        onClick={() =>
+                                            setScaleRandomize(c => ({
+                                                ...c,
+                                                randomizeRoot: !c.randomizeRoot,
+                                            }))
+                                        }
                                         className={`w-11 h-6 rounded-full transition-colors relative ${scaleRandomize.randomizeRoot ? "bg-ink" : "bg-ink/20"}`}>
-                                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${scaleRandomize.randomizeRoot ? "translate-x-5.5" : "translate-x-0.5"}`} />
+                                        <span
+                                            className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${scaleRandomize.randomizeRoot ? "translate-x-[22px]" : "translate-x-[2px]"}`}
+                                        />
                                     </button>
                                 </div>
                             </>
@@ -3044,10 +3271,11 @@ export default function Home() {
                         <button
                             onClick={() => {
                                 handleRandomize();
+                                setRandomizeOn(true);
                                 setRandomizeSheetOpen(false);
                             }}
                             className='w-full py-3 bg-ink text-sand-1 rounded-full text-sm font-bold hover:opacity-90 transition-opacity'>
-                            Randomize
+                            Done
                         </button>
                     </div>
                 </div>
