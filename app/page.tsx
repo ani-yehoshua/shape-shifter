@@ -1,17 +1,31 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import FretboardHorizontal from "@/components/FretboardHorizontal";
 import FretboardVertical from "@/components/FretboardVertical";
 import NotesIntervalsToggle from "@/components/NotesIntervalsToggle";
 import DrawMode from "@/components/DrawMode";
+import SavedChordsPanel from "@/components/SavedChordsPanel";
+import ProgressionPanel from "@/components/ProgressionPanel";
+import CapoButton from "@/components/CapoButton";
+import {
+    saveChord,
+    getCurrentUserId,
+    type SavedChord,
+    type SavedChordContext,
+} from "@/lib/savedChords";
+import { playChord, playNote } from "@/lib/guitarAudio";
 import {
     generateFretboardMap,
     generateAllVoicingsForShape,
     NOTES,
     shuffleArray,
+    STANDARD_MIDI,
 } from "@/lib/fretboardMap";
+import { TUNINGS, STANDARD_TUNING } from "@/lib/tunings";
+import type { Tuning } from "@/lib/tunings";
 import type { NotePosition } from "@/lib/fretboardMap";
 
 type ChordLevel = {
@@ -36,7 +50,7 @@ import { SCALE_SHAPES } from "@/lib/Shapes/Scales";
 import useChordLibrary from "@/lib/hooks/useChordLibrary";
 import { useSubscription } from "@/lib/hooks/useSubscription";
 
-const TUNING = ["E", "B", "G", "D", "A", "E"];
+// default tuning — overridden by selectedTuning state at runtime
 const NUM_FRETS = 24;
 const SEMIS = [...Array(12).keys()];
 
@@ -150,6 +164,55 @@ function voicingFretRange(v: NotePosition[]) {
     return { min: Math.min(...frets), max: Math.max(...frets) };
 }
 
+function ListIcon() {
+    return (
+        <svg className='w-4 h-4' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} strokeLinecap='round'>
+            <line x1='8' y1='6' x2='21' y2='6' />
+            <line x1='8' y1='12' x2='21' y2='12' />
+            <line x1='8' y1='18' x2='21' y2='18' />
+            <line x1='3' y1='6' x2='3.01' y2='6' strokeWidth={3} />
+            <line x1='3' y1='12' x2='3.01' y2='12' strokeWidth={3} />
+            <line x1='3' y1='18' x2='3.01' y2='18' strokeWidth={3} />
+        </svg>
+    );
+}
+
+function ProgressionIcon() {
+    return (
+        <svg className='w-4 h-4' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} strokeLinecap='round' strokeLinejoin='round'>
+            <rect x='2' y='7' width='4' height='10' rx='1' />
+            <rect x='9' y='4' width='4' height='13' rx='1' />
+            <rect x='16' y='9' width='4' height='8' rx='1' />
+        </svg>
+    );
+}
+
+function BookmarkIcon({ filled = false }: { filled?: boolean }) {
+    return (
+        <svg
+            className='w-4 h-4'
+            viewBox='0 0 24 24'
+            fill={filled ? "currentColor" : "none"}
+            stroke='currentColor'
+            strokeWidth={2}
+            strokeLinecap='round'
+            strokeLinejoin='round'>
+            <path d='M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z' />
+        </svg>
+    );
+}
+
+function StrumIcon({ className = "w-5 h-5" }: { className?: string }) {
+    return (
+        <svg
+            className={className}
+            viewBox='12.5 7.5 175 175'
+            fill='currentColor'>
+            <path d='M 42 58 C 56 23 144 23 158 58 C 169 80 118 168 100 165 C 82 168 31 80 42 58 Z' />
+        </svg>
+    );
+}
+
 function ShuffleIcon() {
     return (
         <svg
@@ -164,6 +227,165 @@ function ShuffleIcon() {
                 d='M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99'
             />
         </svg>
+    );
+}
+
+function StopIcon({ className = "w-4 h-4" }: { className?: string }) {
+    return (
+        <svg className={className} viewBox='0 0 24 24' fill='currentColor'>
+            <rect x='5' y='5' width='14' height='14' rx='2' />
+        </svg>
+    );
+}
+
+function SpeakerIcon() {
+    return (
+        <svg className='w-4 h-4' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={2} strokeLinecap='round' strokeLinejoin='round'>
+            <polygon points='11 5 6 9 2 9 2 15 6 15 11 19 11 5' fill='currentColor' stroke='none' />
+            <path d='M15.54 8.46a5 5 0 0 1 0 7.07' />
+            <path d='M19.07 4.93a10 10 0 0 1 0 14.14' />
+            <path d='M12 12h.01' stroke='none' />
+        </svg>
+    );
+}
+
+function PlaybackSpeedButton({
+    speed,
+    onSpeedChange,
+}: {
+    speed: number;
+    onSpeedChange: (v: number) => void;
+}) {
+    const [open, setOpen] = React.useState(false);
+    const btnRef = React.useRef<HTMLButtonElement>(null);
+    const popupRef = React.useRef<HTMLDivElement>(null);
+    const [anchorRect, setAnchorRect] = React.useState<DOMRect | null>(null);
+
+    React.useEffect(() => {
+        if (!open) return;
+        const handler = (e: MouseEvent) => {
+            if (
+                !btnRef.current?.contains(e.target as Node) &&
+                !popupRef.current?.contains(e.target as Node)
+            )
+                setOpen(false);
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [open]);
+
+    const popup =
+        open && anchorRect
+            ? createPortal(
+                  <div
+                      ref={popupRef}
+                      className='bg-sand-1 border border-ink/20 rounded-xl shadow-lg px-4 py-3'
+                      style={{
+                          position: "fixed",
+                          bottom: window.innerHeight - anchorRect.top + 8,
+                          left: Math.max(
+                              8,
+                              Math.min(
+                                  window.innerWidth - 192 - 8,
+                                  anchorRect.left + anchorRect.width / 2 - 96,
+                              ),
+                          ),
+                          width: 192,
+                          zIndex: 9999,
+                      }}>
+                      <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2.5 text-center'>
+                          Playback Speed
+                      </p>
+                      <input
+                          type='range'
+                          min={1}
+                          max={8}
+                          step={1}
+                          value={speed}
+                          onChange={e => onSpeedChange(Number(e.target.value))}
+                          className='w-full accent-ink'
+                      />
+                      <div className='flex justify-between text-[10px] text-ink/40 font-semibold mt-1'>
+                          <span>Slow</span>
+                          <span>Fast</span>
+                      </div>
+                  </div>,
+                  document.body,
+              )
+            : null;
+
+    return (
+        <>
+            <button
+                ref={btnRef}
+                onClick={() => {
+                    if (!open && btnRef.current)
+                        setAnchorRect(btnRef.current.getBoundingClientRect());
+                    setOpen(o => !o);
+                }}
+                title='Playback speed'
+                className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-full border transition-colors ${
+                    open
+                        ? "bg-ink text-sand-1 border-ink"
+                        : "border-ink/40 text-ink hover:border-ink"
+                }`}>
+                <SpeakerIcon />
+            </button>
+            {popup}
+        </>
+    );
+}
+
+function TuningDropdown({
+    selectedTuning,
+    onSelect,
+}: {
+    selectedTuning: Tuning;
+    onSelect: (t: Tuning) => void;
+}) {
+    const [open, setOpen] = React.useState(false);
+    const ref = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (!open) return;
+        const handler = (e: MouseEvent) => {
+            if (!ref.current?.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [open]);
+
+    return (
+        <div className='relative' ref={ref}>
+            <button
+                onClick={() => setOpen(o => !o)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
+                    selectedTuning.name !== "Standard"
+                        ? "bg-ink text-sand-1 border-ink"
+                        : "bg-sand-2 text-ink border-ink hover:bg-sand-3"
+                }`}>
+                {selectedTuning.name}
+            </button>
+            {open && (
+                <div className='absolute bottom-[calc(100%+0.5rem)] left-0 bg-sand-1 border border-ink/20 rounded-xl shadow-lg py-1.5 z-50 min-w-[11rem]'>
+                    {TUNINGS.map(t => (
+                        <button
+                            key={t.name}
+                            onClick={() => { onSelect(t); setOpen(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm font-semibold transition-colors ${
+                                selectedTuning.name === t.name
+                                    ? "bg-ink/10 text-ink"
+                                    : "text-ink hover:bg-ink/5"
+                            }`}>
+                            <span>{t.name}</span>
+                            <span className='block text-[10px] font-mono text-ink/40 mt-0.5'>
+                                {[...t.notes].reverse().join(" · ")}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -201,11 +423,71 @@ export default function Home() {
     const [displayGroups, setDisplayGroups] = React.useState<NotePosition[][]>(
         [],
     );
+
     const [noteDeck, setNoteDeck] = React.useState<number[]>([]);
     const [shuffleChecked, setShuffleChecked] = React.useState(false);
     const [showIntervals, setShowIntervals] = React.useState(false);
     const [isRight, setIsRight] = React.useState(true);
     const [octaveUp, setOctaveUp] = React.useState(false);
+    const [capo, setCapo] = React.useState(0);
+    const [selectedTuning, setSelectedTuning] = React.useState<Tuning>(STANDARD_TUNING);
+
+    // notes per second: 1 = slowest (1000ms gap), 8 = fastest (~125ms gap)
+    const [playbackSpeed, setPlaybackSpeed] = React.useState(4);
+    const scalePlayRef = React.useRef<ReturnType<typeof setTimeout>[]>([]);
+    const [isPlayingScale, setIsPlayingScale] = React.useState(false);
+
+    // ── saved chords ──────────────────────────────────────────────────────────
+    const [userId, setUserId] = React.useState<string | null>(null);
+    const [savedPanelOpen, setSavedPanelOpen] = React.useState(false);
+    const [savedRefreshKey, setSavedRefreshKey] = React.useState(0);
+    const [progressionPanelOpen, setProgressionPanelOpen] = React.useState(false);
+    const [progressionPendingChord, setProgressionPendingChord] = React.useState<{
+        label: string;
+        notes: import("@/lib/fretboardMap").NotePosition[];
+        tuningName: string;
+        tuningFreqs?: number[];
+        capo: number;
+    } | null>(null);
+    const [authGateOpen, setAuthGateOpen] = React.useState(false);
+    const [saveDialog, setSaveDialog] = React.useState<{
+        label: string;
+        notes: NotePosition[];
+        context: SavedChordContext;
+    } | null>(null);
+    const [saveLabel, setSaveLabel] = React.useState("");
+    const [saving, setSaving] = React.useState(false);
+    // For restoring Draw Mode chords from saved panel
+    const [drawPreloadNotes, setDrawPreloadNotes] = React.useState<
+        NotePosition[] | null
+    >(null);
+
+    React.useEffect(() => {
+        getCurrentUserId().then(setUserId);
+    }, []);
+
+    const capoDisplayShape = React.useMemo(
+        () =>
+            capo === 0
+                ? displayShape
+                : displayShape.map(n => ({
+                      ...n,
+                      fret: n.fret != null ? n.fret + capo : n.fret,
+                  })),
+        [displayShape, capo],
+    );
+    const capoDisplayGroups = React.useMemo(
+        () =>
+            capo === 0
+                ? displayGroups
+                : displayGroups.map(group =>
+                      group.map(n => ({
+                          ...n,
+                          fret: n.fret != null ? n.fret + capo : n.fret,
+                      })),
+                  ),
+        [displayGroups, capo],
+    );
     const handedness = isRight ? "right" : "left";
 
     const [menuOpen, setMenuOpen] = React.useState(false);
@@ -242,7 +524,93 @@ export default function Home() {
     const [selectedScaleVariant, setSelectedScaleVariant] = React.useState(0);
 
     const fretboardMap = React.useMemo(
-        () => generateFretboardMap(TUNING, NUM_FRETS),
+        () => generateFretboardMap(selectedTuning.notes, NUM_FRETS),
+        [selectedTuning],
+    );
+
+    // ── save helpers ──────────────────────────────────────────────────────────
+    const openSave = React.useCallback(
+        (notes: NotePosition[], label: string, context: SavedChordContext) => {
+            if (!userId) {
+                setAuthGateOpen(true);
+                return;
+            }
+            setSaveLabel(label);
+            setSaveDialog({ label, notes, context });
+        },
+        [userId],
+    );
+
+    const stopScale = React.useCallback(() => {
+        scalePlayRef.current.forEach(clearTimeout);
+        scalePlayRef.current = [];
+        setIsPlayingScale(false);
+    }, []);
+
+    const playScale = React.useCallback(() => {
+        scalePlayRef.current.forEach(clearTimeout);
+        scalePlayRef.current = [];
+        const delay = Math.round(1000 / playbackSpeed);
+        const sorted = [...capoDisplayShape]
+            .filter(n => n.fret != null && n.fret >= 0)
+            .sort((a, b) => {
+                const pa = (selectedTuning.semitones[a.string] ?? 0) + (a.fret ?? 0);
+                const pb = (selectedTuning.semitones[b.string] ?? 0) + (b.fret ?? 0);
+                return pa - pb;
+            });
+        setIsPlayingScale(true);
+        sorted.forEach((note, i) => {
+            const t = setTimeout(() => {
+                playNote(note.string, note.fret!, selectedTuning.freqs);
+                if (i === sorted.length - 1) setIsPlayingScale(false);
+            }, i * delay);
+            scalePlayRef.current.push(t);
+        });
+    }, [capoDisplayShape, playbackSpeed, selectedTuning]);
+
+    const handleSaveConfirm = React.useCallback(async () => {
+        if (!saveDialog) return;
+        setSaving(true);
+        try {
+            await saveChord({ ...saveDialog, label: saveLabel.trim() || saveDialog.label });
+            setSaveDialog(null);
+            setSavedRefreshKey(k => k + 1);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setSaving(false);
+        }
+    }, [saveDialog, saveLabel]);
+
+    const handleLoadSaved = React.useCallback(
+        (chord: SavedChord) => {
+            const ctx = chord.context;
+            if (ctx.source === "draw") {
+                setIsDrawMode(true);
+                setDrawPreloadNotes(chord.notes);
+                return;
+            }
+            setIsDrawMode(false);
+            setSelectedMode(ctx.mode);
+            setCurrentRootNote(ctx.rootNote);
+            setCapo(ctx.capo);
+            const t = TUNINGS.find(t => t.name === ctx.tuningName);
+            if (t) setSelectedTuning(t);
+            if (ctx.mode === "chords") {
+                setSelectedCategory(ctx.category);
+                setSelectedVoicingType(ctx.voicingType);
+                setSelectedStringSet(ctx.stringSet);
+                setSelectedChordQuality(ctx.chordQuality);
+                setSelectedPosition(ctx.position);
+                setSelectedAltShape(ctx.altShape);
+            } else {
+                setSelectedNoteGroup(ctx.noteGroup);
+                setSelectedScale(ctx.scale);
+                setSelectedScalePosition(ctx.scalePosition);
+                setSelectedScalePattern(ctx.scalePattern);
+                setSelectedScaleVariant(ctx.scaleVariant);
+            }
+        },
         [],
     );
 
@@ -483,6 +851,7 @@ export default function Home() {
             currentRootNote,
             formula,
             fretboardMap,
+            selectedTuning.semitones,
         );
         const low: NotePosition[][] = [];
         const crossing: NotePosition[][] = [];
@@ -507,6 +876,7 @@ export default function Home() {
         selectedAltShape,
         availableAlts,
         fretboardMap,
+        selectedTuning.semitones,
     ]);
 
     const scaleOctaveInfo = React.useMemo(() => {
@@ -522,7 +892,10 @@ export default function Home() {
         if (!pos) return null;
         const rootFret =
             (NOTES.findIndex(p => p.includes(currentRootNote)) - 7 + 12) % 12;
-        const frets = pos.notes.map(n => n.fretOffset + rootFret);
+        const frets = pos.notes.map(n => {
+            const delta = (selectedTuning.semitones[n.string] ?? STANDARD_MIDI[n.string]) - STANDARD_MIDI[n.string];
+            return n.fretOffset + rootFret - delta;
+        });
         const maxFret = Math.max(...frets);
         const minFret = Math.min(...frets);
         return {
@@ -536,6 +909,7 @@ export default function Home() {
         selectedScalePattern,
         selectedScaleVariant,
         currentRootNote,
+        selectedTuning.semitones,
     ]);
 
     React.useEffect(() => {
@@ -564,14 +938,17 @@ export default function Home() {
         );
         const modeRootParentDeg = parentDegrees[selectedScalePosition];
         setDisplayShape(
-            position.notes.map(n => ({
-                string: n.string,
-                fret: n.fretOffset + rootFret + octaveOffset,
-                semitones: (n.semitones - modeInterval + 12) % 12,
-                degree:
-                    ((parentDegrees[n.degree] - modeRootParentDeg + 7) % 7) + 1,
-                isTonic: n.semitones === 0,
-            })),
+            position.notes.map(n => {
+                const delta = (selectedTuning.semitones[n.string] ?? STANDARD_MIDI[n.string]) - STANDARD_MIDI[n.string];
+                return {
+                    string: n.string,
+                    fret: n.fretOffset + rootFret - delta + octaveOffset,
+                    semitones: (n.semitones - modeInterval + 12) % 12,
+                    degree:
+                        ((parentDegrees[n.degree] - modeRootParentDeg + 7) % 7) + 1,
+                    isTonic: n.semitones === 0,
+                };
+            }),
         );
     }, [
         selectedMode,
@@ -582,6 +959,7 @@ export default function Home() {
         selectedScaleVariant,
         currentRootNote,
         octaveUp,
+        selectedTuning.semitones,
     ]);
 
     React.useEffect(() => {
@@ -601,6 +979,7 @@ export default function Home() {
                         currentRootNote,
                         formulas[posName],
                         fretboardMap,
+                        selectedTuning.semitones,
                     ),
                 );
             }
@@ -626,6 +1005,7 @@ export default function Home() {
         fretboardMap,
         voicingInfo,
         octaveUp,
+        selectedTuning.semitones,
     ]);
 
     // ── cycle controls ─────────────────────────────────────────────────────────
@@ -674,12 +1054,6 @@ export default function Home() {
         setOctaveUp(false);
     };
 
-    // ── chord label ─────────────────────────────────────────────────────────────
-    const chordLabel =
-        selectedCategory === "CAGED"
-            ? currentRootNote
-            : `${currentRootNote} ${selectedChordQuality}`;
-
     const scaleEntry = SCALE_SHAPES[selectedNoteGroup]?.[selectedScale];
     const scalePatternKeys = scaleEntry
         ? Object.keys(scaleEntry.altPatterns)
@@ -712,10 +1086,37 @@ export default function Home() {
         currentRootNote,
     ]);
 
+    const capoRootNote = React.useMemo(() => {
+        if (capo === 0) return modeRootNote;
+        const idx = NOTES.findIndex(pair => pair.includes(modeRootNote));
+        const shifted = NOTES[(idx + capo) % NOTES.length];
+        return shifted[shifted.length - 1];
+    }, [modeRootNote, capo]);
+
+    // ── chord label ─────────────────────────────────────────────────────────────
+    const chordLabel =
+        selectedCategory === "CAGED"
+            ? capoRootNote
+            : `${capoRootNote} ${selectedChordQuality}`;
+
     const scaleLabel = scalePosition?.modeName
-        ? `${modeRootNote} ${scalePosition.modeName}`
-        : `${modeRootNote} ${selectedScale} — Pos. ${selectedScalePosition + 1}`;
+        ? `${capoRootNote} ${scalePosition.modeName}`
+        : `${capoRootNote} ${selectedScale} — Pos. ${selectedScalePosition + 1}`;
     const displayLabel = selectedMode === "scales" ? scaleLabel : chordLabel;
+
+    const currentChordForProgression = React.useMemo(
+        () =>
+            capoDisplayShape.length > 0
+                ? {
+                      label: displayLabel,
+                      notes: capoDisplayShape,
+                      tuningName: selectedTuning.name,
+                      tuningFreqs: selectedTuning.freqs,
+                      capo,
+                  }
+                : null,
+        [capoDisplayShape, displayLabel, selectedTuning, capo],
+    );
 
     // ── sub-level value helper ─────────────────────────────────────────────────
     const getSubLevelValue = (levelName: string) => {
@@ -765,7 +1166,7 @@ export default function Home() {
                 {isDrawMode ? (
                     <>
                         {/* Exit bar — visible on both mobile and desktop when in Draw Mode */}
-                        <div className='flex items-center justify-between px-4 pt-3 pb-1 shrink-0'>
+                        <div className='flex items-center px-4 pt-3 pb-1 shrink-0'>
                             <button
                                 onClick={handleToggleDrawMode}
                                 className='flex items-center gap-2 px-4 py-1.5 rounded-full border border-ink/40 text-ink text-xs font-semibold hover:border-ink transition-colors'>
@@ -784,7 +1185,31 @@ export default function Home() {
                                 Exit Draw Mode
                             </button>
                         </div>
-                        <DrawMode />
+                        <DrawMode
+                            tuning={selectedTuning.notes}
+                            tuningFreqs={selectedTuning.freqs}
+                            capo={capo}
+                            onCapoChange={setCapo}
+                            preloadNotes={drawPreloadNotes}
+                            onPreloadConsumed={() => setDrawPreloadNotes(null)}
+                            onSaveRequest={(notes, label) =>
+                                openSave(notes, label, {
+                                    source: "draw",
+                                    tuningName: selectedTuning.name,
+                                    capo,
+                                })
+                            }
+                            onProgressionRequest={(notes, label) => {
+                                setProgressionPendingChord({
+                                    label,
+                                    notes,
+                                    tuningName: selectedTuning.name,
+                                    tuningFreqs: selectedTuning.freqs,
+                                    capo,
+                                });
+                                setProgressionPanelOpen(true);
+                            }}
+                        />
                     </>
                 ) : (
                     <>
@@ -795,7 +1220,7 @@ export default function Home() {
                                 <span className='text-2xl font-bold text-ink tracking-tight'>
                                     {selectedMode === "scales" &&
                                     !scalePosition?.modeName
-                                        ? `${modeRootNote} ${selectedScale}`
+                                        ? `${capoRootNote} ${selectedScale}`
                                         : wrapAtParen(displayLabel)}
                                 </span>
                                 {selectedMode === "scales" &&
@@ -809,16 +1234,19 @@ export default function Home() {
                             {/* Full-width fretboard */}
                             <div className='flex-1 min-h-0'>
                                 <FretboardVertical
-                                    chordShape={displayShape}
+                                    chordShape={capoDisplayShape}
                                     handedness={handedness}
-                                    rootNote={modeRootNote}
+                                    rootNote={capoRootNote}
                                     showIntervals={showIntervals}
                                     showConnector={selectedMode === "chords"}
                                     chordGroups={
-                                        displayGroups.length > 0
-                                            ? displayGroups
+                                        capoDisplayGroups.length > 0
+                                            ? capoDisplayGroups
                                             : undefined
                                     }
+                                    playOnClick
+                                    capo={capo}
+                                    tuningFreqs={selectedTuning.freqs}
                                 />
                             </div>
 
@@ -870,6 +1298,7 @@ export default function Home() {
                                                 </button>
                                                 <button
                                                     onClick={goPrevPos}
+                                                    title='Previous position'
                                                     className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                     <ChevronLeft />
                                                 </button>
@@ -881,6 +1310,7 @@ export default function Home() {
                                                 </span>
                                                 <button
                                                     onClick={goNextPos}
+                                                    title='Next position'
                                                     className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                     <ChevronRight />
                                                 </button>
@@ -917,6 +1347,7 @@ export default function Home() {
                                                                     false,
                                                                 );
                                                             }}
+                                                            title='Previous position'
                                                             className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                             <ChevronLeft />
                                                         </button>
@@ -940,6 +1371,7 @@ export default function Home() {
                                                                     false,
                                                                 );
                                                             }}
+                                                            title='Next position'
                                                             className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                             <ChevronRight />
                                                         </button>
@@ -958,6 +1390,7 @@ export default function Home() {
                                                                         ],
                                                                     )
                                                                 }
+                                                                title='Previous pattern'
                                                                 className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                                 <ChevronLeft />
                                                             </button>
@@ -976,6 +1409,7 @@ export default function Home() {
                                                                         ],
                                                                     )
                                                                 }
+                                                                title='Next pattern'
                                                                 className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                                 <ChevronRight />
                                                             </button>
@@ -992,6 +1426,7 @@ export default function Home() {
                                                                             scaleNumVariants,
                                                                     )
                                                                 }
+                                                                title='Previous variant'
                                                                 className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                                 <ChevronLeft />
                                                             </button>
@@ -1011,6 +1446,7 @@ export default function Home() {
                                                                             scaleNumVariants,
                                                                     )
                                                                 }
+                                                                title='Next variant'
                                                                 className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                                 <ChevronRight />
                                                             </button>
@@ -1024,6 +1460,7 @@ export default function Home() {
                                     <div className='flex items-center gap-1 shrink-0'>
                                         <button
                                             onClick={goPrevAlt}
+                                            title='Previous shape'
                                             className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                             <ChevronLeft />
                                         </button>
@@ -1037,6 +1474,7 @@ export default function Home() {
                                         </span>
                                         <button
                                             onClick={goNextAlt}
+                                            title='Next shape'
                                             className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                             <ChevronRight />
                                         </button>
@@ -1045,51 +1483,114 @@ export default function Home() {
                             </div>
 
                             {/* Action bar */}
-                            <div className='shrink-0 border-t border-ink/20 bg-sand-1 px-4 pt-2 pb-4 flex items-center gap-3'>
-                                <button
-                                    onClick={() => setShuffleChecked(s => !s)}
-                                    title='Shuffle'
-                                    className={`w-9 h-9 flex items-center justify-center rounded-full border transition-colors ${
-                                        shuffleChecked
-                                            ? "bg-ink text-sand-1 border-ink"
-                                            : "text-ink border-ink/40 hover:border-ink"
-                                    }`}>
-                                    <ShuffleIcon />
-                                </button>
+                            <div className='shrink-0 border-t border-ink/20 bg-sand-1 pt-2 pb-4 flex items-center gap-3 pr-4'>
+                                {/* Scrollable controls */}
+                                <div className='flex-1 overflow-x-auto no-scrollbar'>
+                                    <div className='flex items-center gap-3 px-4 w-max'>
+                                        <button
+                                            onClick={() => setShuffleChecked(s => !s)}
+                                            title='Shuffle'
+                                            className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-full border transition-colors ${
+                                                shuffleChecked
+                                                    ? "bg-ink text-sand-1 border-ink"
+                                                    : "text-ink border-ink/40 hover:border-ink"
+                                            }`}>
+                                            <ShuffleIcon />
+                                        </button>
 
-                                <NotesIntervalsToggle
-                                    showIntervals={showIntervals}
-                                    onToggle={setShowIntervals}
-                                />
+                                        <NotesIntervalsToggle
+                                            showIntervals={showIntervals}
+                                            onToggle={setShowIntervals}
+                                        />
 
-                                <button
-                                    onClick={() => setIsRight(h => !h)}
-                                    title={isRight ? "Right hand" : "Left hand"}
-                                    className='w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
-                                    <HandIcon flipped={!isRight} />
-                                </button>
+                                        <button
+                                            onClick={() => setIsRight(h => !h)}
+                                            title={isRight ? "Right hand" : "Left hand"}
+                                            className='shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                            <HandIcon flipped={!isRight} />
+                                        </button>
 
-                                <button
-                                    onClick={handleToggleDrawMode}
-                                    title='Draw Mode'
-                                    className='relative w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
-                                    {!hasPro && (
-                                        <span className='absolute -top-1 -right-1 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1'>
-                                            <StarIcon />
-                                        </span>
+                                        <CapoButton
+                                            capo={capo}
+                                            setCapo={setCapo}
+                                            size='sm'
+                                        />
+
+                                        <button
+                                            onClick={handleToggleDrawMode}
+                                            title='Draw Mode'
+                                            className='relative shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                            {!hasPro && (
+                                                <span className='absolute -top-1 -right-1 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1'>
+                                                    <StarIcon />
+                                                </span>
+                                            )}
+                                            <PencilIcon />
+                                        </button>
+
+                                        {/* My Chords panel */}
+                                        <button
+                                            onClick={() => setSavedPanelOpen(true)}
+                                            title='My Chords'
+                                            className='shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                            <ListIcon />
+                                        </button>
+
+                                        {/* Progression builder */}
+                                        <button
+                                            onClick={() => setProgressionPanelOpen(true)}
+                                            title='Progression Builder'
+                                            className='shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                            <ProgressionIcon />
+                                        </button>
+
+                                        {selectedMode === "scales" && (
+                                            <PlaybackSpeedButton
+                                                speed={playbackSpeed}
+                                                onSpeedChange={setPlaybackSpeed}
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Fixed right: Save + Play + New Chord */}
+                                <div className='shrink-0 flex items-center gap-2'>
+                                    {displayShape.length > 0 && (
+                                        <>
+                                            <button
+                                                onClick={() => openSave(
+                                                    capoDisplayShape,
+                                                    displayLabel,
+                                                    selectedMode === "scales"
+                                                        ? { source: "library", mode: "scales", rootNote: currentRootNote, tuningName: selectedTuning.name, capo, noteGroup: selectedNoteGroup, scale: selectedScale, scalePosition: selectedScalePosition, scalePattern: selectedScalePattern, scaleVariant: selectedScaleVariant }
+                                                        : { source: "library", mode: "chords", rootNote: currentRootNote, tuningName: selectedTuning.name, capo, category: selectedCategory, voicingType: selectedVoicingType, stringSet: selectedStringSet, chordQuality: selectedChordQuality, position: selectedPosition, altShape: selectedAltShape },
+                                                )}
+                                                title='Save chord'
+                                                className='w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                                <BookmarkIcon />
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    if (selectedMode === "scales") {
+                                                        if (isPlayingScale) stopScale(); else playScale();
+                                                    } else {
+                                                        playChord(capoDisplayShape, selectedTuning.freqs);
+                                                    }
+                                                }}
+                                                title={selectedMode === "scales" ? (isPlayingScale ? "Stop" : "Play scale") : "Play"}
+                                                className={`w-9 h-9 flex items-center justify-center rounded-full border transition-colors ${isPlayingScale ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
+                                                {selectedMode === "scales" && isPlayingScale ? <StopIcon /> : <StrumIcon />}
+                                            </button>
+                                        </>
                                     )}
-                                    <PencilIcon />
-                                </button>
-
-                                <div className='flex-1' />
-
-                                <button
-                                    onClick={handleGenerateNewRoot}
-                                    className='px-6 py-2.5 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all'>
-                                    {selectedMode === "scales"
-                                        ? "New Root"
-                                        : "New Chord"}
-                                </button>
+                                    <button
+                                        onClick={handleGenerateNewRoot}
+                                        className='whitespace-nowrap px-5 py-2.5 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all'>
+                                        {selectedMode === "scales"
+                                            ? "New Root"
+                                            : "New Chord"}
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -1411,6 +1912,32 @@ export default function Home() {
                                                 )}
                                             </>
                                         )}
+
+                                        {/* Tuning */}
+                                        <div>
+                                            <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
+                                                Tuning
+                                            </p>
+                                            <div className='flex flex-wrap gap-1.5'>
+                                                {TUNINGS.map(t => (
+                                                    <button
+                                                        key={t.name}
+                                                        onClick={() => setSelectedTuning(t)}
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                                            selectedTuning.name === t.name
+                                                                ? "bg-ink text-sand-1 border-ink"
+                                                                : "text-ink border-ink/40 hover:border-ink"
+                                                        }`}>
+                                                        {t.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {selectedTuning.name !== "Standard" && (
+                                                <p className='mt-1.5 text-[10px] text-ink/40 font-mono'>
+                                                    {[...selectedTuning.notes].reverse().join(" · ")}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <button
@@ -1429,7 +1956,7 @@ export default function Home() {
                                 <span className='text-3xl font-bold text-ink tracking-tight'>
                                     {selectedMode === "scales" &&
                                     !scalePosition?.modeName
-                                        ? `${modeRootNote} ${selectedScale}`
+                                        ? `${capoRootNote} ${selectedScale}`
                                         : wrapAtParen(displayLabel)}
                                 </span>
                                 {selectedMode === "scales" &&
@@ -1443,16 +1970,19 @@ export default function Home() {
                             {/* Fretboard */}
                             <div className='w-full px-4 xl:px-8'>
                                 <FretboardHorizontal
-                                    chordShape={displayShape}
+                                    chordShape={capoDisplayShape}
                                     handedness={handedness}
-                                    rootNote={modeRootNote}
+                                    rootNote={capoRootNote}
                                     showIntervals={showIntervals}
                                     showConnector={selectedMode === "chords"}
                                     chordGroups={
-                                        displayGroups.length > 0
-                                            ? displayGroups
+                                        capoDisplayGroups.length > 0
+                                            ? capoDisplayGroups
                                             : undefined
                                     }
+                                    playOnClick
+                                    capo={capo}
+                                    tuningFreqs={selectedTuning.freqs}
                                 />
                             </div>
 
@@ -1716,6 +2246,7 @@ export default function Home() {
                                                                                 ],
                                                                             )
                                                                         }
+                                                                        title='Previous pattern'
                                                                         className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-r border-ink rounded-l'>
                                                                         <ChevronLeft />
                                                                     </button>
@@ -1741,6 +2272,7 @@ export default function Home() {
                                                                                 ],
                                                                             )
                                                                         }
+                                                                        title='Next pattern'
                                                                         className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-l border-ink rounded-r'>
                                                                         <ChevronRight />
                                                                     </button>
@@ -1763,6 +2295,7 @@ export default function Home() {
                                                                                     scaleNumVariants,
                                                                             )
                                                                         }
+                                                                        title='Previous variant'
                                                                         className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-r border-ink rounded-l'>
                                                                         <ChevronLeft />
                                                                     </button>
@@ -1789,6 +2322,7 @@ export default function Home() {
                                                                                     scaleNumVariants,
                                                                             )
                                                                         }
+                                                                        title='Next variant'
                                                                         className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-l border-ink rounded-r'>
                                                                         <ChevronRight />
                                                                     </button>
@@ -1824,6 +2358,7 @@ export default function Home() {
                                                     <div className='flex items-center gap-2 border border-ink rounded'>
                                                         <button
                                                             onClick={goPrevAlt}
+                                                            title='Previous shape'
                                                             className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-r border-ink rounded-l'>
                                                             <ChevronLeft />
                                                         </button>
@@ -1844,6 +2379,7 @@ export default function Home() {
                                                         </span>
                                                         <button
                                                             onClick={goNextAlt}
+                                                            title='Next shape'
                                                             className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-l border-ink rounded-r'>
                                                             <ChevronRight />
                                                         </button>
@@ -1863,55 +2399,212 @@ export default function Home() {
                                     )}
 
                                 {/* New Chord/Root */}
-                                <button
-                                    onClick={handleGenerateNewRoot}
-                                    className='px-6 py-2 bg-ink text-sand-1 text-sm font-semibold rounded-full hover:opacity-90 transition-opacity'>
-                                    {selectedMode === "scales"
-                                        ? "New Root"
-                                        : "New Chord"}
-                                </button>
+                                <div className='flex items-center gap-2'>
+                                    {displayShape.length > 0 && (
+                                        <>
+                                            <button
+                                                onClick={() => openSave(
+                                                    capoDisplayShape,
+                                                    displayLabel,
+                                                    selectedMode === "scales"
+                                                        ? { source: "library", mode: "scales", rootNote: currentRootNote, tuningName: selectedTuning.name, capo, noteGroup: selectedNoteGroup, scale: selectedScale, scalePosition: selectedScalePosition, scalePattern: selectedScalePattern, scaleVariant: selectedScaleVariant }
+                                                        : { source: "library", mode: "chords", rootNote: currentRootNote, tuningName: selectedTuning.name, capo, category: selectedCategory, voicingType: selectedVoicingType, stringSet: selectedStringSet, chordQuality: selectedChordQuality, position: selectedPosition, altShape: selectedAltShape },
+                                                )}
+                                                title='Save chord'
+                                                className='flex items-center gap-2 px-4 py-2 rounded-full border border-ink/40 text-ink text-sm font-semibold hover:border-ink transition-colors'>
+                                                <BookmarkIcon />
+                                                Save
+                                            </button>
+                                            {selectedMode === "scales" && (
+                                                <PlaybackSpeedButton
+                                                    speed={playbackSpeed}
+                                                    onSpeedChange={setPlaybackSpeed}
+                                                />
+                                            )}
+                                            <button
+                                                onClick={() => {
+                                                    if (selectedMode === "scales") {
+                                                        if (isPlayingScale) stopScale(); else playScale();
+                                                    } else {
+                                                        playChord(capoDisplayShape, selectedTuning.freqs);
+                                                    }
+                                                }}
+                                                title={selectedMode === "scales" ? (isPlayingScale ? "Stop" : "Play scale") : "Play"}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${isPlayingScale ? "bg-ink text-sand-1 border-ink hover:opacity-80" : "border-ink/40 text-ink hover:border-ink"}`}>
+                                                {selectedMode === "scales" && isPlayingScale ? <StopIcon /> : <StrumIcon />}
+                                                {selectedMode === "scales" ? (isPlayingScale ? "Stop" : "Play") : "Strum"}
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        onClick={handleGenerateNewRoot}
+                                        className='px-6 py-2 bg-ink text-sand-1 text-sm font-semibold rounded-full hover:opacity-90 transition-opacity'>
+                                        {selectedMode === "scales"
+                                            ? "New Root"
+                                            : "New Chord"}
+                                    </button>
+                                </div>
 
                                 {/* Actions */}
-                                <div className='flex items-center gap-6'>
-                                    <button
-                                        onClick={() =>
-                                            setShuffleChecked(s => !s)
-                                        }
-                                        className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
-                                            shuffleChecked
-                                                ? "bg-ink text-sand-1 border-ink"
-                                                : "bg-sand-1 text-ink border-ink hover:bg-sand-2"
-                                        }`}>
-                                        <ShuffleIcon />
-                                        Shuffle
-                                    </button>
-                                    <NotesIntervalsToggle
-                                        showIntervals={showIntervals}
-                                        onToggle={setShowIntervals}
-                                    />
-                                    <button
-                                        onClick={() => setIsRight(h => !h)}
-                                        className='flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
-                                        <HandIcon flipped={!isRight} />
-                                        {isRight ? "Right hand" : "Left hand"}
-                                    </button>
-                                    <button
-                                        onClick={handleToggleDrawMode}
-                                        className='relative flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
-                                        {!hasPro && (
-                                            <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1'>
-                                                <StarIcon />
-                                            </span>
-                                        )}
-                                        <PencilIcon />
-                                        Draw Mode
-                                    </button>
+                                <div className='flex flex-wrap items-center justify-center gap-4'>
+                                        <TuningDropdown
+                                            selectedTuning={selectedTuning}
+                                            onSelect={setSelectedTuning}
+                                        />
+                                        <button
+                                            onClick={() =>
+                                                setShuffleChecked(s => !s)
+                                            }
+                                            className={`whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
+                                                shuffleChecked
+                                                    ? "bg-ink text-sand-1 border-ink"
+                                                    : "bg-sand-1 text-ink border-ink hover:bg-sand-2"
+                                            }`}>
+                                            <ShuffleIcon />
+                                            Shuffle
+                                        </button>
+                                        <NotesIntervalsToggle
+                                            showIntervals={showIntervals}
+                                            onToggle={setShowIntervals}
+                                        />
+                                        <button
+                                            onClick={() => setIsRight(h => !h)}
+                                            className='whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
+                                            <HandIcon flipped={!isRight} />
+                                            {isRight ? "Right hand" : "Left hand"}
+                                        </button>
+                                        <CapoButton
+                                            capo={capo}
+                                            setCapo={setCapo}
+                                            size='md'
+                                        />
+                                        <button
+                                            onClick={handleToggleDrawMode}
+                                            className='whitespace-nowrap relative flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
+                                            {!hasPro && (
+                                                <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1'>
+                                                    <StarIcon />
+                                                </span>
+                                            )}
+                                            <PencilIcon />
+                                            Draw Mode
+                                        </button>
+                                        <button
+                                            onClick={() => setSavedPanelOpen(true)}
+                                            title='My Chords'
+                                            className='whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
+                                            <ListIcon />
+                                            My Chords
+                                        </button>
+                                        <button
+                                            onClick={() => setProgressionPanelOpen(true)}
+                                            title='Progression Builder'
+                                            className='whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
+                                            <ProgressionIcon />
+                                            Progression
+                                        </button>
                                 </div>
                             </div>
                         </div>
                     </>
                 )}
             </main>
+
+            {/* ── Saved Chords Panel ────────────────────────────── */}
+            <SavedChordsPanel
+                open={savedPanelOpen}
+                onClose={() => setSavedPanelOpen(false)}
+                onLoad={handleLoadSaved}
+                refreshKey={savedRefreshKey}
+            />
+
+            {/* ── Progression Builder Panel ─────────────────────── */}
+            <ProgressionPanel
+                open={progressionPanelOpen}
+                onClose={() => setProgressionPanelOpen(false)}
+                currentChord={currentChordForProgression}
+                userId={userId}
+                onAuthRequired={() => { setProgressionPanelOpen(false); setAuthGateOpen(true); }}
+                onRequestOpen={() => setProgressionPanelOpen(true)}
+                pendingChord={progressionPendingChord}
+                onPendingConsumed={() => setProgressionPendingChord(null)}
+            />
+
+            {/* ── Auth Gate Modal ───────────────────────────────── */}
+            {authGateOpen && (
+                <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
+                    <div
+                        className='absolute inset-0 bg-ink/40'
+                        onClick={() => setAuthGateOpen(false)}
+                    />
+                    <div className='relative bg-sand-1 rounded-2xl shadow-xl p-6 w-full max-w-xs text-center flex flex-col gap-4'>
+                        <div className='w-10 h-10 rounded-full bg-ink/10 flex items-center justify-center mx-auto'>
+                            <BookmarkIcon />
+                        </div>
+                        <div>
+                            <p className='font-bold text-ink text-lg'>
+                                Sign in to save
+                            </p>
+                            <p className='text-sm text-ink/60 mt-1'>
+                                Create a free account to save chords and access
+                                them anywhere.
+                            </p>
+                        </div>
+                        <div className='flex flex-col gap-2'>
+                            <button
+                                onClick={() => {
+                                    setAuthGateOpen(false);
+                                    router.push("/signin");
+                                }}
+                                className='w-full py-2.5 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 transition-opacity'>
+                                Sign in
+                            </button>
+                            <button
+                                onClick={() => setAuthGateOpen(false)}
+                                className='w-full py-2 text-ink/50 text-sm hover:text-ink transition-colors'>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Save Dialog ───────────────────────────────────── */}
+            {saveDialog && (
+                <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
+                    <div
+                        className='absolute inset-0 bg-ink/40'
+                        onClick={() => setSaveDialog(null)}
+                    />
+                    <div className='relative bg-sand-1 rounded-2xl shadow-xl p-6 w-full max-w-xs flex flex-col gap-4'>
+                        <p className='font-bold text-ink text-lg'>Save chord</p>
+                        <input
+                            autoFocus
+                            className='w-full bg-sand-2 border border-ink/20 rounded-xl px-4 py-2.5 text-sm text-ink outline-none focus:border-ink transition-colors'
+                            value={saveLabel}
+                            onChange={e => setSaveLabel(e.target.value)}
+                            onKeyDown={e => {
+                                if (e.key === "Enter") handleSaveConfirm();
+                                if (e.key === "Escape") setSaveDialog(null);
+                            }}
+                            placeholder='Chord name…'
+                        />
+                        <div className='flex gap-2'>
+                            <button
+                                onClick={() => setSaveDialog(null)}
+                                className='flex-1 py-2.5 rounded-full border border-ink/30 text-ink text-sm font-semibold hover:border-ink transition-colors'>
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveConfirm}
+                                disabled={saving}
+                                className='flex-1 py-2.5 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity'>
+                                {saving ? "Saving…" : "Save"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ── Welcome Modal (post-subscribe) ────────────────── */}
             {showWelcome && (
