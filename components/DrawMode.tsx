@@ -1590,29 +1590,13 @@ export default function DrawMode({
                                     fill='none'
                                     stroke='currentColor'
                                     strokeWidth={2}
-                                    strokeLinecap='round'
-                                    strokeLinejoin='round'>
-                                    <rect
-                                        x='2'
-                                        y='7'
-                                        width='4'
-                                        height='10'
-                                        rx='1'
-                                    />
-                                    <rect
-                                        x='9'
-                                        y='4'
-                                        width='4'
-                                        height='13'
-                                        rx='1'
-                                    />
-                                    <rect
-                                        x='16'
-                                        y='9'
-                                        width='4'
-                                        height='8'
-                                        rx='1'
-                                    />
+                                    strokeLinecap='round'>
+                                    <line x1='8' y1='6' x2='21' y2='6' />
+                                    <line x1='8' y1='12' x2='21' y2='12' />
+                                    <line x1='8' y1='18' x2='21' y2='18' />
+                                    <line x1='3' y1='6' x2='3.01' y2='6' strokeWidth={3} />
+                                    <line x1='3' y1='12' x2='3.01' y2='12' strokeWidth={3} />
+                                    <line x1='3' y1='18' x2='3.01' y2='18' strokeWidth={3} />
                                 </svg>
                             </button>
                         )}
@@ -1930,31 +1914,15 @@ export default function DrawMode({
                                 fill='none'
                                 stroke='currentColor'
                                 strokeWidth={2}
-                                strokeLinecap='round'
-                                strokeLinejoin='round'>
-                                <rect
-                                    x='2'
-                                    y='7'
-                                    width='4'
-                                    height='10'
-                                    rx='1'
-                                />
-                                <rect
-                                    x='9'
-                                    y='4'
-                                    width='4'
-                                    height='13'
-                                    rx='1'
-                                />
-                                <rect
-                                    x='16'
-                                    y='9'
-                                    width='4'
-                                    height='8'
-                                    rx='1'
-                                />
+                                strokeLinecap='round'>
+                                <line x1='8' y1='6' x2='21' y2='6' />
+                                <line x1='8' y1='12' x2='21' y2='12' />
+                                <line x1='8' y1='18' x2='21' y2='18' />
+                                <line x1='3' y1='6' x2='3.01' y2='6' strokeWidth={3} />
+                                <line x1='3' y1='12' x2='3.01' y2='12' strokeWidth={3} />
+                                <line x1='3' y1='18' x2='3.01' y2='18' strokeWidth={3} />
                             </svg>
-                            Progression
+                            Progressions
                         </button>
                     )}
 

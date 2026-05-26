@@ -12,6 +12,7 @@ import ProgressionPanel from "@/components/ProgressionPanel";
 import CapoButton from "@/components/CapoButton";
 import {
     saveChord,
+    fetchSavedChords,
     getCurrentUserId,
     type SavedChord,
     type SavedChordContext,
@@ -49,6 +50,7 @@ import {
 import { SCALE_SHAPES } from "@/lib/Shapes/Scales";
 import useChordLibrary from "@/lib/hooks/useChordLibrary";
 import { useSubscription } from "@/lib/hooks/useSubscription";
+import { usePreferences } from "@/lib/contexts/PreferencesContext";
 
 // default tuning — overridden by selectedTuning state at runtime
 const NUM_FRETS = 24;
@@ -204,40 +206,6 @@ function ListIcon() {
     );
 }
 
-function ProgressionIcon() {
-    return (
-        <svg
-            className='w-4 h-4'
-            viewBox='0 0 24 24'
-            fill='none'
-            stroke='currentColor'
-            strokeWidth={2}
-            strokeLinecap='round'
-            strokeLinejoin='round'>
-            <rect
-                x='2'
-                y='7'
-                width='4'
-                height='10'
-                rx='1'
-            />
-            <rect
-                x='9'
-                y='4'
-                width='4'
-                height='13'
-                rx='1'
-            />
-            <rect
-                x='16'
-                y='9'
-                width='4'
-                height='8'
-                rx='1'
-            />
-        </svg>
-    );
-}
 
 function BookmarkIcon({ filled = false }: { filled?: boolean }) {
     return (
@@ -265,19 +233,21 @@ function StrumIcon({ className = "w-5 h-5" }: { className?: string }) {
     );
 }
 
-function ShuffleIcon() {
+function RandomizeIcon() {
     return (
         <svg
-            className='w-6 h-6'
+            className='w-4 h-4'
             fill='none'
             stroke='currentColor'
-            strokeWidth={1.5}
-            viewBox='0 0 24 24'>
-            <path
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                d='M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99'
-            />
+            strokeWidth={2}
+            viewBox='0 0 24 24'
+            strokeLinecap='round'
+            strokeLinejoin='round'>
+            <path d='M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.8-1.1 2-1.7 3.3-1.7H22' />
+            <path d='m18 2 4 4-4 4' />
+            <path d='M2 6h1.9c1.5 0 2.9.9 3.5 2.2' />
+            <path d='M22 18h-5.9c-1.3 0-2.5-.7-3.1-1.8l-.5-.8' />
+            <path d='m18 14 4 4-4 4' />
         </svg>
     );
 }
@@ -486,6 +456,7 @@ function wrapAtParen(text: string): React.ReactNode {
 export default function Home() {
     const router = useRouter();
     const hasPro = useSubscription();
+    const preferences = usePreferences();
 
     // ── state ──────────────────────────────────────────────────────────────────
     const [isDrawMode, setIsDrawMode] = React.useState(false);
@@ -505,13 +476,59 @@ export default function Home() {
     );
 
     const [noteDeck, setNoteDeck] = React.useState<number[]>([]);
-    const [shuffleChecked, setShuffleChecked] = React.useState(false);
+
+    type ChordRandomizeConfig = {
+        categories: string[];
+        voicingTypes: string[];
+        stringSets: string[];
+        qualities: string[];
+        randomizeRoot: boolean;
+    };
+    type ScaleRandomizeConfig = {
+        noteGroups: string[];
+        scales: string[];
+        randomizeRoot: boolean;
+    };
+    const [randomizeOn, setRandomizeOn] = React.useState(false);
+    const [randomizeSheetOpen, setRandomizeSheetOpen] = React.useState(false);
+    const [chordRandomize, setChordRandomize] =
+        React.useState<ChordRandomizeConfig>({
+            categories: [],
+            voicingTypes: [],
+            stringSets: [],
+            qualities: [],
+            randomizeRoot: true,
+        });
+    const [scaleRandomize, setScaleRandomize] =
+        React.useState<ScaleRandomizeConfig>({
+            noteGroups: [],
+            scales: [],
+            randomizeRoot: true,
+        });
     const [showIntervals, setShowIntervals] = React.useState(false);
-    const [isRight, setIsRight] = React.useState(true);
+    const isRight = preferences.handedness === "right";
+    const setIsRight = React.useCallback(
+        (v: boolean) => preferences.setHandedness(v ? "right" : "left"),
+        [preferences],
+    );
     const [octaveUp, setOctaveUp] = React.useState(false);
     const [capo, setCapo] = React.useState(0);
-    const [selectedTuning, setSelectedTuning] =
-        React.useState<Tuning>(STANDARD_TUNING);
+    const [selectedTuning, setSelectedTuningRaw] = React.useState<Tuning>(
+        () => TUNINGS.find(t => t.name === preferences.tuningName) ?? STANDARD_TUNING,
+    );
+    const setSelectedTuning = React.useCallback(
+        (t: Tuning) => {
+            setSelectedTuningRaw(t);
+            preferences.setTuningName(t.name);
+        },
+        [preferences],
+    );
+    // Sync when preference changes from the settings drawer
+    React.useEffect(() => {
+        setSelectedTuningRaw(
+            TUNINGS.find(t => t.name === preferences.tuningName) ?? STANDARD_TUNING,
+        );
+    }, [preferences.tuningName]);
 
     // notes per second: 1 = slowest (1000ms gap), 8 = fastest (~125ms gap)
     const [playbackSpeed, setPlaybackSpeed] = React.useState(4);
@@ -520,6 +537,9 @@ export default function Home() {
 
     // ── saved chords ──────────────────────────────────────────────────────────
     const [userId, setUserId] = React.useState<string | null>(null);
+    const [savedChordKeys, setSavedChordKeys] = React.useState<Set<string>>(
+        new Set(),
+    );
     const [savedPanelOpen, setSavedPanelOpen] = React.useState(false);
     const [savedRefreshKey, setSavedRefreshKey] = React.useState(0);
     const [progressionPanelOpen, setProgressionPanelOpen] =
@@ -549,6 +569,34 @@ export default function Home() {
         getCurrentUserId().then(setUserId);
     }, []);
 
+    const chordSignature = React.useCallback(
+        (notes: NotePosition[]) =>
+            `${selectedTuning.name}|${capo}|${notes
+                .map(n => `${n.string}:${n.fret}`)
+                .sort()
+                .join(",")}`,
+        [selectedTuning.name, capo],
+    );
+
+    // Fetch signatures whenever userId or savedRefreshKey changes
+    React.useEffect(() => {
+        if (!userId) { setSavedChordKeys(new Set()); return; }
+        fetchSavedChords()
+            .then(chords => {
+                setSavedChordKeys(
+                    new Set(
+                        chords.map(c =>
+                            `${c.context.tuningName}|${c.context.capo}|${c.notes
+                                .map((n: NotePosition) => `${n.string}:${n.fret}`)
+                                .sort()
+                                .join(",")}`,
+                        ),
+                    ),
+                );
+            })
+            .catch(() => {});
+    }, [userId, savedRefreshKey]);
+
     const capoDisplayShape = React.useMemo(
         () =>
             capo === 0
@@ -572,6 +620,10 @@ export default function Home() {
         [displayGroups, capo],
     );
     const handedness = isRight ? "right" : "left";
+
+    const isCurrentChordSaved =
+        capoDisplayShape.length > 0 &&
+        savedChordKeys.has(chordSignature(capoDisplayShape));
 
     const [menuOpen, setMenuOpen] = React.useState(false);
 
@@ -618,14 +670,10 @@ export default function Home() {
                 setAuthGateOpen(true);
                 return;
             }
-            if (!hasPro) {
-                openPaywall();
-                return;
-            }
             setSaveLabel(label);
             setSaveDialog({ label, notes, context });
         },
-        [userId, hasPro, openPaywall],
+        [userId],
     );
 
     const stopScale = React.useCallback(() => {
@@ -665,6 +713,8 @@ export default function Home() {
                 ...saveDialog,
                 label: saveLabel.trim() || saveDialog.label,
             });
+            const sig = chordSignature(saveDialog.notes);
+            setSavedChordKeys(prev => new Set([...prev, sig]));
             setSaveDialog(null);
             setSavedRefreshKey(k => k + 1);
         } catch (e) {
@@ -672,7 +722,7 @@ export default function Home() {
         } finally {
             setSaving(false);
         }
-    }, [saveDialog, saveLabel]);
+    }, [saveDialog, saveLabel, chordSignature]);
 
     const handleLoadSaved = React.useCallback((chord: SavedChord) => {
         const ctx = chord.context;
@@ -701,7 +751,7 @@ export default function Home() {
             setSelectedScalePattern(ctx.scalePattern);
             setSelectedScaleVariant(ctx.scaleVariant);
         }
-    }, []);
+    }, [setSelectedTuning]);
 
     const { selectionHierarchy, availableAlts } = useChordLibrary({
         allChordShapes,
@@ -810,21 +860,47 @@ export default function Home() {
         setOctaveUp(octaveFromDisplay());
     };
 
-    // ── generate new root ──────────────────────────────────────────────────────
-    const handleGenerateNewRoot = () => {
-        const deck = noteDeck.length ? [...noteDeck] : shuffleArray(SEMIS);
-        const nextSem = deck.pop()!;
-        setNoteDeck(deck);
-        const candidates = NOTES[nextSem];
+    // ── randomize ──────────────────────────────────────────────────────────────
+    function pick<T>(arr: T[]): T {
+        return arr[Math.floor(Math.random() * arr.length)];
+    }
 
-        if (!shuffleChecked || selectedMode === "scales") {
-            const simple =
-                candidates.find(r => !r.includes("#") && !r.includes("b")) ||
-                candidates[1] ||
-                candidates[0];
-            setCurrentRootNote(simple);
+    function pickFrom<T>(pool: T[], all: T[]): T {
+        const src = pool.length ? pool : all;
+        return pick(src);
+    }
+
+    const handleRandomize = () => {
+        if (selectedMode === "scales") {
+            const allGroups = Object.keys(SCALE_SHAPES);
+            const group = pickFrom(scaleRandomize.noteGroups, allGroups);
+            const allScales = Object.keys(SCALE_SHAPES[group] ?? {});
+            const scale = pickFrom(
+                scaleRandomize.scales.filter(s => allScales.includes(s)),
+                allScales,
+            );
+            const entry = SCALE_SHAPES[group]?.[scale];
+            if (!entry) return;
+            const positionCount = entry.positions.length;
+            const position = positionCount ? Math.floor(Math.random() * positionCount) : 0;
+            setSelectedNoteGroup(group);
+            setSelectedScale(scale);
+            setSelectedScalePosition(position);
+            setSelectedScalePattern(entry.defaultPattern);
+            setSelectedScaleVariant(0);
+            if (scaleRandomize.randomizeRoot) {
+                const naturals = NOTES[Math.floor(Math.random() * 12)].filter(
+                    n => !n.includes("#") && !n.includes("b"),
+                );
+                setCurrentRootNote(pick(naturals.length ? naturals : NOTES[0]));
+            }
             return;
         }
+
+        // Chord mode
+        const cfg = chordRandomize;
+        const allCats = Object.keys(allChordShapes);
+        const cat = pickFrom(cfg.categories, allCats);
 
         const newSelections = {
             voicingType: "",
@@ -835,80 +911,79 @@ export default function Home() {
         };
         let cursor: ChordLevel | undefined = (
             allChordShapes as Record<string, ChordLevel>
-        )[selectedCategory];
+        )[cat];
         while (cursor && cursor.options && cursor.levelName !== "Positions") {
             const levelName = cursor.levelName;
             const options: Record<string, ChordLevel> = cursor.options;
-            const keys = Object.keys(options);
-            const pick = keys[Math.floor(Math.random() * keys.length)];
-            if (levelName === "Voicing Types") newSelections.voicingType = pick;
-            else if (levelName === "String Sets")
-                newSelections.stringSet = pick;
-            else if (levelName === "Chord Qualities")
-                newSelections.quality = pick;
-            cursor = options[pick];
+            const allKeys = Object.keys(options);
+            let pool: string[];
+            if (levelName === "Voicing Types") pool = cfg.voicingTypes.filter(v => allKeys.includes(v));
+            else if (levelName === "String Sets") pool = cfg.stringSets.filter(v => allKeys.includes(v));
+            else if (levelName === "Chord Qualities") pool = cfg.qualities.filter(v => allKeys.includes(v));
+            else pool = [];
+            const chosen = pickFrom(pool, allKeys);
+            if (levelName === "Voicing Types") newSelections.voicingType = chosen;
+            else if (levelName === "String Sets") newSelections.stringSet = chosen;
+            else if (levelName === "Chord Qualities") newSelections.quality = chosen;
+            cursor = options[chosen];
         }
 
         if (!cursor?.options) return;
         const posKeys = Object.keys(cursor.options);
-        newSelections.position =
-            posKeys[Math.floor(Math.random() * posKeys.length)];
+        newSelections.position = pick(posKeys);
         const pd = cursor.options[newSelections.position];
-        const alts =
-            Array.isArray(pd.altShapes) && pd.altShapes.length
-                ? pd.altShapes
-                : [];
-        newSelections.altShape =
-            hasPro && alts.length ? Math.floor(Math.random() * alts.length) : 0;
+        const alts = Array.isArray(pd.altShapes) && pd.altShapes.length ? pd.altShapes : [];
+        newSelections.altShape = hasPro && alts.length ? Math.floor(Math.random() * alts.length) : 0;
 
-        const positionData = cursor.options[newSelections.position];
-        const formula = Array.isArray(positionData.altShapes)
-            ? positionData.altShapes[newSelections.altShape]
-            : positionData;
-        const pattern = formula.pattern!;
-
-        function isCleanRoot(root: string) {
-            if (root === "B#" || root === "E#") return false;
-            return pattern.every(
-                ({
-                    semitones,
-                    degree,
-                }: {
-                    semitones: number;
-                    degree: number;
-                }) => {
-                    const label = spellInterval(root, semitones, degree);
-                    if (
-                        degree !== 1 &&
-                        MAJOR_SCALE_OFFSETS[degree] !== semitones
-                    ) {
-                        return /^[#b][2-7]$/.test(label);
-                    } else {
-                        return !/^[#b]/.test(label);
-                    }
-                },
-            );
-        }
-
-        const valid = candidates.filter(isCleanRoot);
-        let rootName: string;
-        if (valid.length > 1) {
-            rootName = valid[Math.floor(Math.random() * valid.length)];
-        } else if (valid.length === 1) {
-            rootName = valid[0];
-        } else {
-            rootName =
-                candidates.find(isCleanRoot) ||
-                candidates.find(r => !r.includes("#") && !r.includes("b")) ||
-                candidates[0];
-        }
-
-        setCurrentRootNote(rootName);
+        setSelectedCategory(cat);
         setSelectedVoicingType(newSelections.voicingType);
         setSelectedStringSet(newSelections.stringSet);
         setSelectedChordQuality(newSelections.quality);
         setSelectedPosition(newSelections.position);
         setSelectedAltShape(newSelections.altShape);
+
+        if (cfg.randomizeRoot) {
+            const positionData = cursor.options[newSelections.position];
+            const formula = Array.isArray(positionData.altShapes)
+                ? positionData.altShapes[newSelections.altShape]
+                : positionData;
+            const pattern = formula?.pattern;
+            if (pattern) {
+                function isCleanRoot(root: string) {
+                    if (root === "B#" || root === "E#") return false;
+                    return (pattern as Array<{ semitones: number; degree: number }>).every(({ semitones, degree }) => {
+                        const label = spellInterval(root, semitones, degree);
+                        return degree !== 1 && MAJOR_SCALE_OFFSETS[degree] !== semitones
+                            ? /^[#b][2-7]$/.test(label)
+                            : !/^[#b]/.test(label);
+                    });
+                }
+                const sem = Math.floor(Math.random() * 12);
+                const candidates = NOTES[sem];
+                const valid = candidates.filter(isCleanRoot);
+                setCurrentRootNote(
+                    valid.length
+                        ? pick(valid)
+                        : (candidates.find(r => !r.includes("#") && !r.includes("b")) ?? candidates[0]),
+                );
+            } else {
+                const sem = Math.floor(Math.random() * 12);
+                const candidates = NOTES[sem];
+                setCurrentRootNote(candidates.find(r => !r.includes("#") && !r.includes("b")) ?? candidates[0]);
+            }
+        }
+    };
+
+    const handleGenerateNewRoot = () => {
+        const deck = noteDeck.length ? [...noteDeck] : shuffleArray(SEMIS);
+        const nextSem = deck.pop()!;
+        setNoteDeck(deck);
+        const candidates = NOTES[nextSem];
+        const simple =
+            candidates.find(r => !r.includes("#") && !r.includes("b")) ||
+            candidates[1] ||
+            candidates[0];
+        setCurrentRootNote(simple);
     };
 
     // ── effects ────────────────────────────────────────────────────────────────
@@ -1525,7 +1600,7 @@ export default function Home() {
                                                             </button>
                                                             <span className='relative text-xs font-semibold text-ink w-6 text-center flex items-center justify-center'>
                                                                 {scaleVariantLocked && (
-                                                                    <span className='absolute -top-2 -right-2 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
+                                                                    <span className='absolute -top-1 -right-1 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
                                                                         <StarIcon />
                                                                     </span>
                                                                 )}
@@ -1580,19 +1655,20 @@ export default function Home() {
                             {/* Action bar */}
                             <div className='shrink-0 border-t border-ink/20 bg-sand-1 pt-2 pb-4 flex items-center gap-3 pr-4'>
                                 {/* Scrollable controls */}
-                                <div className='flex-1 overflow-x-auto no-scrollbar'>
-                                    <div className='flex items-center gap-3 px-4 py-1 w-max'>
+                                <div className='flex-1 overflow-x-auto no-scrollbar pt-2.5 pb-1'>
+                                    <div className='flex items-center gap-3 px-4 w-max'>
                                         <button
-                                            onClick={() =>
-                                                setShuffleChecked(s => !s)
-                                            }
-                                            title='Shuffle'
+                                            onClick={() => {
+                                                setRandomizeOn(v => !v);
+                                                setRandomizeSheetOpen(true);
+                                            }}
+                                            title='Randomize'
                                             className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-full border transition-colors ${
-                                                shuffleChecked
+                                                randomizeOn
                                                     ? "bg-ink text-sand-1 border-ink"
                                                     : "text-ink border-ink/40 hover:border-ink"
                                             }`}>
-                                            <ShuffleIcon />
+                                            <RandomizeIcon />
                                         </button>
 
                                         <NotesIntervalsToggle
@@ -1601,7 +1677,7 @@ export default function Home() {
                                         />
 
                                         <button
-                                            onClick={() => setIsRight(h => !h)}
+                                            onClick={() => setIsRight(!isRight)}
                                             title={
                                                 isRight
                                                     ? "Right hand"
@@ -1636,17 +1712,22 @@ export default function Home() {
                                             }
                                             title='My Chords'
                                             className='shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
-                                            <ListIcon />
+                                            <BookmarkIcon filled />
                                         </button>
 
                                         {/* Progression builder */}
                                         <button
                                             onClick={() =>
-                                                setProgressionPanelOpen(true)
+                                                hasPro ? setProgressionPanelOpen(true) : openPaywall()
                                             }
-                                            title='Progression Builder'
-                                            className='shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
-                                            <ProgressionIcon />
+                                            title='Progressions'
+                                            className='shrink-0 relative w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                            {!hasPro && (
+                                                <span className='absolute -top-1 -right-1 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
+                                                    <StarIcon />
+                                                </span>
+                                            )}
+                                            <ListIcon />
                                         </button>
 
                                         {selectedMode === "scales" && (
@@ -1711,12 +1792,7 @@ export default function Home() {
                                                     )
                                                 }
                                                 title='Save chord'
-                                                className='relative w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
-                                                {!hasPro && (
-                                                    <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
-                                                        <StarIcon />
-                                                    </span>
-                                                )}
+                                                className={`w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors ${isCurrentChordSaved ? "text-yellow-400" : "text-ink"}`}>
                                                 <BookmarkIcon />
                                             </button>
                                             <button
@@ -2626,12 +2702,7 @@ export default function Home() {
                                                     )
                                                 }
                                                 title='Save chord'
-                                                className='relative flex items-center gap-2 px-4 py-2 rounded-full border border-ink/40 text-ink text-sm font-semibold hover:border-ink transition-colors'>
-                                                {!hasPro && (
-                                                    <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1 z-10'>
-                                                        <StarIcon />
-                                                    </span>
-                                                )}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-full border border-ink/40 text-sm font-semibold hover:border-ink transition-colors ${isCurrentChordSaved ? "text-yellow-400" : "text-ink"}`}>
                                                 <BookmarkIcon />
                                                 Save
                                             </button>
@@ -2697,23 +2768,24 @@ export default function Home() {
                                         onSelect={setSelectedTuning}
                                     />
                                     <button
-                                        onClick={() =>
-                                            setShuffleChecked(s => !s)
-                                        }
+                                        onClick={() => {
+                                            setRandomizeOn(v => !v);
+                                            setRandomizeSheetOpen(true);
+                                        }}
                                         className={`whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
-                                            shuffleChecked
+                                            randomizeOn
                                                 ? "bg-ink text-sand-1 border-ink"
                                                 : "bg-sand-1 text-ink border-ink hover:bg-sand-2"
                                         }`}>
-                                        <ShuffleIcon />
-                                        Shuffle
+                                        <RandomizeIcon />
+                                        Randomize
                                     </button>
                                     <NotesIntervalsToggle
                                         showIntervals={showIntervals}
                                         onToggle={setShowIntervals}
                                     />
                                     <button
-                                        onClick={() => setIsRight(h => !h)}
+                                        onClick={() => setIsRight(!isRight)}
                                         className='whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
                                         <HandIcon flipped={!isRight} />
                                         {isRight ? "Right hand" : "Left hand"}
@@ -2738,17 +2810,22 @@ export default function Home() {
                                         onClick={() => setSavedPanelOpen(true)}
                                         title='My Chords'
                                         className='whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
-                                        <ListIcon />
+                                        <BookmarkIcon filled />
                                         My Chords
                                     </button>
                                     <button
                                         onClick={() =>
-                                            setProgressionPanelOpen(true)
+                                            hasPro ? setProgressionPanelOpen(true) : openPaywall()
                                         }
-                                        title='Progression Builder'
-                                        className='whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
-                                        <ProgressionIcon />
-                                        Progression
+                                        title='Progressions'
+                                        className='whitespace-nowrap relative flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
+                                        {!hasPro && (
+                                            <span className='absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1'>
+                                                <StarIcon />
+                                            </span>
+                                        )}
+                                        <ListIcon />
+                                        Progressions
                                     </button>
                                 </div>
                             </div>
@@ -2784,6 +2861,214 @@ export default function Home() {
                 pendingChord={progressionPendingChord}
                 onPendingConsumed={() => setProgressionPendingChord(null)}
             />
+
+            {/* ── Randomize Sheet ──────────────────────────────── */}
+            <>
+                {randomizeSheetOpen && (
+                    <div
+                        className='fixed inset-0 z-40 bg-ink/30'
+                        onClick={() => setRandomizeSheetOpen(false)}
+                    />
+                )}
+                <div
+                    className={`fixed z-50 bg-sand-1 shadow-xl transition-transform duration-300 flex flex-col
+                    bottom-0 left-0 right-0 rounded-t-2xl max-h-[80dvh]
+                    sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:w-96 sm:rounded-2xl sm:max-h-[85dvh]
+                    ${randomizeSheetOpen ? "translate-y-0 sm:-translate-y-1/2" : "translate-y-full sm:translate-y-full sm:opacity-0 sm:pointer-events-none"}`}>
+                    {/* Header */}
+                    <div className='flex items-center justify-between px-5 pt-5 pb-3 border-b border-ink/10 shrink-0'>
+                        <h2 className='text-base font-bold text-ink'>Randomize</h2>
+                        <div className='flex items-center gap-3'>
+                            <button
+                                onClick={() => {
+                                    if (selectedMode === "chords") {
+                                        setChordRandomize({ categories: [], voicingTypes: [], stringSets: [], qualities: [], randomizeRoot: true });
+                                    } else {
+                                        setScaleRandomize({ noteGroups: [], scales: [], randomizeRoot: true });
+                                    }
+                                }}
+                                className='text-xs font-semibold text-ink/40 hover:text-ink transition-colors'>
+                                Clear
+                            </button>
+                            <button
+                                onClick={() => setRandomizeSheetOpen(false)}
+                                className='text-ink/40 hover:text-ink transition-colors text-xl leading-none'>
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Body */}
+                    <div className='flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5'>
+                        {selectedMode === "chords" ? (
+                            <>
+                                {/* Categories */}
+                                <div>
+                                    <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
+                                        Category <span className='normal-case font-normal text-ink/30'>(empty = all)</span>
+                                    </p>
+                                    <div className='flex flex-wrap gap-2'>
+                                        {Object.keys(allChordShapes).map(cat => {
+                                            const active = chordRandomize.categories.includes(cat);
+                                            return (
+                                                <button
+                                                    key={cat}
+                                                    onClick={() =>
+                                                        setChordRandomize(c => ({
+                                                            ...c,
+                                                            categories: active
+                                                                ? c.categories.filter(x => x !== cat)
+                                                                : [...c.categories, cat],
+                                                            voicingTypes: [],
+                                                            stringSets: [],
+                                                            qualities: [],
+                                                        }))
+                                                    }
+                                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                    {cat}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Sub-levels — only shown when exactly one category is pinned */}
+                                {chordRandomize.categories.length === 1 && (() => {
+                                    const cat = chordRandomize.categories[0];
+                                    const levels: { label: string; key: keyof ChordRandomizeConfig; options: string[] }[] = [];
+                                    let cursor: ChordLevel | undefined = (allChordShapes as Record<string, ChordLevel>)[cat];
+                                    while (cursor?.options && cursor.levelName !== "Positions") {
+                                        const keys: string[] = Object.keys(cursor.options);
+                                        if (cursor.levelName === "Voicing Types") levels.push({ label: "Voicing", key: "voicingTypes", options: keys });
+                                        else if (cursor.levelName === "String Sets") levels.push({ label: "String Set", key: "stringSets", options: keys });
+                                        else if (cursor.levelName === "Chord Qualities") levels.push({ label: "Quality", key: "qualities", options: keys });
+                                        // drill to first option to discover next level
+                                        cursor = cursor.options[keys[0]];
+                                    }
+                                    return levels.map(({ label, key, options }) => (
+                                        <div key={key}>
+                                            <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
+                                                {label} <span className='normal-case font-normal text-ink/30'>(empty = all)</span>
+                                            </p>
+                                            <div className='flex flex-wrap gap-2'>
+                                                {options.map(opt => {
+                                                    const active = (chordRandomize[key] as string[]).includes(opt);
+                                                    return (
+                                                        <button
+                                                            key={opt}
+                                                            onClick={() =>
+                                                                setChordRandomize(c => ({
+                                                                    ...c,
+                                                                    [key]: active
+                                                                        ? (c[key] as string[]).filter(x => x !== opt)
+                                                                        : [...(c[key] as string[]), opt],
+                                                                }))
+                                                            }
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                            {opt}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ));
+                                })()}
+
+                                {/* Root note */}
+                                <div className='flex items-center justify-between'>
+                                    <p className='text-sm font-semibold text-ink'>Randomize root note</p>
+                                    <button
+                                        onClick={() => setChordRandomize(c => ({ ...c, randomizeRoot: !c.randomizeRoot }))}
+                                        className={`w-11 h-6 rounded-full transition-colors relative ${chordRandomize.randomizeRoot ? "bg-ink" : "bg-ink/20"}`}>
+                                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${chordRandomize.randomizeRoot ? "translate-x-5.5" : "translate-x-0.5"}`} />
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                {/* Note Groups */}
+                                <div>
+                                    <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
+                                        Note Group <span className='normal-case font-normal text-ink/30'>(empty = all)</span>
+                                    </p>
+                                    <div className='flex flex-wrap gap-2'>
+                                        {Object.keys(SCALE_SHAPES).map(group => {
+                                            const active = scaleRandomize.noteGroups.includes(group);
+                                            return (
+                                                <button
+                                                    key={group}
+                                                    onClick={() =>
+                                                        setScaleRandomize(c => ({
+                                                            ...c,
+                                                            noteGroups: active
+                                                                ? c.noteGroups.filter(x => x !== group)
+                                                                : [...c.noteGroups, group],
+                                                            scales: [],
+                                                        }))
+                                                    }
+                                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                    {group}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Specific scales — shown when note groups are pinned */}
+                                {scaleRandomize.noteGroups.length > 0 && (
+                                    <div>
+                                        <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
+                                            Scale <span className='normal-case font-normal text-ink/30'>(empty = all in group)</span>
+                                        </p>
+                                        <div className='flex flex-wrap gap-2'>
+                                            {scaleRandomize.noteGroups.flatMap(g => Object.keys(SCALE_SHAPES[g] ?? {})).map(s => {
+                                                const active = scaleRandomize.scales.includes(s);
+                                                return (
+                                                    <button
+                                                        key={s}
+                                                        onClick={() =>
+                                                            setScaleRandomize(c => ({
+                                                                ...c,
+                                                                scales: active
+                                                                    ? c.scales.filter(x => x !== s)
+                                                                    : [...c.scales, s],
+                                                            }))
+                                                        }
+                                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                        {s}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Root note */}
+                                <div className='flex items-center justify-between'>
+                                    <p className='text-sm font-semibold text-ink'>Randomize root note</p>
+                                    <button
+                                        onClick={() => setScaleRandomize(c => ({ ...c, randomizeRoot: !c.randomizeRoot }))}
+                                        className={`w-11 h-6 rounded-full transition-colors relative ${scaleRandomize.randomizeRoot ? "bg-ink" : "bg-ink/20"}`}>
+                                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${scaleRandomize.randomizeRoot ? "translate-x-5.5" : "translate-x-0.5"}`} />
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className='shrink-0 px-5 pb-6 pt-3 border-t border-ink/10'>
+                        <button
+                            onClick={() => {
+                                handleRandomize();
+                                setRandomizeSheetOpen(false);
+                            }}
+                            className='w-full py-3 bg-ink text-sand-1 rounded-full text-sm font-bold hover:opacity-90 transition-opacity'>
+                            Randomize
+                        </button>
+                    </div>
+                </div>
+            </>
 
             {/* ── Auth Gate Modal ───────────────────────────────── */}
             {authGateOpen && (

@@ -4,6 +4,8 @@ import * as React from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useSubscription } from "@/lib/hooks/useSubscription";
+import { usePreferences } from "@/lib/contexts/PreferencesContext";
+import { TUNINGS } from "@/lib/tunings";
 import FormFields from "@/components/FormFields";
 import SubmitFeedback from "@/components/SubmitFeedback";
 import { deleteAccount, updateEmail, emailRegex } from "@/lib/API";
@@ -11,6 +13,8 @@ import { deleteAccount, updateEmail, emailRegex } from "@/lib/API";
 export default function Header() {
     const { user, signOut, isLoading: authIsLoading } = useAuth();
     const hasPro = useSubscription();
+    const { handedness, setHandedness, tuningName, setTuningName } =
+        usePreferences();
     const router = useRouter();
     const searchParams = useSearchParams();
     const pathname = usePathname();
@@ -283,6 +287,75 @@ export default function Header() {
 
                         <div className='flex-1 flex flex-col gap-6 px-5'>
                             <SubmitFeedback className='text-sand-1' />
+
+                            {/* Preferences */}
+                            <div className='flex flex-col gap-4'>
+                                <h3 className='text-xs font-bold text-sand-1/70 uppercase tracking-wider'>
+                                    Preferences
+                                </h3>
+
+                                {/* Handedness */}
+                                <div className='flex flex-col gap-1.5'>
+                                    <p className='text-[10px] font-bold text-sand-1/50 uppercase tracking-widest'>
+                                        Handedness
+                                    </p>
+                                    <div className='flex rounded-xl overflow-hidden border border-sand-1/20'>
+                                        {(
+                                            [
+                                                ["right", "Right-handed"],
+                                                ["left", "Left-handed"],
+                                            ] as const
+                                        ).map(([val, label]) => (
+                                            <button
+                                                key={val}
+                                                onClick={() =>
+                                                    setHandedness(val)
+                                                }
+                                                className={`flex-1 py-2.5 text-sm font-medium transition-colors first:border-r first:border-sand-1/20 ${
+                                                    handedness === val
+                                                        ? "bg-sand-1 text-sand-4 font-semibold"
+                                                        : "text-sand-1/60 hover:text-sand-1/80"
+                                                }`}>
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Default tuning */}
+                                <div className='flex flex-col gap-1.5'>
+                                    <p className='text-[10px] font-bold text-sand-1/50 uppercase tracking-widest'>
+                                        Default Tuning
+                                    </p>
+                                    <div className='flex flex-wrap gap-1.5'>
+                                        {TUNINGS.map(t => (
+                                            <button
+                                                key={t.name}
+                                                onClick={() =>
+                                                    setTuningName(t.name)
+                                                }
+                                                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                                    tuningName === t.name
+                                                        ? "bg-sand-1 text-sand-4 border-sand-1"
+                                                        : "text-sand-1/70 border-sand-1/20 hover:border-sand-1/60 hover:text-sand-1"
+                                                }`}>
+                                                {t.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {tuningName !== "Standard" && (
+                                        <p className='text-[10px] text-sand-1/40 font-mono'>
+                                            {[
+                                                ...(TUNINGS.find(
+                                                    t => t.name === tuningName,
+                                                )?.notes ?? []),
+                                            ]
+                                                .reverse()
+                                                .join(" · ")}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
 
                             <div className='flex flex-col gap-2'>
                                 <h3 className='text-xs font-bold text-sand-1/70 uppercase tracking-wider'>
