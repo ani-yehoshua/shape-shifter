@@ -1919,11 +1919,13 @@ export default function Home() {
                                     onClick={() => setMenuOpen(false)}
                                 />
                                 <div className='bg-sand-1 rounded-t-2xl shadow-2xl flex flex-col max-h-[85dvh]'>
-                                    <div className='shrink-0 pt-3'>
-                                        <div className='w-10 h-1 bg-ink/20 rounded-full mx-auto' />
+                                    {/* Handle */}
+                                    <div className='shrink-0 py-3 flex justify-center'>
+                                        <div className='w-10 h-1 bg-ink/20 rounded-full' />
                                     </div>
 
-                                    <div className='flex-1 overflow-y-auto px-4 pt-4 pb-8 flex flex-col gap-5'>
+                                    {/* Scrollable content */}
+                                    <div className='flex-1 min-h-0 overflow-y-auto px-4 flex flex-col gap-5'>
                                         {/* Mode toggle */}
                                         <div className='flex rounded-xl overflow-hidden border border-ink'>
                                             <button
@@ -2265,11 +2267,14 @@ export default function Home() {
                                         </div>
                                     </div>
 
-                                    <button
-                                        onClick={() => setMenuOpen(false)}
-                                        className='w-full mt-6 py-3 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 transition-opacity'>
-                                        Done
-                                    </button>
+                                    {/* Footer */}
+                                    <div className='shrink-0 px-4 pt-3 pb-8'>
+                                        <button
+                                            onClick={() => setMenuOpen(false)}
+                                            className='w-full py-3 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 transition-opacity'>
+                                            Done
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
