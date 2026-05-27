@@ -486,6 +486,7 @@ export default function Home() {
     type ScaleRandomizeConfig = {
         noteGroups: string[];
         scales: string[];
+        modes: string[];
         randomizeRoot: boolean;
     };
     const [randomizeOn, setRandomizeOn] = React.useState(false);
@@ -502,6 +503,7 @@ export default function Home() {
         React.useState<ScaleRandomizeConfig>({
             noteGroups: [],
             scales: [],
+            modes: [],
             randomizeRoot: true,
         });
     const [showIntervals, setShowIntervals] = React.useState(false);
@@ -884,33 +886,108 @@ export default function Home() {
 
     const handleRandomize = () => {
         if (selectedMode === "scales") {
+            // Compute the current displayed tonic (what the root button shows)
+            // modeRootNote is declared later, so we compute it inline here
+            const currentRootIdx = NOTES.findIndex(p =>
+                p.includes(currentRootNote),
+            );
+            const currentEntry = SCALE_SHAPES[selectedNoteGroup]?.[selectedScale];
+            const currentModeInterval = currentEntry?.intervals[selectedScalePosition] ?? 0;
+            const currentDegreeNum = parseInt(
+                (currentEntry?.degrees[selectedScalePosition] ?? "1").match(/\d+/)?.[0] ?? "1",
+            );
+            const displayedTonicIdx = (currentRootIdx + currentModeInterval) % 12;
+            const tonicNoteStr = spellNote(currentRootNote, currentModeInterval, currentDegreeNum);
+            const tonicLetterIdx = "ABCDEFG".indexOf(tonicNoteStr[0]);
+
             const allGroups = Object.keys(SCALE_SHAPES);
             const group = pickFrom(scaleRandomize.noteGroups, allGroups);
             const allScales = Object.keys(SCALE_SHAPES[group] ?? {});
-            const scale = pickFrom(
-                scaleRandomize.scales.filter(s => allScales.includes(s)),
-                allScales,
-            );
+            const pool = scaleRandomize.scales.length > 0
+                ? scaleRandomize.scales.filter(s => allScales.includes(s))
+                : allScales;
+            // Filter scales to those that have at least one eligible mode position
+            const eligibleScales =
+                scaleRandomize.modes.length > 0
+                    ? (() => {
+                          const f = pool.filter(s =>
+                              (SCALE_SHAPES[group]?.[s]?.positions ?? []).some(
+                                  p =>
+                                      p.modeName &&
+                                      scaleRandomize.modes.includes(p.modeName),
+                              ),
+                          );
+                          return f.length > 0 ? f : pool;
+                      })()
+                    : pool;
+            const scale = pickFrom(eligibleScales, allScales);
             const entry = SCALE_SHAPES[group]?.[scale];
             if (!entry) return;
             const positionCount = entry.positions.length;
+            // Pick a random eligible position (mode)
+            const eligibleIndices =
+                scaleRandomize.modes.length > 0
+                    ? entry.positions
+                          .map((p, i) => ({ p, i }))
+                          .filter(
+                              ({ p }) =>
+                                  p.modeName &&
+                                  scaleRandomize.modes.includes(p.modeName),
+                          )
+                          .map(({ i }) => i)
+                    : Array.from({ length: positionCount }, (_, i) => i);
             const position =
-                !scaleRandomize.randomizeRoot
-                    ? 0
-                    : positionCount
-                      ? Math.floor(Math.random() * positionCount)
-                      : 0;
+                eligibleIndices.length > 0
+                    ? eligibleIndices[
+                          Math.floor(Math.random() * eligibleIndices.length)
+                      ]
+                    : 0;
             setSelectedNoteGroup(group);
             setSelectedScale(scale);
             setSelectedScalePosition(position);
             setSelectedScalePattern(entry.defaultPattern);
             setSelectedScaleVariant(0);
+
+            let newRoot: string;
             if (scaleRandomize.randomizeRoot) {
                 const naturals = NOTES[Math.floor(Math.random() * 12)].filter(
                     n => !n.includes("#") && !n.includes("b"),
                 );
-                setCurrentRootNote(pick(naturals.length ? naturals : NOTES[0]));
+                newRoot = pick(naturals.length ? naturals : NOTES[0]);
+            } else {
+                // Back-calculate parent scale root so the displayed tonic stays fixed.
+                const newModeInterval = entry.intervals[position];
+                const parentIdx =
+                    (displayedTonicIdx - newModeInterval + 12) % 12;
+                const pair = NOTES[parentIdx];
+                // Use letter-based selection: parent letter = tonic letter − (degree−1) in ABCDEFG space
+                const newDegreeNum = parseInt(
+                    (entry.degrees[position] ?? "1").match(/\d+/)?.[0] ?? "1",
+                );
+                const parentLetterIdx = ((tonicLetterIdx - (newDegreeNum - 1)) % 7 + 7) % 7;
+                const parentLetter = "ABCDEFG"[parentLetterIdx];
+                newRoot =
+                    pair.find(n => n[0] === parentLetter) ??
+                    pair.find(n => !n.includes("#")) ??
+                    pair[0];
             }
+
+            // Compute whether the scale sits entirely above fret 12 → needs octave shift
+            const pos = entry.positions[position];
+            if (pos?.notes?.length) {
+                const newRootFret = (NOTES.findIndex(p => p.includes(newRoot)) - 7 + 12) % 12;
+                const posFrets = pos.notes.map(n => {
+                    const delta =
+                        (selectedTuning.semitones[n.string] ?? STANDARD_MIDI[n.string]) -
+                        STANDARD_MIDI[n.string];
+                    return n.fretOffset + newRootFret - delta;
+                });
+                setOctaveUp(Math.max(...posFrets) > 24 && Math.min(...posFrets) >= 12);
+            } else {
+                setOctaveUp(false);
+            }
+
+            setCurrentRootNote(newRoot);
             return;
         }
 
@@ -1020,7 +1097,18 @@ export default function Home() {
             candidates[1] ||
             candidates[0];
         setCurrentRootNote(simple);
+        if (selectedMode === "scales") setSelectedScalePosition(0);
     };
+
+    // When the user picks a root from the picker, reset to position 0 in scales
+    // mode so the chosen note becomes the displayed tonic.
+    const handleSelectRoot = React.useCallback(
+        (note: string) => {
+            setCurrentRootNote(note);
+            if (selectedMode === "scales") setSelectedScalePosition(0);
+        },
+        [selectedMode],
+    );
 
     // ── effects ────────────────────────────────────────────────────────────────
     React.useEffect(() => {
@@ -1098,10 +1186,9 @@ export default function Home() {
                     STANDARD_MIDI[n.string]) - STANDARD_MIDI[n.string];
             return n.fretOffset + rootFret - delta;
         });
-        const maxFret = Math.max(...frets);
         const minFret = Math.min(...frets);
         return {
-            hasAlt: maxFret > 24 && minFret - 12 >= 0,
+            hasAlt: minFret >= 12,
         };
     }, [
         selectedMode,
@@ -1133,28 +1220,28 @@ export default function Home() {
             setDisplayShape([]);
             return;
         }
-        const octaveOffset = octaveUp ? -12 : 0;
         const modeInterval = scaleEntry.intervals[selectedScalePosition];
         const parentDegrees = scaleEntry.degrees.map(d =>
             parseInt(d.match(/\d+/)?.[0] ?? "1"),
         );
         const modeRootParentDeg = parentDegrees[selectedScalePosition];
+        // Pre-compute raw frets so we can gate octaveOffset on whether this
+        // position actually sits above fret 12 (same logic as scaleOctaveInfo.hasAlt).
+        const rawFrets = position.notes.map(n => {
+            const delta =
+                (selectedTuning.semitones[n.string] ?? STANDARD_MIDI[n.string]) -
+                STANDARD_MIDI[n.string];
+            return n.fretOffset + rootFret - delta;
+        });
+        const octaveOffset = octaveUp && Math.min(...rawFrets) >= 12 ? -12 : 0;
         setDisplayShape(
-            position.notes.map(n => {
-                const delta =
-                    (selectedTuning.semitones[n.string] ??
-                        STANDARD_MIDI[n.string]) - STANDARD_MIDI[n.string];
-                return {
-                    string: n.string,
-                    fret: n.fretOffset + rootFret - delta + octaveOffset,
-                    semitones: (n.semitones - modeInterval + 12) % 12,
-                    degree:
-                        ((parentDegrees[n.degree] - modeRootParentDeg + 7) %
-                            7) +
-                        1,
-                    isTonic: n.semitones === 0,
-                };
-            }),
+            position.notes.map((n, i) => ({
+                string: n.string,
+                fret: rawFrets[i] + octaveOffset,
+                semitones: (n.semitones - modeInterval + 12) % 12,
+                degree: ((parentDegrees[n.degree] - modeRootParentDeg + 7) % 7) + 1,
+                isTonic: n.semitones === 0,
+            })),
         );
     }, [
         selectedMode,
@@ -1167,6 +1254,7 @@ export default function Home() {
         octaveUp,
         selectedTuning.semitones,
     ]);
+
 
     React.useEffect(() => {
         if (isDrawMode) return;
@@ -1550,18 +1638,15 @@ export default function Home() {
                                                 <>
                                                     <div className='flex items-center gap-1'>
                                                         <button
-                                                            onClick={() => {
+                                                            onClick={() =>
                                                                 setSelectedScalePosition(
                                                                     p =>
                                                                         (p -
                                                                             1 +
                                                                             numPos) %
                                                                         numPos,
-                                                                );
-                                                                setOctaveUp(
-                                                                    false,
-                                                                );
-                                                            }}
+                                                                )
+                                                            }
                                                             title='Previous position'
                                                             className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                             <ChevronLeft />
@@ -1575,17 +1660,14 @@ export default function Home() {
                                                                 : `${selectedScalePosition + 1}`}
                                                         </span>
                                                         <button
-                                                            onClick={() => {
+                                                            onClick={() =>
                                                                 setSelectedScalePosition(
                                                                     p =>
                                                                         (p +
                                                                             1) %
                                                                         numPos,
-                                                                );
-                                                                setOctaveUp(
-                                                                    false,
-                                                                );
-                                                            }}
+                                                                )
+                                                            }
                                                             title='Next position'
                                                             className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
                                                             <ChevronRight />
@@ -1904,8 +1986,8 @@ export default function Home() {
                                         </button>
                                     ) : (
                                         <RootNoteButton
-                                            root={currentRootNote}
-                                            onSelect={setCurrentRootNote}
+                                            root={modeRootNote}
+                                            onSelect={handleSelectRoot}
                                             onRandom={handleGenerateNewRoot}
                                             className='whitespace-nowrap px-5 py-2.5 bg-ink text-sand-1 rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all'
                                         />
@@ -2671,9 +2753,7 @@ export default function Home() {
                                         {/* Scale octave shift (desktop) */}
                                         {scaleOctaveInfo?.hasAlt && (
                                             <button
-                                                onClick={() =>
-                                                    setOctaveUp(o => !o)
-                                                }
+                                                onClick={() => setOctaveUp(o => !o)}
                                                 className={`px-4 py-1.5 rounded border text-sm font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "bg-sand-1 text-ink border-ink hover:bg-sand-2"}`}>
                                                 {octaveUp ? "+12" : "-12"}
                                             </button>
@@ -2843,8 +2923,8 @@ export default function Home() {
                                         </button>
                                     ) : (
                                         <RootNoteButton
-                                            root={currentRootNote}
-                                            onSelect={setCurrentRootNote}
+                                            root={modeRootNote}
+                                            onSelect={handleSelectRoot}
                                             onRandom={handleGenerateNewRoot}
                                             className='px-6 py-2 bg-ink text-sand-1 text-sm font-semibold rounded-full hover:opacity-90 transition-opacity'
                                         />
@@ -2988,6 +3068,7 @@ export default function Home() {
                                         setScaleRandomize({
                                             noteGroups: [],
                                             scales: [],
+                                            modes: [],
                                             randomizeRoot: true,
                                         });
                                     }
@@ -3011,7 +3092,7 @@ export default function Home() {
                                 <div>
                                     <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
                                         Category{" "}
-                                        <span className='normal-case font-normal text-ink/30'>
+                                        <span className='normal-case font-semibold text-ink/30'>
                                             (empty = all)
                                         </span>
                                     </p>
@@ -3116,7 +3197,7 @@ export default function Home() {
                                                 <div key={key}>
                                                     <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
                                                         {label}{" "}
-                                                        <span className='normal-case font-normal text-ink/30'>
+                                                        <span className='normal-case font-semibold text-ink/30'>
                                                             (empty = all)
                                                         </span>
                                                     </p>
@@ -3189,7 +3270,7 @@ export default function Home() {
                                 <div>
                                     <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
                                         Note Group{" "}
-                                        <span className='normal-case font-normal text-ink/30'>
+                                        <span className='normal-case font-semibold text-ink/30'>
                                             (empty = all)
                                         </span>
                                     </p>
@@ -3236,7 +3317,7 @@ export default function Home() {
                                     <div>
                                         <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
                                             Scale{" "}
-                                            <span className='normal-case font-normal text-ink/30'>
+                                            <span className='normal-case font-semibold text-ink/30'>
                                                 (empty = all in group)
                                             </span>
                                         </p>
@@ -3281,6 +3362,84 @@ export default function Home() {
                                     </div>
                                 )}
 
+                                {/* Modes — all named positions across applicable scales */}
+                                {(() => {
+                                    if (scaleRandomize.noteGroups.length === 0)
+                                        return null;
+                                    const relevantScales =
+                                        scaleRandomize.scales.length > 0
+                                            ? scaleRandomize.scales
+                                            : scaleRandomize.noteGroups.flatMap(
+                                                  g =>
+                                                      Object.keys(
+                                                          SCALE_SHAPES[g] ?? {},
+                                                      ),
+                                              );
+                                    const allModeNames = Array.from(
+                                        new Set(
+                                            relevantScales.flatMap(s =>
+                                                scaleRandomize.noteGroups.flatMap(
+                                                    g =>
+                                                        (
+                                                            SCALE_SHAPES[g]?.[s]
+                                                                ?.positions ?? []
+                                                        )
+                                                            .map(p => p.modeName)
+                                                            .filter(
+                                                                (
+                                                                    m,
+                                                                ): m is string =>
+                                                                    !!m,
+                                                            ),
+                                                ),
+                                            ),
+                                        ),
+                                    );
+                                    if (allModeNames.length === 0) return null;
+                                    return (
+                                        <div>
+                                            <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
+                                                Mode{" "}
+                                                <span className='normal-case font-semibold text-ink/30'>
+                                                    (empty = all)
+                                                </span>
+                                            </p>
+                                            <div className='flex flex-wrap gap-2'>
+                                                {allModeNames.map(modeName => {
+                                                    const active =
+                                                        scaleRandomize.modes.includes(
+                                                            modeName,
+                                                        );
+                                                    return (
+                                                        <button
+                                                            key={modeName}
+                                                            onClick={() =>
+                                                                setScaleRandomize(
+                                                                    c => ({
+                                                                        ...c,
+                                                                        modes: active
+                                                                            ? c.modes.filter(
+                                                                                  m =>
+                                                                                      m !==
+                                                                                      modeName,
+                                                                              )
+                                                                            : [
+                                                                                  ...c.modes,
+                                                                                  modeName,
+                                                                              ],
+                                                                    }),
+                                                                )
+                                                            }
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                            {modeName}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
                                 {/* Root note */}
                                 <div className='flex items-center justify-between'>
                                     <p className='text-sm font-semibold text-ink'>
@@ -3291,6 +3450,7 @@ export default function Home() {
                                             setScaleRandomize(c => ({
                                                 ...c,
                                                 randomizeRoot: !c.randomizeRoot,
+                                                modes: [],
                                             }))
                                         }
                                         className={`w-11 h-6 rounded-full transition-colors relative ${scaleRandomize.randomizeRoot ? "bg-ink" : "bg-ink/20"}`}>

@@ -14,9 +14,15 @@ interface Props {
     className?: string;
 }
 
-export default function RootNoteButton({ root, onSelect, onRandom, className }: Props) {
+export default function RootNoteButton({
+    root,
+    onSelect,
+    onRandom,
+    className,
+}: Props) {
     const [open, setOpen] = React.useState(false);
     const [anchorRect, setAnchorRect] = React.useState<DOMRect | null>(null);
+    const [useFlats, setUseFlats] = React.useState(() => root.includes("b"));
     const btnRef = React.useRef<HTMLButtonElement>(null);
     const popupRef = React.useRef<HTMLDivElement>(null);
 
@@ -37,6 +43,9 @@ export default function RootNoteButton({ root, onSelect, onRandom, className }: 
         setOpen(o => !o);
     };
 
+    // popup width: 4 cols × 40px + 3 gaps × 4px + 2 × 12px padding = 208px
+    const POPUP_W = 208;
+
     const popup =
         open && anchorRect
             ? createPortal(
@@ -49,22 +58,38 @@ export default function RootNoteButton({ root, onSelect, onRandom, className }: 
                           left: Math.max(
                               8,
                               Math.min(
-                                  window.innerWidth - 172 - 8,
-                                  anchorRect.left + anchorRect.width / 2 - 86,
+                                  window.innerWidth - POPUP_W - 8,
+                                  anchorRect.left +
+                                      anchorRect.width / 2 -
+                                      POPUP_W / 2,
                               ),
                           ),
-                          width: 172,
+                          width: POPUP_W,
                           zIndex: 9999,
                       }}>
+                      {/* Sharp / flat toggle */}
+                      <div className='flex items-center justify-between mb-2'>
+                          <span className='text-[10px] font-bold uppercase tracking-widest text-ink/30'>
+                              Root
+                          </span>
+                          <button
+                              onClick={() => setUseFlats(f => !f)}
+                              className='text-[11px] font-semibold text-ink/50 hover:text-ink transition-colors px-1 py-0.5 rounded'>
+                              {useFlats ? "♯ Sharps" :"♭ Flats"}
+                          </button>
+                      </div>
                       <div
                           style={{
                               display: "grid",
-                              gridTemplateColumns: "repeat(4, 2.375rem)",
+                              gridTemplateColumns: "repeat(4, 2.75rem)",
                               gap: "0.25rem",
                           }}>
                           {C_TO_B.map(idx => {
                               const pair = NOTES[idx];
-                              const label = pair[0];
+                              const label =
+                                  pair.length > 1 && useFlats
+                                      ? pair[1]
+                                      : pair[0];
                               const isActive = pair.includes(root);
                               return (
                                   <button
@@ -73,7 +98,7 @@ export default function RootNoteButton({ root, onSelect, onRandom, className }: 
                                           onSelect(label);
                                           setOpen(false);
                                       }}
-                                      className={`h-8 rounded-lg text-xs font-bold transition-colors ${
+                                      className={`h-9 rounded-lg text-xs font-bold transition-colors ${
                                           isActive
                                               ? "bg-ink text-sand-1"
                                               : "text-ink hover:bg-ink/10"
@@ -88,7 +113,7 @@ export default function RootNoteButton({ root, onSelect, onRandom, className }: 
                               onRandom();
                               setOpen(false);
                           }}
-                          className='mt-1 w-full text-[11px] font-semibold text-ink/50 hover:text-ink py-1 transition-colors'>
+                          className='mt-2 w-full text-[11px] font-semibold text-ink/50 hover:text-ink py-1 transition-colors'>
                           Random
                       </button>
                   </div>,
@@ -98,7 +123,10 @@ export default function RootNoteButton({ root, onSelect, onRandom, className }: 
 
     return (
         <>
-            <button ref={btnRef} onClick={handleToggle} className={className}>
+            <button
+                ref={btnRef}
+                onClick={handleToggle}
+                className={className}>
                 {root}
             </button>
             {popup}
