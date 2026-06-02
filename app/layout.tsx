@@ -13,7 +13,7 @@ const montserrat = Montserrat({
     display: "swap",
 });
 
-const BASE_URL = "https://shapeshifter.djoshware.com";
+const BASE_URL = "https://the-shape-shifter.com";
 
 export const metadata: Metadata = {
     metadataBase: new URL(BASE_URL),

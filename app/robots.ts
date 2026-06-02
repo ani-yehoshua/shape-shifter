@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const BASE_URL = "https://shapeshifter.djoshware.com";
+const BASE_URL = "https://the-shape-shifter.com";
 
 export default function robots(): MetadataRoute.Robots {
     return {

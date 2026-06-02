@@ -1429,7 +1429,7 @@ export default function Home() {
         "@context": "https://schema.org",
         "@type": "WebApplication",
         name: "Shape Shifter",
-        url: "https://shapeshifter.djoshware.com",
+        url: "https://the-shape-shifter.com",
         description:
             "Explore guitar chords and scales across every key and position. Interactive fretboard diagrams for chord voicings, scale patterns, and modes.",
         applicationCategory: "MusicApplication",

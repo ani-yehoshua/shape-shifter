@@ -79,7 +79,7 @@ export default async function OgImage() {
                         fontWeight: 700,
                         letterSpacing: "0.5px",
                     }}>
-                    shapeshifter.djoshware.com
+                    the-shape-shifter.com
                 </div>
             </div>
         ),
