@@ -103,6 +103,7 @@ export default function Header() {
 
     const [deleteOpen, setDeleteOpen] = React.useState(false);
     const [deleteLoading, setDeleteLoading] = React.useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = React.useState("");
     const [deleteAlert, setDeleteAlert] = React.useState<{
         msg: string;
         ok: boolean;
@@ -591,24 +592,43 @@ export default function Header() {
                                 This cannot be undone.
                             </p>
                         </div>
-                        <div className='px-6 py-4'>
+                        <div className='px-6 py-4 flex flex-col gap-3'>
                             {deleteAlert && (
                                 <p className={alertClass(deleteAlert.ok)}>
                                     {deleteAlert.msg}
                                 </p>
                             )}
+                            <label className='text-xs text-sand-1/60 text-center'>
+                                Type{" "}
+                                <span className='font-bold tracking-widest text-sand-1/80'>
+                                    DELETE
+                                </span>{" "}
+                                to confirm
+                            </label>
+                            <input
+                                value={deleteConfirmText}
+                                onChange={e =>
+                                    setDeleteConfirmText(e.target.value)
+                                }
+                                placeholder='DELETE'
+                                className='w-full bg-sand-1/10 border border-sand-1/30 rounded-lg px-3 py-2 text-sm text-sand-1 placeholder-sand-1/20 outline-none focus:border-red-500 text-center font-bold tracking-widest transition-colors'
+                            />
                         </div>
                         <div className='flex gap-3 px-6 pb-5'>
                             <button
                                 onClick={() => {
                                     setDeleteOpen(false);
                                     setDeleteAlert(null);
+                                    setDeleteConfirmText("");
                                 }}
                                 className='flex-1 py-2.5 rounded-full bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
                                 Cancel
                             </button>
                             <button
-                                disabled={deleteLoading}
+                                disabled={
+                                    deleteLoading ||
+                                    deleteConfirmText !== "DELETE"
+                                }
                                 onClick={handleDeleteAccount}
                                 className='flex-1 py-2.5 rounded-full bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-all'>
                                 {deleteLoading ? "Deleting…" : "Delete"}

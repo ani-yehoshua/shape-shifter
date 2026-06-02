@@ -1,27 +1,18 @@
-import Mailgun from 'mailgun.js';
-import FormData from 'form-data';
+import { Resend } from 'resend';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function getMailgun() {
-    const key = process.env.MAILGUN_API_KEY;
-    const domain = process.env.MAILGUN_DOMAIN;
-    const from = process.env.MAILGUN_FROM;
-    const to = process.env.MAILGUN_TO;
-    if (!key || !domain || !from || !to)
-        throw new Error('Mailgun env vars are not set');
-    const mailgun = new Mailgun(FormData);
-    return {
-        mg: mailgun.client({ username: 'api', key }),
-        domain,
-        from,
-        to,
-    };
+function getResend() {
+    const key = process.env.RESEND_API_KEY;
+    const from = process.env.RESEND_FROM;
+    const to = process.env.RESEND_TO;
+    if (!key || !from || !to) throw new Error('Resend env vars are not set');
+    return { resend: new Resend(key), from, to };
 }
 
 export async function POST(req: Request) {
-    const { mg, domain, from, to } = getMailgun();
+    const { resend, from, to } = getResend();
 
     const contentType = req.headers.get('content-type') || '';
     if (!contentType.includes('multipart/form-data')) {
@@ -44,26 +35,27 @@ export async function POST(req: Request) {
             const buffer = Buffer.from(await file.arrayBuffer());
             return {
                 filename: file.name,
-                data: buffer,
-                contentType: file.type,
+                content: buffer,
             };
         }),
     );
 
     try {
-        const result = await mg.messages.create(domain, {
+        const { data, error } = await resend.emails.send({
             from,
             to: [to],
             subject: '🛠️ New Issue Reported',
             text: `From: ${email}\n\nMessage:\n${message}`,
-            ...(attachments.length ? { attachment: attachments } : {}),
+            ...(attachments.length ? { attachments } : {}),
         });
 
-        return new Response(JSON.stringify({ success: true, data: result }), {
+        if (error) throw error;
+
+        return new Response(JSON.stringify({ success: true, data }), {
             status: 200,
         });
     } catch (error: any) {
-        console.error('Mailgun error:', error);
+        console.error('Resend error:', error);
         return new Response(
             JSON.stringify({ success: false, error: error.message }),
             { status: 500 },

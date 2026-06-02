@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
         '172.20.10.11', // iPhone hotspot
         '192.168.99.39', // Parkey's house
     ],
-    serverExternalPackages: ['mailgun.js', 'form-data'],
+    serverExternalPackages: ['resend'],
 };
 
 export default nextConfig;
