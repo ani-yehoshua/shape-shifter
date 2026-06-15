@@ -31,14 +31,14 @@
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dJoshware/shape-shifter.git"
+    "url": "git+https://github.com/Yehoshua/shape-shifter.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "bugs": {
-    "url": "https://github.com/dJoshware/shape-shifter/issues"
+    "url": "https://github.com/Yehoshua/shape-shifter/issues"
   },
-  "homepage": "https://github.com/dJoshware/shape-shifter#readme"
+  "homepage": "https://github.com/Yehoshua/shape-shifter#readme"
 }

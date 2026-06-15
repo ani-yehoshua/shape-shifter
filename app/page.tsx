@@ -482,6 +482,7 @@ export default function Home() {
         voicingTypes: string[];
         stringSets: string[];
         qualities: string[];
+        inversions: string[];
         randomizeRoot: boolean;
     };
     type ScaleRandomizeConfig = {
@@ -498,6 +499,7 @@ export default function Home() {
             voicingTypes: [],
             stringSets: [],
             qualities: [],
+            inversions: [],
             randomizeRoot: true,
         });
     const [scaleRandomize, setScaleRandomize] =
@@ -1026,9 +1028,33 @@ export default function Home() {
             const options: Record<string, ChordLevel> = cursor.options;
             const allKeys = Object.keys(options);
             let pool: string[];
-            if (levelName === "Voicing Types")
-                pool = cfg.voicingTypes.filter(v => allKeys.includes(v));
-            else if (levelName === "String Sets")
+            if (levelName === "Voicing Types") {
+                const directFilter = cfg.voicingTypes.filter(v =>
+                    allKeys.includes(v),
+                );
+                if (directFilter.length > 0) {
+                    pool = directFilter;
+                } else if (cfg.stringSets.length > 0) {
+                    // Exclude voicing types that have no String Sets level, then
+                    // narrow to those containing the selected set(s).
+                    const hasStringSets = allKeys.filter(
+                        k => options[k]?.levelName === "String Sets",
+                    );
+                    const hasMatchingSet = hasStringSets.filter(k =>
+                        cfg.stringSets.some(
+                            ss => options[k].options && ss in options[k].options,
+                        ),
+                    );
+                    pool =
+                        hasMatchingSet.length > 0
+                            ? hasMatchingSet
+                            : hasStringSets.length > 0
+                              ? hasStringSets
+                              : allKeys;
+                } else {
+                    pool = allKeys;
+                }
+            } else if (levelName === "String Sets")
                 pool = cfg.stringSets.filter(v => allKeys.includes(v));
             else if (levelName === "Chord Qualities")
                 pool = cfg.qualities.filter(v => allKeys.includes(v));
@@ -1045,7 +1071,12 @@ export default function Home() {
 
         if (!cursor?.options) return;
         const posKeys = Object.keys(cursor.options);
-        newSelections.position = pick(posKeys);
+        const filteredPosKeys = cfg.inversions.length
+            ? posKeys.filter(k => cfg.inversions.includes(k))
+            : posKeys;
+        newSelections.position = pick(
+            filteredPosKeys.length ? filteredPosKeys : posKeys,
+        );
         const pd = cursor.options[newSelections.position];
         const alts =
             Array.isArray(pd.altShapes) && pd.altShapes.length
@@ -1158,14 +1189,28 @@ export default function Home() {
         );
         const low: NotePosition[][] = [];
         const crossing: NotePosition[][] = [];
-        const high: NotePosition[][] = [];
+        const highAll: NotePosition[][] = [];
         for (const v of all) {
             const range = voicingFretRange(v);
             if (!range) continue;
-            if (range.max <= 12) low.push(v);
-            else if (range.min >= 12) high.push(v);
+            if (range.min >= 12) highAll.push(v);
+            else if (range.max <= 12) low.push(v);
             else crossing.push(v);
         }
+        // Keep only the lowest-register octave group in high so that shapes
+        // with roots at open strings (fret 0, 12, 24) don't double-render.
+        const highRanges = highAll.map(v => voicingFretRange(v));
+        const lowestHighMin =
+            highRanges.length > 0
+                ? Math.min(
+                      ...highRanges
+                          .filter((r): r is NonNullable<typeof r> => r !== null)
+                          .map(r => r.min),
+                  )
+                : Infinity;
+        const high = highAll.filter(
+            (_, i) => (highRanges[i]?.min ?? Infinity) === lowestHighMin,
+        );
         return {
             low,
             crossing,
@@ -3076,6 +3121,7 @@ export default function Home() {
                                             voicingTypes: [],
                                             stringSets: [],
                                             qualities: [],
+                                            inversions: [],
                                             randomizeRoot: true,
                                         });
                                     } else {
@@ -3141,6 +3187,8 @@ export default function Home() {
                                                                         [],
                                                                     qualities:
                                                                         [],
+                                                                    inversions:
+                                                                        [],
                                                                 }),
                                                             )
                                                         }
@@ -3153,109 +3201,209 @@ export default function Home() {
                                     </div>
                                 </div>
 
-                                {/* Sub-levels — only shown when exactly one category is pinned */}
-                                {chordRandomize.categories.length === 1 &&
+                                {/* Sub-levels — shown when at least one category is pinned */}
+                                {chordRandomize.categories.length >= 1 &&
                                     (() => {
-                                        const cat =
-                                            chordRandomize.categories[0];
-                                        const levels: {
-                                            label: string;
-                                            key: keyof ChordRandomizeConfig;
-                                            options: string[];
-                                        }[] = [];
-                                        let cursor: ChordLevel | undefined = (
-                                            allChordShapes as Record<
-                                                string,
-                                                ChordLevel
-                                            >
-                                        )[cat];
-                                        while (
-                                            cursor?.options &&
-                                            cursor.levelName !== "Positions"
-                                        ) {
-                                            const keys: string[] = Object.keys(
-                                                cursor.options,
-                                            );
+                                        // Collect the union of options at each level across all pinned categories
+                                        const levelUnions: Map<
+                                            string,
+                                            string[]
+                                        > = new Map();
+                                        const posOptions: string[] = [];
+                                        const LEVEL_META: Record<
+                                            string,
+                                            {
+                                                label: string;
+                                                key: keyof ChordRandomizeConfig;
+                                            }
+                                        > = {
+                                            "Voicing Types": {
+                                                label: "Voicing",
+                                                key: "voicingTypes",
+                                            },
+                                            "String Sets": {
+                                                label: "String Set",
+                                                key: "stringSets",
+                                            },
+                                            "Chord Qualities": {
+                                                label: "Quality",
+                                                key: "qualities",
+                                            },
+                                        };
+                                        const LEVEL_ORDER = [
+                                            "Voicing Types",
+                                            "String Sets",
+                                            "Chord Qualities",
+                                        ];
+                                        for (const cat of chordRandomize.categories) {
+                                            let node:
+                                                | ChordLevel
+                                                | undefined = (
+                                                allChordShapes as Record<
+                                                    string,
+                                                    ChordLevel
+                                                >
+                                            )[cat];
+                                            while (
+                                                node?.options &&
+                                                node.levelName !== "Positions"
+                                            ) {
+                                                const lname =
+                                                    node.levelName ?? "";
+                                                const keys: string[] =
+                                                    Object.keys(node.options);
+                                                if (LEVEL_META[lname]) {
+                                                    if (
+                                                        !levelUnions.has(lname)
+                                                    )
+                                                        levelUnions.set(
+                                                            lname,
+                                                            [],
+                                                        );
+                                                    const existing =
+                                                        levelUnions.get(lname)!;
+                                                    for (const k of keys)
+                                                        if (
+                                                            !existing.includes(k)
+                                                        )
+                                                            existing.push(k);
+                                                }
+                                                node = node.options[keys[0]];
+                                            }
                                             if (
-                                                cursor.levelName ===
-                                                "Voicing Types"
-                                            )
-                                                levels.push({
-                                                    label: "Voicing",
-                                                    key: "voicingTypes",
-                                                    options: keys,
-                                                });
-                                            else if (
-                                                cursor.levelName ===
-                                                "String Sets"
-                                            )
-                                                levels.push({
-                                                    label: "String Set",
-                                                    key: "stringSets",
-                                                    options: keys,
-                                                });
-                                            else if (
-                                                cursor.levelName ===
-                                                "Chord Qualities"
-                                            )
-                                                levels.push({
-                                                    label: "Quality",
-                                                    key: "qualities",
-                                                    options: keys,
-                                                });
-                                            // drill to first option to discover next level
-                                            cursor = cursor.options[keys[0]];
+                                                node?.levelName === "Positions" &&
+                                                node.options
+                                            ) {
+                                                for (const k of Object.keys(
+                                                    node.options,
+                                                ))
+                                                    if (!posOptions.includes(k))
+                                                        posOptions.push(k);
+                                            }
                                         }
-                                        return levels.map(
-                                            ({ label, key, options }) => (
-                                                <div key={key}>
-                                                    <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
-                                                        {label}{" "}
-                                                        <span className='normal-case font-semibold text-ink/30'>
-                                                            (empty = all)
-                                                        </span>
-                                                    </p>
-                                                    <div className='flex flex-wrap gap-2'>
-                                                        {options.map(opt => {
-                                                            const active = (
-                                                                chordRandomize[
-                                                                    key
-                                                                ] as string[]
-                                                            ).includes(opt);
-                                                            return (
-                                                                <button
-                                                                    key={opt}
-                                                                    onClick={() =>
-                                                                        setChordRandomize(
-                                                                            c => ({
-                                                                                ...c,
-                                                                                [key]: active
-                                                                                    ? (
-                                                                                          c[
-                                                                                              key
-                                                                                          ] as string[]
-                                                                                      ).filter(
-                                                                                          x =>
-                                                                                              x !==
-                                                                                              opt,
-                                                                                      )
-                                                                                    : [
-                                                                                          ...(c[
-                                                                                              key
-                                                                                          ] as string[]),
-                                                                                          opt,
-                                                                                      ],
-                                                                            }),
-                                                                        )
-                                                                    }
-                                                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                                                                    {opt}
-                                                                </button>
-                                                            );
-                                                        })}
+                                        const levelsToRender = LEVEL_ORDER.filter(
+                                            lname => levelUnions.has(lname),
+                                        ).map(lname => ({
+                                            ...LEVEL_META[lname],
+                                            options: levelUnions.get(lname)!,
+                                        }));
+                                        const posLabel = posOptions.some(
+                                            k =>
+                                                k === "Root" ||
+                                                k.includes("Inv."),
+                                        )
+                                            ? "Inversion"
+                                            : "Shape";
+                                        return (
+                                            <>
+                                                {levelsToRender.map(
+                                                    ({ label, key, options }) => (
+                                                        <div key={key}>
+                                                            <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
+                                                                {label}{" "}
+                                                                <span className='normal-case font-semibold text-ink/30'>
+                                                                    (empty = all)
+                                                                </span>
+                                                            </p>
+                                                            <div className='flex flex-wrap gap-2'>
+                                                                {options.map(
+                                                                    opt => {
+                                                                        const active =
+                                                                            (
+                                                                                chordRandomize[
+                                                                                    key
+                                                                                ] as string[]
+                                                                            ).includes(
+                                                                                opt,
+                                                                            );
+                                                                        return (
+                                                                            <button
+                                                                                key={
+                                                                                    opt
+                                                                                }
+                                                                                onClick={() =>
+                                                                                    setChordRandomize(
+                                                                                        c => ({
+                                                                                            ...c,
+                                                                                            [key]: active
+                                                                                                ? (
+                                                                                                      c[
+                                                                                                          key
+                                                                                                      ] as string[]
+                                                                                                  ).filter(
+                                                                                                      x =>
+                                                                                                          x !==
+                                                                                                          opt,
+                                                                                                  )
+                                                                                                : [
+                                                                                                      ...(c[
+                                                                                                          key
+                                                                                                      ] as string[]),
+                                                                                                      opt,
+                                                                                                  ],
+                                                                                        }),
+                                                                                    )
+                                                                                }
+                                                                                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                                                {
+                                                                                    opt
+                                                                                }
+                                                                            </button>
+                                                                        );
+                                                                    },
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ),
+                                                )}
+                                                {posOptions.length > 0 && (
+                                                    <div>
+                                                        <p className='text-[10px] font-bold uppercase tracking-widest text-ink/40 mb-2'>
+                                                            {posLabel}{" "}
+                                                            <span className='normal-case font-semibold text-ink/30'>
+                                                                (empty = all)
+                                                            </span>
+                                                        </p>
+                                                        <div className='flex flex-wrap gap-2'>
+                                                            {posOptions.map(
+                                                                pos => {
+                                                                    const active =
+                                                                        chordRandomize.inversions.includes(
+                                                                            pos,
+                                                                        );
+                                                                    return (
+                                                                        <button
+                                                                            key={
+                                                                                pos
+                                                                            }
+                                                                            onClick={() =>
+                                                                                setChordRandomize(
+                                                                                    c => ({
+                                                                                        ...c,
+                                                                                        inversions:
+                                                                                            active
+                                                                                                ? c.inversions.filter(
+                                                                                                      x =>
+                                                                                                          x !==
+                                                                                                          pos,
+                                                                                                  )
+                                                                                                : [
+                                                                                                      ...c.inversions,
+                                                                                                      pos,
+                                                                                                  ],
+                                                                                    }),
+                                                                                )
+                                                                            }
+                                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${active ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
+                                                                            {pos}
+                                                                        </button>
+                                                                    );
+                                                                },
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ),
+                                                )}
+                                            </>
                                         );
                                     })()}
 

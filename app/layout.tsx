@@ -24,6 +24,10 @@ export const metadata: Metadata = {
     description:
         "Explore guitar chords and scales in every key and position. Interactive fretboard with chord voicings, scale patterns, modes, Draw Mode, and chord progressions.",
     keywords: [
+        "shape shifter guitar",
+        "shape shifter app",
+        "shape shifter guitar app",
+        "guitar chord shapes",
         "guitar chords",
         "guitar scales",
         "fretboard",
@@ -37,9 +41,9 @@ export const metadata: Metadata = {
         "chord progressions",
         "draw mode guitar",
     ],
-    authors: [{ name: "dJoshware", url: BASE_URL }],
-    creator: "dJoshware",
-    publisher: "dJoshware",
+    authors: [{ name: "Yehoshua", url: BASE_URL }],
+    creator: "Yehoshua",
+    publisher: "Yehoshua",
     applicationName: "Shape Shifter",
     referrer: "origin-when-cross-origin",
     alternates: { canonical: BASE_URL },
@@ -77,6 +81,24 @@ export default function RootLayout({
             lang='en'
             className={montserrat.variable}>
             <body className='h-dvh overflow-hidden sm:h-auto sm:min-h-dvh sm:overflow-visible flex flex-col bg-sand-1 text-ink'>
+                <script
+                    type='application/ld+json'
+                    dangerouslySetInnerHTML={{
+                        __html: JSON.stringify({
+                            "@context": "https://schema.org",
+                            "@type": "WebApplication",
+                            name: "Shape Shifter",
+                            description:
+                                "Interactive guitar chord and scale explorer. Browse voicings, positions, modes, and shapes across the full fretboard.",
+                            applicationCategory: "MusicApplication",
+                            operatingSystem: "Web",
+                            url: BASE_URL,
+                            keywords:
+                                "shape shifter guitar, shape shifter app, guitar chord shapes, guitar voicings, fretboard explorer, guitar scales, music theory",
+                            offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+                        }),
+                    }}
+                />
                 <Providers>
                     <Suspense>
                         <Header />
