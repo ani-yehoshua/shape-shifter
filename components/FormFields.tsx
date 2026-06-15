@@ -10,6 +10,7 @@ type Props = {
     label: string;
     minRows?: number;
     multiline?: boolean;
+    name?: string;
     onBlur?: React.FocusEventHandler;
     onChange?: React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement>;
     required?: boolean;
@@ -26,6 +27,7 @@ export default function FormFields({
     label,
     minRows = 3,
     multiline,
+    name,
     onBlur,
     onChange,
     required,
@@ -77,6 +79,7 @@ export default function FormFields({
                         id={id}
                         autoComplete={autoComplete}
                         className={inputBase}
+                        name={name}
                         onBlur={onBlur}
                         onChange={
                             onChange as React.ChangeEventHandler<HTMLInputElement>

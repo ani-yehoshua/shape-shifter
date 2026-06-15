@@ -35,7 +35,12 @@ function SignInForm() {
     const supabase = React.useMemo(() => createClient(), []);
 
     const [step, setStep] = React.useState<Step>("email");
-    const [email, setEmail] = React.useState("");
+    const [email, setEmail] = React.useState(
+        () =>
+            typeof window !== "undefined"
+                ? (localStorage.getItem("ss_last_email") ?? "")
+                : "",
+    );
     const [code, setCode] = React.useState("");
     const [status, setStatus] = React.useState<Status>("idle");
     const [message, setMessage] = React.useState("");
@@ -89,6 +94,7 @@ function SignInForm() {
             setMessage("Code is invalid or expired — request a new one.");
             return;
         }
+        localStorage.setItem("ss_last_email", email.trim());
         setStatus("success");
         setMessage("Signed in. Redirecting…");
         window.location.href = destination;
@@ -142,6 +148,7 @@ function SignInForm() {
                             <FormFields
                                 autoComplete='email'
                                 label='Email'
+                                name='email'
                                 onChange={e => {
                                     setEmail(e.target.value);
                                     setMessage("");

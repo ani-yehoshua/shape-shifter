@@ -16,7 +16,12 @@ export async function updateSession(req: NextRequest) {
                 },
                 setAll(cookiesToSet) {
                     cookiesToSet.forEach(({ name, value, options }) =>
-                        supabaseResponse.cookies.set(name, value, options),
+                        supabaseResponse.cookies.set(name, value, {
+                            ...options,
+                            // Ensure auth cookies survive browser close — without
+                            // maxAge they become session cookies Safari deletes on exit.
+                            maxAge: options?.maxAge ?? 60 * 60 * 24 * 365,
+                        }),
                     );
                 },
             },
