@@ -13,11 +13,76 @@ export type ScaleEntry = {
 
 export type ScaleGroup = Record<string, ScaleEntry>;
 
-// Builds blues box positions from the minor pentatonic 2nps boxes + b5 injection.
-// Injects b5 (degree 3) whenever the 4th (degree 2) is immediately followed by
+// Builds blues box positions from the minor pentatonic 2nps boxes + ♭5 injection.
+// Injects ♭5 (degree 3) whenever the 4th (degree 2) is immediately followed by
 // the 5th (degree 4) in the note sequence — one rule covers both the same-string
-// case (e.g. A string: 4–b5–5) and the string-crossing case (G string ends on 4,
-// B string starts on 5 → b5 appended to G string).
+// case (e.g. A string: 4–♭5–5) and the string-crossing case (G string ends on 4,
+// B string starts on 5 → ♭5 appended to G string).
+// Generic bebop standard-position builder.
+// Takes the underlying base scale (without the passing tone), generates 3nps
+// positions, re-maps degrees through `degreeMap` to leave a gap at the passing-
+// tone slot, then injects the passing tone whenever `injectAfterDeg` is
+// immediately followed by `injectBeforeDeg` — same logic and same edge-case
+// handling as buildBluesStandard (covers same-string and string-crossing cases).
+function buildBebopStandard(
+    baseIntervals: number[],
+    degreeMap: number[],
+    injectAfterDeg: number,
+    injectBeforeDeg: number,
+    injectSemitone: number,
+    injectDegree: number,
+): ScalePosition[] {
+    return generateNpsPositions(baseIntervals, 3).map(pos => {
+        const notes = pos.notes.map(n => ({
+            ...n,
+            degree: degreeMap[n.degree],
+        }));
+        const withPassing: ScaleNote[] = [];
+        for (let i = 0; i < notes.length; i++) {
+            withPassing.push(notes[i]);
+            const next = notes[i + 1];
+            if (
+                notes[i].degree === injectAfterDeg &&
+                next?.degree === injectBeforeDeg
+            ) {
+                withPassing.push({
+                    string: notes[i].string,
+                    fretOffset: notes[i].fretOffset + 1,
+                    semitones: injectSemitone,
+                    degree: injectDegree,
+                });
+            }
+        }
+        return { ...pos, notes: withPassing };
+    });
+}
+
+// Jazz Major (add ♭6) — Major scale + chromatic ♭6 passing tone between 5→6.
+function buildBebopMajorStandard(): ScalePosition[] {
+    // major deg 0–6 → bebop deg, skipping slot 5 (♭6 is the passing tone)
+    return buildBebopStandard(
+        [0, 2, 4, 5, 7, 9, 11],
+        [0, 1, 2, 3, 4, 6, 7],
+        4, // inject after 5th  (bebop deg 4)
+        6, // inject before 6th (bebop deg 6)
+        8, // ♭6 semitone
+        5, // bebop degree index for ♭6
+    );
+}
+
+// Bebop Dominant — Mixolydian + chromatic natural-7 passing tone between ♭7→root.
+function buildBebopDominantStandard(): ScalePosition[] {
+    // Mixolydian deg 0–6 map straight to bebop degs 0–6; natural 7 is slot 7
+    return buildBebopStandard(
+        [0, 2, 4, 5, 7, 9, 10],
+        [0, 1, 2, 3, 4, 5, 6],
+        6, // inject after ♭7   (bebop deg 6)
+        0, // inject before root (bebop deg 0, next octave)
+        11, // natural 7 semitone
+        7, // bebop degree index for natural 7
+    );
+}
+
 function buildBluesStandard(): ScalePosition[] {
     const pentaToBlues = [0, 1, 2, 4, 5]; // minor penta degree → blues degree index
     return generateNpsPositions([0, 3, 5, 7, 10], 2).map(pos => {
@@ -107,6 +172,40 @@ function buildScale(
 // them as coming-soon until scales are added.
 
 export const SCALE_SHAPES: Record<string, ScaleGroup> = {
+    // ── Symmetrical ───────────────────────────────────────────────────────────
+    Symmetrical: {
+        Diminished: buildScale(
+            'Diminished',
+            [0, 2, 3, 5, 6, 8, 9, 11],
+            ['1', '2', '♭3', '4', '♭5', '♭6', '6', '7'],
+            ['Diminished', 'Dominant (♭9 #9 #11 13)'],
+            3,
+            [2, 3, 4],
+            undefined,
+            { 3: [1, -1], 4: [1] },
+        ),
+        Symmetrical: buildScale(
+            'Symmetrical',
+            [0, 1, 2, 4, 5, 6, 8, 9, 10],
+            ['1', '♭2', '2', '3', '4', '♭5', '♭6', '6', '♭7'],
+            undefined,
+            3,
+            [3, 4],
+            undefined,
+            { 3: [-1, -2], 4: [1, -1] },
+        ),
+        'Whole Tone': buildScale(
+            'Whole Tone',
+            [0, 2, 4, 6, 8, 10],
+            ['1', '2', '3', '#4', '#5', '♭7'],
+            undefined, // only 2 distinct modes (all positions sound the same)
+            3,
+            [2, 3],
+            undefined,
+            { 3: [1] },
+        ),
+    },
+
     // ── 5-note ────────────────────────────────────────────────────────────────
     '5-note': {
         Pentatonic: buildScale(
@@ -124,18 +223,10 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
     // ── 6-note ────────────────────────────────────────────────────────────────
     // Common 6-note scales: Whole Tone, Blues, Augmented, Prometheus, …
     '6-note': {
-        // 'Whole Tone': buildScale(
-        //     'Whole Tone',
-        //     [0, 2, 4, 6, 8, 10],
-        //     ['1', '2', '3', '#4', '#5', 'b7'],
-        //     undefined, // only 2 distinct modes (all positions sound the same)
-        //     2,
-        //     [2, 3, 4],
-        // ),
         Blues: buildScale(
             'Blues',
             [0, 3, 5, 6, 7, 10],
-            ['1', 'b3', '4', 'b5', '5', 'b7'],
+            ['1', '♭3', '4', '♭5', '5', '♭7'],
             undefined,
             2,
             [2, 3],
@@ -152,11 +243,11 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             ['1', '2', '3', '4', '5', '6', '7'],
             [
                 'Major (Ionian)',
-                'Dorian',
+                'Minor (Dorian)',
                 'Phrygian',
                 'Lydian',
-                'Mixolydian',
-                'Minor (Aeolian)',
+                'Dominant (Mixolydian)',
+                'Natural Minor (Aeolian)',
                 'Locrian',
             ],
             3,
@@ -167,12 +258,12 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
         'Harmonic Minor': buildScale(
             'Harmonic Minor',
             [0, 2, 3, 5, 7, 8, 11],
-            ['1', '2', 'b3', '4', '5', 'b6', '7'],
+            ['1', '2', '♭3', '4', '5', '♭6', '7'],
             [
                 'Harmonic Minor',
                 'Locrian ♮6',
                 'Major ♯5',
-                'Dorian ♯4',
+                'Minor ♯4 (Dorian ♯4)',
                 'Phrygian Dominant',
                 'Lydian ♯2',
                 'Altered Diminished',
@@ -185,13 +276,13 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
         'Melodic Minor': buildScale(
             'Melodic Minor',
             [0, 2, 3, 5, 7, 9, 11],
-            ['1', '2', 'b3', '4', '5', '6', '7'],
+            ['1', '2', '♭3', '4', '5', '6', '7'],
             [
                 'Melodic Minor',
-                'Dorian b2',
-                'Lydian Augmented',
+                'Minor ♭2 (Dorian ♭2)',
+                'Lydian ♯5',
                 'Lydian Dominant',
-                'Mixolydian b6',
+                'Dominant ♭6 (Mixolydian ♭6)',
                 'Locrian ♮2',
                 'Altered Dominant',
             ],
@@ -203,13 +294,13 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
         'Harmonic Major': buildScale(
             'Harmonic Major',
             [0, 2, 4, 5, 7, 8, 11],
-            ['1', '2', '3', '4', '5', 'b6', '7'],
+            ['1', '2', '3', '4', '5', '♭6', '7'],
             [
                 'Harmonic Major',
-                'Dorian b5',
-                'Phrygian b4',
-                'Lydian b3',
-                'Mixolydian b2',
+                'Minor ♭5 (Dorian ♭5)',
+                'Phrygian ♭4',
+                'Lydian ♭3',
+                'Dominant ♭2 (Mixolydian ♭2)',
                 'Lydian ♯2 ♯5',
                 'Locrian Diminished',
             ],
@@ -221,12 +312,12 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
         'Hungarian Minor': buildScale(
             'Hungarian Minor',
             [0, 2, 3, 6, 7, 8, 11],
-            ['1', '2', 'b3', '♯4', '5', 'b6', '7'],
+            ['1', '2', '♭3', '♯4', '5', '♭6', '7'],
             [
                 'Double Harmonic Minor (Hungarian Minor)',
-                'Mixolydian b2 b5',
+                'Dominant ♭2 ♭5 (Mixolydian ♭2 ♭5)',
                 'Major ♯2 ♯5',
-                'Locrian Diminished bb3',
+                'Locrian Diminished ♭♭3',
                 'Double Harmonic Major (Phrygian Maj3 Maj7)',
                 'Lydian ♯2 ♯6',
                 'Altered Diminished ♮5',
@@ -236,25 +327,59 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             undefined,
             { 3: [1, -1], 4: [1, 2] },
         ),
+        'Dominant #9': buildScale(
+            'Dominant #9',
+            [0, 3, 4, 5, 7, 9, 10],
+            ['1', '#2', '3', '4', '5', '6', '♭7'],
+            undefined,
+            3,
+            [2, 3],
+            undefined,
+            { 3: [1, -1] },
+        ),
     },
 
     // ── 8-note ────────────────────────────────────────────────────────────────
     // The algorithm handles any note count; degree spelling still uses the
     // 7-letter diatonic system (% 7), so repeated letter-numbers (e.g. two
-    // "3"s for b3 and #3) are normal and spell correctly.
+    // "3"s for ♭3 and #3) are normal and spell correctly.
     '8-note': {
-        // 'Diminished': buildScale(
-        //     'Diminished',
-        //     [0, 2, 3, 5, 6, 8, 9, 11],        // whole-half
-        //     ['1', '2', 'b3', '4', 'b5', 'b6', '6', '7'],
-        //     [
-        //         'Diminished (W-H)',
-        //         'Diminished (H-W)',
-        //         // … 6 more mode names
-        //     ],
-        //     2,
-        //     [2, 3, 4],
-        // ),
+        'Jazz Major (add ♭6)': buildScale(
+            'Jazz Major (add ♭6)',
+            [0, 2, 4, 5, 7, 8, 9, 11],
+            ['1', '2', '3', '4', '5', '♭6', '6', '7'],
+            [
+                'Jazz Major (add ♭6)',
+                'Minor (add ♭5)',
+                'Phrygian (add 3)',
+                'Lydian (add ♭3)',
+                'Dominant (add ♭2)',
+                'Nat. Minor (add 7)',
+                'Locrian (add 6)',
+            ],
+            3,
+            [2, 3, 4],
+            buildBebopMajorStandard(),
+            { 3: [1, -1], 4: [1, 2] },
+        ),
+        'Jazz Dominant (add ♮7)': buildScale(
+            'Jazz Dominant (add ♮7)',
+            [0, 2, 4, 5, 7, 9, 10, 11],
+            ['1', '2', '3', '4', '5', '6', '♭7', '7'],
+            [
+                'Jazz Dominant (add ♮7)',
+                'Minor (add ♭5)',
+                'Phrygian (add 3)',
+                'Lydian (add ♭3)',
+                'Dominant (add ♭2)',
+                'Nat. Minor (add 7)',
+                'Locrian (add 6)',
+            ],
+            3,
+            [2, 3, 4],
+            buildBebopDominantStandard(),
+            { 3: [1, -1], 4: [1, 2] },
+        ),
     },
 
     // ── 9-note ────────────────────────────────────────────────────────────────
@@ -262,13 +387,15 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
     // Hand-authored positions are strongly recommended for dense scales since
     // NPS patterns cycle 1.5+ times across 6 strings.
     '9-note': {
-        // 'Bebop Dominant': buildScale(
-        //     'Bebop Dominant',
-        //     [0, 2, 4, 5, 7, 9, 10, 11],       // chromatic passing tone
-        //     ['1', '2', '3', '4', '5', '6', 'b7', '7'],
-        //     undefined,
-        //     2,
-        //     [2, 3],
-        // ),
+        'Bebop Dominant': buildScale(
+            'Bebop Dominant',
+            [0, 2, 4, 5, 7, 9, 10, 11],
+            ['1', '2', '3', '4', '5', '6', '♭7', '7'],
+            undefined,
+            3,
+            [2, 3, 4],
+            buildBebopDominantStandard(),
+            { 3: [1, -1], 4: [1, 2] },
+        ),
     },
 };
