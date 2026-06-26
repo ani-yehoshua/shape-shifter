@@ -74,10 +74,8 @@ const FretboardHorizontal = ({
     }, [chordShape, fretWidth, padX, handedness, diagramWidth]);
 
     const yForString = React.useCallback(
-        (s: number) =>
-            (handedness === "right" ? s : numStrings - 1 - s) * stringSpacing +
-            padY,
-        [handedness, numStrings],
+        (s: number) => s * stringSpacing + padY,
+        [],
     );
     const xForFretLine = React.useCallback(
         (i: number) =>

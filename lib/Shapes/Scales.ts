@@ -24,13 +24,20 @@ export type ScaleGroup = Record<string, ScaleEntry>;
 // tone slot, then injects the passing tone whenever `injectAfterDeg` is
 // immediately followed by `injectBeforeDeg` — same logic and same edge-case
 // handling as buildBluesStandard (covers same-string and string-crossing cases).
-function buildBebopStandard(
+type BebopInj = {
+    afterDeg: number;
+    beforeDeg: number;
+    semitone: number;
+    degree: number;
+    // true  → stay on afterDeg's string (passing tone ends the current string)
+    // false → go on beforeDeg's string (passing tone starts the next string) [default]
+    stayOnAfterString?: boolean;
+};
+
+function buildBebopStdMulti(
     baseIntervals: number[],
     degreeMap: number[],
-    injectAfterDeg: number,
-    injectBeforeDeg: number,
-    injectSemitone: number,
-    injectDegree: number,
+    injections: BebopInj[],
 ): ScalePosition[] {
     return generateNpsPositions(baseIntervals, 3).map(pos => {
         const notes = pos.notes.map(n => ({
@@ -41,27 +48,102 @@ function buildBebopStandard(
         for (let i = 0; i < notes.length; i++) {
             withPassing.push(notes[i]);
             const next = notes[i + 1];
-            if (
-                notes[i].degree === injectAfterDeg &&
-                next?.degree === injectBeforeDeg
-            ) {
-                withPassing.push({
-                    string: notes[i].string,
-                    fretOffset: notes[i].fretOffset + 1,
-                    semitones: injectSemitone,
-                    degree: injectDegree,
-                });
+            for (const inj of injections) {
+                if (
+                    notes[i].degree === inj.afterDeg &&
+                    next?.degree === inj.beforeDeg
+                ) {
+                    const sameStr = notes[i].string === next!.string;
+                    const onAfter = sameStr || inj.stayOnAfterString;
+                    withPassing.push({
+                        string: onAfter ? notes[i].string : next!.string,
+                        fretOffset: onAfter
+                            ? notes[i].fretOffset + 1
+                            : next!.fretOffset - 1,
+                        semitones: inj.semitone,
+                        degree: inj.degree,
+                    });
+                    break;
+                }
             }
         }
         return { ...pos, notes: withPassing };
     });
 }
 
-// Jazz Major (add ♭6) — Major scale + chromatic ♭6 passing tone between 5→6.
-function buildBebopMajorStandard(): ScalePosition[] {
+function buildBebopStd(
+    baseIntervals: number[],
+    degreeMap: number[],
+    injectAfterDeg: number,
+    injectBeforeDeg: number,
+    injectSemitone: number,
+    injectDegree: number,
+): ScalePosition[] {
+    return buildBebopStdMulti(baseIntervals, degreeMap, [
+        {
+            afterDeg: injectAfterDeg,
+            beforeDeg: injectBeforeDeg,
+            semitone: injectSemitone,
+            degree: injectDegree,
+        },
+    ]);
+}
+
+// Jazz Major (add ♭6)
+function buildBebopMajorFlat6Std(): ScalePosition[] {
     // major deg 0–6 → bebop deg, skipping slot 5 (♭6 is the passing tone)
-    return buildBebopStandard(
+    return buildBebopStdMulti(
         [0, 2, 4, 5, 7, 9, 11],
+        [0, 1, 2, 3, 4, 6, 7],
+        [
+            {
+                afterDeg: 4,
+                beforeDeg: 6,
+                semitone: 8,
+                degree: 6,
+                stayOnAfterString: true,
+            },
+        ],
+    );
+}
+
+// Jazz Dominant (add ♮7)
+function buildBebopDominantNat7Std(): ScalePosition[] {
+    // Mixolydian deg 0–6 map straight to bebop degs 0–6; natural 7 is slot 7.
+    // stayOnAfterString: ♮7 ends ♭7's string; root starts the next string.
+    return buildBebopStdMulti(
+        [0, 2, 4, 5, 7, 9, 10],
+        [0, 1, 2, 3, 4, 5, 6],
+        [
+            {
+                afterDeg: 6,
+                beforeDeg: 0,
+                semitone: 11,
+                degree: 7,
+                stayOnAfterString: true,
+            },
+        ],
+    );
+}
+
+// Jazz Minor (add ♭7)
+function buildBebopMinorFlat7Std(): ScalePosition[] {
+    // melodic minor deg 0–6 → bebop deg, skipping slot 6 (♭7 is the passing tone)
+    return buildBebopStd(
+        [0, 2, 3, 5, 7, 9, 11],
+        [0, 1, 2, 3, 4, 5, 7],
+        5, // inject after 6th  (bebop deg 5)
+        7, // inject before ♮7  (bebop deg 7)
+        10, // ♭7 semitone
+        6, // bebop degree index for ♭7
+    );
+}
+
+// Jazz Minor (add ♭6)
+function buildBebopMinorFlat6Std(): ScalePosition[] {
+    // melodic minor deg 0–6 → bebop deg, skipping slot 5 (♭6 is the passing tone)
+    return buildBebopStd(
+        [0, 2, 3, 5, 7, 9, 11],
         [0, 1, 2, 3, 4, 6, 7],
         4, // inject after 5th  (bebop deg 4)
         6, // inject before 6th (bebop deg 6)
@@ -70,16 +152,72 @@ function buildBebopMajorStandard(): ScalePosition[] {
     );
 }
 
-// Bebop Dominant — Mixolydian + chromatic natural-7 passing tone between ♭7→root.
-function buildBebopDominantStandard(): ScalePosition[] {
-    // Mixolydian deg 0–6 map straight to bebop degs 0–6; natural 7 is slot 7
-    return buildBebopStandard(
+// Jazz Minor (add ♯4)
+function buildBebopMinorSharp4Std(): ScalePosition[] {
+    // melodic minor deg 0–6 → bebop deg, skipping slot 4 (♯4 is the passing tone).
+    // stayOnAfterString: ♯4 ends the 4th's string; 5th starts the next string.
+    return buildBebopStdMulti(
+        [0, 2, 3, 5, 7, 9, 11],
+        [0, 1, 2, 3, 5, 6, 7],
+        [
+            {
+                afterDeg: 3,
+                beforeDeg: 5,
+                semitone: 6,
+                degree: 4,
+                stayOnAfterString: true,
+            },
+        ],
+    );
+}
+
+// Jazz Major (add ♭3 and ♭6)
+function buildBebopMajorFlat3Flat6Std(): ScalePosition[] {
+    // major deg 0–6 → bebop deg, skipping slots 2 (♭3) and 6 (♭6)
+    return buildBebopStdMulti(
+        [0, 2, 4, 5, 7, 9, 11],
+        [0, 1, 3, 4, 5, 7, 8],
+        [
+            {
+                afterDeg: 1,
+                beforeDeg: 3,
+                semitone: 3,
+                degree: 2,
+                stayOnAfterString: true,
+            }, // ♭3 ends 2nd's string
+            {
+                afterDeg: 5,
+                beforeDeg: 7,
+                semitone: 8,
+                degree: 6,
+                stayOnAfterString: true,
+            }, // ♭6 ends 5th's string
+        ],
+    );
+}
+
+// Jazz Dominant (add ♭3 and ♮7)
+function buildBebopDominantFlat3Nat7Std(): ScalePosition[] {
+    // Mixolydian deg 0–6 → bebop deg, skipping slots 2 (♭3) and 8 (♮7)
+    return buildBebopStdMulti(
         [0, 2, 4, 5, 7, 9, 10],
-        [0, 1, 2, 3, 4, 5, 6],
-        6, // inject after ♭7   (bebop deg 6)
-        0, // inject before root (bebop deg 0, next octave)
-        11, // natural 7 semitone
-        7, // bebop degree index for natural 7
+        [0, 1, 3, 4, 5, 6, 7],
+        [
+            {
+                afterDeg: 1,
+                beforeDeg: 3,
+                semitone: 3,
+                degree: 2,
+                stayOnAfterString: true,
+            }, // ♭3 ends 2nd's string
+            {
+                afterDeg: 7,
+                beforeDeg: 0,
+                semitone: 11,
+                degree: 8,
+                stayOnAfterString: true,
+            }, // ♮7 ends ♭7's string
+        ],
     );
 }
 
@@ -178,7 +316,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             'Diminished',
             [0, 2, 3, 5, 6, 8, 9, 11],
             ['1', '2', '♭3', '4', '♭5', '♭6', '6', '7'],
-            ['Diminished', 'Dominant (♭9 #9 #11 13)'],
+            ['Diminished', 'Dominant (♭9 ♯9 ♯11 13)'],
             3,
             [2, 3, 4],
             undefined,
@@ -197,7 +335,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
         'Whole Tone': buildScale(
             'Whole Tone',
             [0, 2, 4, 6, 8, 10],
-            ['1', '2', '3', '#4', '#5', '♭7'],
+            ['1', '2', '3', '♯4', '♯5', '♭7'],
             undefined, // only 2 distinct modes (all positions sound the same)
             3,
             [2, 3],
@@ -327,10 +465,10 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             undefined,
             { 3: [1, -1], 4: [1, 2] },
         ),
-        'Dominant #9': buildScale(
-            'Dominant #9',
+        'Dominant ♯9': buildScale(
+            'Dominant ♯9',
             [0, 3, 4, 5, 7, 9, 10],
-            ['1', '#2', '3', '4', '5', '6', '♭7'],
+            ['1', '♯2', '3', '4', '5', '6', '♭7'],
             undefined,
             3,
             [2, 3],
@@ -351,15 +489,16 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [
                 'Jazz Major (add ♭6)',
                 'Minor (add ♭5)',
-                'Phrygian (add 3)',
+                'Phrygian (add ♮3)',
                 'Lydian (add ♭3)',
                 'Dominant (add ♭2)',
-                'Nat. Minor (add 7)',
-                'Locrian (add 6)',
+                // no ♭6 mode
+                'Nat. Minor (add ♮7)',
+                'Locrian (add ♮6)',
             ],
             3,
             [2, 3, 4],
-            buildBebopMajorStandard(),
+            buildBebopMajorFlat6Std(),
             { 3: [1, -1], 4: [1, 2] },
         ),
         'Jazz Dominant (add ♮7)': buildScale(
@@ -368,16 +507,74 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             ['1', '2', '3', '4', '5', '6', '♭7', '7'],
             [
                 'Jazz Dominant (add ♮7)',
-                'Minor (add ♭5)',
-                'Phrygian (add 3)',
-                'Lydian (add ♭3)',
-                'Dominant (add ♭2)',
-                'Nat. Minor (add 7)',
-                'Locrian (add 6)',
+                'Nat. Minor (add ♮6)',
+                'Locrian (add ♮5)',
+                'Major (add ♭5)',
+                'Minor (add ♮3)',
+                'Phrygian (add ♮2)',
+                'Lydian (add ♭2)',
+                // no ♮7 mode
             ],
             3,
             [2, 3, 4],
-            buildBebopDominantStandard(),
+            buildBebopDominantNat7Std(),
+            { 3: [1, -1], 4: [1, 2] },
+        ),
+        'Jazz Minor (add ♭7)': buildScale(
+            'Jazz Minor (add ♭7)',
+            [0, 2, 3, 5, 7, 9, 10, 11],
+            ['1', '2', '♭3', '4', '5', '6', '♭7', '7'],
+            [
+                'Jazz Minor (add ♭7)',
+                'Minor ♭2 (add ♭6)',
+                'Lydian ♯5 (add ♮5)',
+                'Lydian Dominant (add ♮4)',
+                'Dominant ♭6 (add ♯2)',
+                'Locrian ♮2 (add ♭2)',
+                // no ♭7 mode
+                'Altered Dominant (add ♮7)',
+            ],
+            3,
+            [2, 3, 4],
+            buildBebopMinorFlat7Std(),
+            { 3: [1, -1], 4: [1, 2] },
+        ),
+        'Jazz Minor (add ♭6)': buildScale(
+            'Jazz Minor (add ♭6)',
+            [0, 2, 3, 5, 7, 8, 9, 11],
+            ['1', '2', '♭3', '4', '5', '♭6', '6', '7'],
+            [
+                'Jazz Minor (add ♭6)',
+                'Minor ♭2 (add ♯4)',
+                'Lydian ♯5 (add ♮4)',
+                'Lydian Dominant (add ♯2)',
+                'Dominant ♭6 (add ♭2)',
+                // no ♭6 mode
+                'Locrian ♮2 (add ♮7)',
+                'Altered Dominant (add ♮6)',
+            ],
+            3,
+            [2, 3, 4],
+            buildBebopMinorFlat6Std(),
+            { 3: [1, -1], 4: [1, 2] },
+        ),
+        'Jazz Minor (add ♯4)': buildScale(
+            'Jazz Minor (add ♯4)',
+            [0, 2, 3, 5, 6, 7, 9, 11],
+            ['1', '2', '♭3', '4', '♯4', '5', '6', '7'],
+            [
+                'Jazz Minor (add ♯4)',
+                'Minor ♭2 (add ♮3)',
+                'Lydian ♯5 (add ♭3)',
+                'Lydian Dominant (add ♭2)',
+                // no ♯4 mode
+                'Dominant ♭6 (add ♮7)',
+                'Locrian ♮2 (add ♮6)',
+                'Altered Dominant (add ♮5)',
+            ],
+            3,
+            [2, 3, 4],
+            buildBebopMinorSharp4Std(),
             { 3: [1, -1], 4: [1, 2] },
         ),
     },
@@ -387,14 +584,44 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
     // Hand-authored positions are strongly recommended for dense scales since
     // NPS patterns cycle 1.5+ times across 6 strings.
     '9-note': {
-        'Bebop Dominant': buildScale(
-            'Bebop Dominant',
-            [0, 2, 4, 5, 7, 9, 10, 11],
-            ['1', '2', '3', '4', '5', '6', '♭7', '7'],
-            undefined,
+        'Jazz Major (add ♭3 ,♭6)': buildScale(
+            'Jazz Major (add ♭3 ,♭6)',
+            [0, 2, 3, 4, 5, 7, 8, 9, 11],
+            ['1', '2', '♭3', '3', '4', '5', '♭6', '6', '7'],
+            [
+                'Jazz Major (add ♭3 ,♭6)',
+                'Minor (add ♭2 ,♭5)',
+                // no ♭3 mode
+                'Phrygian (add ♮3 ,♮7)',
+                'Lydian (add ♭3 ,♭7)',
+                'Dominant (add ♭2 ,♭6)',
+                // no ♭6 mode
+                'Nat. Minor (add ♭5 ,♮7)',
+                'Locrian (add ♮3 ,♮6)',
+            ],
             3,
             [2, 3, 4],
-            buildBebopDominantStandard(),
+            buildBebopMajorFlat3Flat6Std(),
+            { 3: [1, -1], 4: [1, 2] },
+        ),
+        'Jazz Dominant (add ♭3 ,♮7)': buildScale(
+            'Jazz Dominant (add ♭3 ,♮7)',
+            [0, 2, 3, 4, 5, 7, 9, 10, 11],
+            ['1', '2', '3', '4', '5', '6', '♭7', '7'],
+            [
+                'Jazz Dominant (add ♭3 ,♮7)',
+                'Nat. Minor (add ♮6)',
+                // no ♭3 mode
+                'Locrian (add ♮5)',
+                'Major (add ♭5)',
+                'Minor (add ♮3)',
+                'Phrygian (add ♮2)',
+                'Lydian (add ♭2)',
+                // no ♮7 mode
+            ],
+            3,
+            [2, 3, 4],
+            buildBebopDominantFlat3Nat7Std(),
             { 3: [1, -1], 4: [1, 2] },
         ),
     },

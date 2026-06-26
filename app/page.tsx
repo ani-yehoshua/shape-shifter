@@ -50,6 +50,7 @@ import {
     MAJOR_SCALE_OFFSETS,
 } from "@/lib/MusicTheory";
 import { SCALE_SHAPES } from "@/lib/Shapes/Scales";
+import { SCALE_CHORD_SHAPES, generateDiatonicVoicings } from "@/lib/Shapes/ScaleChords";
 import useChordLibrary from "@/lib/hooks/useChordLibrary";
 import { useSubscription } from "@/lib/hooks/useSubscription";
 import { usePreferences } from "@/lib/contexts/PreferencesContext";
@@ -57,6 +58,35 @@ import { usePreferences } from "@/lib/contexts/PreferencesContext";
 // default tuning — overridden by selectedTuning state at runtime
 const NUM_FRETS = 24;
 const SEMIS = [...Array(12).keys()];
+
+function getModeIntervals(base: number[], modeIdx: number): number[] {
+    const N = base.length;
+    const m = ((modeIdx % N) + N) % N;
+    const root = base[m];
+    return Array.from({ length: N }, (_, i) => {
+        const raw = m + i;
+        return base[raw % N] - root + Math.floor(raw / N) * 12;
+    });
+}
+
+function deriveChordQualityName(
+    pattern: Array<{ degree: number; semitones: number }>,
+    scaleIntervals: number[],
+    deg: number,
+    fallback: string,
+): string {
+    const N = scaleIntervals.length;
+    const third = pattern.find(n => n.degree === 3)?.semitones;
+    const seventh = pattern.find(n => n.degree === 7)?.semitones;
+    const fifth = ((scaleIntervals[(deg + 4) % N] - scaleIntervals[deg]) % 12 + 12) % 12;
+    if (third === 4 && seventh === 11) return 'Maj7';
+    if (third === 4 && seventh === 10) return 'Dom7';
+    if (third === 3 && seventh === 11) return 'MinMaj7';
+    if (third === 3 && seventh === 10 && fifth === 6) return 'Min7♭5';
+    if (third === 3 && seventh === 10) return 'Min7';
+    if (third === 3 && seventh === 9) return 'Dim7';
+    return fallback;
+}
 
 // ─── small reusable pieces ────────────────────────────────────────────────────
 
@@ -661,7 +691,7 @@ export default function Home() {
         }
     }, []);
 
-    const [selectedMode, setSelectedMode] = React.useState<"chords" | "scales">(
+    const [selectedMode, setSelectedMode] = React.useState<"chords" | "scales" | "scaleChords">(
         "chords",
     );
     const [selectedNoteGroup, setSelectedNoteGroup] = React.useState("7-note");
@@ -671,6 +701,17 @@ export default function Home() {
         () => SCALE_SHAPES["7-note"]["Major"].defaultPattern,
     );
     const [selectedScaleVariant, setSelectedScaleVariant] = React.useState(0);
+    const [selectedScaleChordGroup, setSelectedScaleChordGroup] = React.useState(
+        () => Object.keys(SCALE_CHORD_SHAPES)[0] ?? "",
+    );
+    const [selectedScaleChordQuality, setSelectedScaleChordQuality] = React.useState(
+        () => Object.keys(Object.values(SCALE_CHORD_SHAPES)[0] ?? {})[0] ?? "",
+    );
+    const [selectedScaleChordInversion, setSelectedScaleChordInversion] =
+        React.useState("Root");
+    const [selectedScaleChordMode, setSelectedScaleChordMode] = React.useState(0);
+    const [selectedScaleChordDegree, setSelectedScaleChordDegree] = React.useState(0);
+    const [showAllScaleChords, setShowAllScaleChords] = React.useState(true);
 
     const fretboardMap = React.useMemo(
         () => generateFretboardMap(selectedTuning.notes, NUM_FRETS),
@@ -896,13 +937,23 @@ export default function Home() {
             );
             const currentEntry =
                 SCALE_SHAPES[selectedNoteGroup]?.[selectedScale];
+            const currentVariants =
+                currentEntry?.altPatterns[selectedScalePattern] ??
+                (currentEntry ? [currentEntry.positions] : undefined);
+            const currentPosition = currentVariants
+                ? (currentVariants[selectedScaleVariant] ?? currentVariants[0])?.[selectedScalePosition]
+                : undefined;
+            const currentModeScaleNote = currentPosition?.notes[0];
             const currentModeInterval =
+                currentModeScaleNote?.semitones ??
                 currentEntry?.intervals[selectedScalePosition] ?? 0;
-            const currentDegreeNum = parseInt(
-                (currentEntry?.degrees[selectedScalePosition] ?? "1").match(
-                    /\d+/,
-                )?.[0] ?? "1",
-            );
+            const currentDegreeNum = currentModeScaleNote
+                ? parseInt(
+                    (currentEntry?.degrees[currentModeScaleNote.degree] ?? "1").match(/\d+/)?.[0] ?? "1",
+                )
+                : parseInt(
+                    (currentEntry?.degrees[selectedScalePosition] ?? "1").match(/\d+/)?.[0] ?? "1",
+                );
             const displayedTonicIdx =
                 (currentRootIdx + currentModeInterval) % 12;
             const tonicNoteStr = spellNote(
@@ -1280,11 +1331,15 @@ export default function Home() {
             setDisplayShape([]);
             return;
         }
-        const modeInterval = scaleEntry.intervals[selectedScalePosition];
         const parentDegrees = scaleEntry.degrees.map(d =>
             parseInt(d.match(/\d+/)?.[0] ?? "1"),
         );
-        const modeRootParentDeg = parentDegrees[selectedScalePosition];
+        // Derive the mode root from the position's lowest note so that bebop
+        // Std. patterns (7 positions, 8-entry intervals array) resolve correctly.
+        // For normal scales this is identical to intervals[selectedScalePosition].
+        const modeRootNote = position.notes[0];
+        const modeInterval = modeRootNote.semitones;
+        const modeRootParentDeg = parentDegrees[modeRootNote.degree];
         // Pre-compute raw frets so we can gate octaveOffset on whether this
         // position actually sits above fret 12 (same logic as scaleOctaveInfo.hasAlt).
         const rawFrets = position.notes.map(n => {
@@ -1317,8 +1372,83 @@ export default function Home() {
     ]);
 
     React.useEffect(() => {
+        if (selectedMode !== "scaleChords") return;
+        const entry = SCALE_SHAPES[selectedNoteGroup]?.[selectedScale];
+        const group = SCALE_CHORD_SHAPES[selectedScaleChordGroup];
+        const quality = group?.[selectedScaleChordQuality];
+        const template = quality?.[selectedScaleChordInversion];
+        if (!entry || !template || !currentRootNote) {
+            setDisplayShape([]);
+            setDisplayGroups([]);
+            return;
+        }
+        const intervals = getModeIntervals(entry.intervals, selectedScaleChordMode);
+        const N = intervals.length;
+        const rootSemitone = NOTES.findIndex(p => p.includes(currentRootNote));
+        const patterns = generateDiatonicVoicings(template, intervals);
+
+        const remap = (voicing: NotePosition[], d: number): NotePosition[] =>
+            voicing.map(note => ({
+                ...note,
+                semitones: (intervals[d] + (note.semitones ?? 0)) % 12,
+                degree: (d + (note.degree ?? 1) - 1) % N + 1,
+            }));
+
+        if (showAllScaleChords) {
+            const allGroups: NotePosition[][] = [];
+            for (let d = 0; d < N; d++) {
+                const dRootSemitone = (rootSemitone + intervals[d]) % NOTES.length;
+                const dRootNote = NOTES[dRootSemitone][0];
+                const dFormula = { rootString: template.rootString, pattern: patterns[d] };
+                const dVoicings = generateAllVoicingsForShape(
+                    dRootNote,
+                    dFormula,
+                    fretboardMap,
+                    selectedTuning.semitones,
+                );
+                // Push every neck position for this diatonic chord, not just the first
+                for (const v of dVoicings) {
+                    allGroups.push(remap(v, d));
+                }
+            }
+            setDisplayGroups(allGroups);
+            setDisplayShape(allGroups.flat());
+            return;
+        }
+
+        const deg = selectedScaleChordDegree % N;
+        const chordRootSemitone = (rootSemitone + intervals[deg]) % NOTES.length;
+        const chordRootNote = NOTES[chordRootSemitone][0];
+        const tempFormula = { rootString: template.rootString, pattern: patterns[deg] };
+        const voicings = generateAllVoicingsForShape(
+            chordRootNote,
+            tempFormula,
+            fretboardMap,
+            selectedTuning.semitones,
+        );
+        const hasOctave = voicings.length > 1;
+        const active = octaveUp && hasOctave ? voicings[1] : voicings[0];
+        setDisplayGroups([]);
+        setDisplayShape(active ?? []);
+    }, [
+        selectedMode,
+        selectedNoteGroup,
+        selectedScale,
+        selectedScaleChordMode,
+        selectedScaleChordGroup,
+        selectedScaleChordQuality,
+        selectedScaleChordInversion,
+        selectedScaleChordDegree,
+        showAllScaleChords,
+        octaveUp,
+        currentRootNote,
+        fretboardMap,
+        selectedTuning.semitones,
+    ]);
+
+    React.useEffect(() => {
         if (isDrawMode) return;
-        if (selectedMode === "scales") return;
+        if (selectedMode !== "chords") return;
         const formulas = selectionHierarchy.finalFormulas;
         if (!currentRootNote || !formulas) {
             setDisplayShape([]);
@@ -1408,6 +1538,45 @@ export default function Home() {
         setOctaveUp(false);
     };
 
+    const scaleChordHasOctave = React.useMemo(() => {
+        if (selectedMode !== "scaleChords" || showAllScaleChords) return false;
+        const entry = SCALE_SHAPES[selectedNoteGroup]?.[selectedScale];
+        const template =
+            SCALE_CHORD_SHAPES[selectedScaleChordGroup]?.[selectedScaleChordQuality]?.[
+                selectedScaleChordInversion
+            ];
+        if (!entry || !template || !currentRootNote) return false;
+        const intervals = getModeIntervals(entry.intervals, selectedScaleChordMode);
+        const N = intervals.length;
+        const deg = selectedScaleChordDegree % N;
+        const rootSemitone = NOTES.findIndex(p => p.includes(currentRootNote));
+        const chordRootSemitone = (rootSemitone + intervals[deg]) % NOTES.length;
+        const chordRootNote = NOTES[chordRootSemitone][0];
+        const patterns = generateDiatonicVoicings(template, intervals);
+        const tempFormula = { rootString: template.rootString, pattern: patterns[deg] };
+        return (
+            generateAllVoicingsForShape(
+                chordRootNote,
+                tempFormula,
+                fretboardMap,
+                selectedTuning.semitones,
+            ).length > 1
+        );
+    }, [
+        selectedMode,
+        showAllScaleChords,
+        selectedNoteGroup,
+        selectedScale,
+        selectedScaleChordMode,
+        selectedScaleChordGroup,
+        selectedScaleChordQuality,
+        selectedScaleChordInversion,
+        selectedScaleChordDegree,
+        currentRootNote,
+        fretboardMap,
+        selectedTuning.semitones,
+    ]);
+
     const scaleEntry = SCALE_SHAPES[selectedNoteGroup]?.[selectedScale];
     const scalePatternKeys = scaleEntry
         ? Object.keys(scaleEntry.altPatterns)
@@ -1424,20 +1593,35 @@ export default function Home() {
         : undefined;
 
     const modeRootNote = React.useMemo(() => {
-        if (selectedMode !== "scales") return currentRootNote;
-        const scaleEntry = SCALE_SHAPES[selectedNoteGroup]?.[selectedScale];
-        if (!scaleEntry) return currentRootNote;
-        const modeInterval = scaleEntry.intervals[selectedScalePosition];
-        const degreeNum = parseInt(
-            scaleEntry.degrees[selectedScalePosition].match(/\d+/)?.[0] ?? "1",
-        );
-        return spellNote(currentRootNote, modeInterval, degreeNum);
+        if (selectedMode === "scales") {
+            const scaleEntry = SCALE_SHAPES[selectedNoteGroup]?.[selectedScale];
+            if (!scaleEntry) return currentRootNote;
+            const rootScaleNote = scalePosition?.notes[0];
+            const modeInterval = rootScaleNote?.semitones ?? scaleEntry.intervals[selectedScalePosition];
+            const degreeNum = rootScaleNote
+                ? parseInt(scaleEntry.degrees[rootScaleNote.degree]?.match(/\d+/)?.[0] ?? "1")
+                : parseInt(scaleEntry.degrees[selectedScalePosition]?.match(/\d+/)?.[0] ?? "1");
+            return spellNote(currentRootNote, modeInterval, degreeNum);
+        }
+        if (selectedMode === "scaleChords" && !showAllScaleChords) {
+            const entry = SCALE_SHAPES[selectedNoteGroup]?.[selectedScale];
+            if (!entry || !currentRootNote) return currentRootNote;
+            const intervals = getModeIntervals(entry.intervals, selectedScaleChordMode);
+            const N = intervals.length;
+            const deg = selectedScaleChordDegree % N;
+            return spellNote(currentRootNote, intervals[deg], deg + 1);
+        }
+        return currentRootNote;
     }, [
         selectedMode,
         selectedNoteGroup,
         selectedScale,
         selectedScalePosition,
+        selectedScaleChordMode,
+        selectedScaleChordDegree,
+        showAllScaleChords,
         currentRootNote,
+        scalePosition?.notes,
     ]);
 
     const capoRootNote = React.useMemo(() => {
@@ -1456,7 +1640,35 @@ export default function Home() {
     const scaleLabel = scalePosition?.modeName
         ? `${capoRootNote} ${scalePosition.modeName}`
         : `${capoRootNote} ${selectedScale} — Pos. ${selectedScalePosition + 1}`;
-    const displayLabel = selectedMode === "scales" ? scaleLabel : chordLabel;
+    const N = scaleEntry?.intervals.length || 7;
+    const scaleChordDeg = selectedScaleChordDegree % N;
+    const selectedModeName = (scaleVariants?.[0] ?? [])[selectedScaleChordMode % N]?.modeName;
+    const scaleChordDegPosition = (scaleVariants?.[0] ?? [])[(selectedScaleChordMode + scaleChordDeg) % N];
+    const scaleChordModeName = showAllScaleChords
+        ? `${currentRootNote} ${selectedModeName ?? selectedScale}`
+        : scaleChordDegPosition?.modeName
+          ? `${capoRootNote} ${scaleChordDegPosition.modeName}`
+          : `${capoRootNote} ${selectedScale} — Deg. ${scaleChordDeg + 1}`;
+    const scaleChordQualityLabel = (() => {
+        if (showAllScaleChords || !scaleEntry) return '';
+        const intervals = getModeIntervals(scaleEntry.intervals, selectedScaleChordMode);
+        const template =
+            SCALE_CHORD_SHAPES[selectedScaleChordGroup]?.[selectedScaleChordQuality]?.[
+                selectedScaleChordInversion
+            ];
+        if (!template) return selectedScaleChordQuality;
+        const pattern = generateDiatonicVoicings(template, intervals)[scaleChordDeg];
+        return deriveChordQualityName(pattern, intervals, scaleChordDeg, selectedScaleChordQuality);
+    })();
+    const scaleChordLabel = showAllScaleChords
+        ? scaleChordModeName
+        : `${scaleChordModeName} (${scaleChordQualityLabel})`;
+    const displayLabel =
+        selectedMode === "scales"
+            ? scaleLabel
+            : selectedMode === "scaleChords"
+              ? scaleChordLabel
+              : chordLabel;
 
     const currentChordForProgression = React.useMemo(
         () =>
@@ -1584,12 +1796,20 @@ export default function Home() {
                                     {selectedMode === "scales" &&
                                     !scalePosition?.modeName
                                         ? `${capoRootNote} ${selectedScale}`
-                                        : wrapAtParen(displayLabel)}
+                                        : selectedMode === "scaleChords"
+                                          ? scaleChordModeName
+                                          : wrapAtParen(displayLabel)}
                                 </span>
                                 {selectedMode === "scales" &&
                                     !scalePosition?.modeName && (
                                         <p className='text-sm font-semibold text-ink/60 mt-0.5'>
                                             {`Position ${selectedScalePosition + 1}`}
+                                        </p>
+                                    )}
+                                {selectedMode === "scaleChords" &&
+                                    scaleChordQualityLabel && (
+                                        <p className='text-md font-semibold text-ink/60 mt-0.5'>
+                                            {`(${scaleChordQualityLabel})`}
                                         </p>
                                     )}
                             </div>
@@ -1601,7 +1821,7 @@ export default function Home() {
                                     handedness={handedness}
                                     rootNote={capoRootNote}
                                     showIntervals={showIntervals}
-                                    showConnector={selectedMode === "chords"}
+                                    showConnector={selectedMode === "chords" || selectedMode === "scaleChords"}
                                     chordGroups={
                                         capoDisplayGroups.length > 0
                                             ? capoDisplayGroups
@@ -1640,7 +1860,77 @@ export default function Home() {
                                         </button>
                                     )}
 
+                                {selectedMode === "scaleChords" &&
+                                    !showAllScaleChords &&
+                                    scaleChordHasOctave && (
+                                        <button
+                                            onClick={() => setOctaveUp(o => !o)}
+                                            className={`px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
+                                            {octaveUp ? "+12" : "-12"}
+                                        </button>
+                                    )}
+
                                 <div className='flex-1 min-w-0 overflow-x-auto no-scrollbar flex items-center justify-end gap-1 h-8'>
+                                    {selectedMode === "scaleChords" &&
+                                        (() => {
+                                            const intervals = scaleEntry?.intervals ?? [];
+                                            const N = intervals.length || 7;
+                                            const deg = selectedScaleChordDegree % N;
+                                            const rootSemitone = currentRootNote
+                                                ? NOTES.findIndex(p =>
+                                                      p.includes(currentRootNote),
+                                                  )
+                                                : 0;
+                                            const chordRootSemitone =
+                                                (rootSemitone + (intervals[deg] ?? 0)) %
+                                                NOTES.length;
+                                            const chordRootLabel = currentRootNote
+                                                ? NOTES[chordRootSemitone][0]
+                                                : "";
+                                            return (
+                                                <div className='flex items-center gap-1'>
+                                                    <button
+                                                        onClick={() =>
+                                                            setShowAllScaleChords(v => !v)
+                                                        }
+                                                        className={`px-2 py-1 rounded-full text-xs font-bold border transition-colors ${
+                                                            showAllScaleChords
+                                                                ? "bg-ink text-sand-1 border-ink"
+                                                                : "text-ink border-ink/40 hover:border-ink"
+                                                        }`}>
+                                                        All
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowAllScaleChords(false);
+                                                            setSelectedScaleChordDegree(
+                                                                d => (d - 1 + N) % N,
+                                                            );
+                                                        }}
+                                                        title='Previous degree'
+                                                        className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                                        <ChevronLeft />
+                                                    </button>
+                                                    <span className='text-xs font-semibold text-ink min-w-[3.5rem] text-center leading-tight'>
+                                                        {showAllScaleChords
+                                                            ? "All"
+                                                            : `${deg + 1} (${chordRootLabel})`}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowAllScaleChords(false);
+                                                            setSelectedScaleChordDegree(
+                                                                d => (d + 1) % N,
+                                                            );
+                                                        }}
+                                                        title='Next degree'
+                                                        className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                                        <ChevronRight />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}
+
                                     {selectedMode === "chords" &&
                                         selectionHierarchy.positions.length >
                                             0 && (
@@ -1820,6 +2110,41 @@ export default function Home() {
                                             );
                                         })()}
                                 </div>
+                                {selectedMode === "scaleChords" &&
+                                    !showAllScaleChords &&
+                                    (() => {
+                                        const invKeys = Object.keys(
+                                            SCALE_CHORD_SHAPES[selectedScaleChordGroup]?.[selectedScaleChordQuality] ?? {},
+                                        );
+                                        const invIdx = invKeys.indexOf(selectedScaleChordInversion);
+                                        return invKeys.length > 1 ? (
+                                            <div className='flex items-center gap-1 shrink-0'>
+                                                <button
+                                                    onClick={() =>
+                                                        setSelectedScaleChordInversion(
+                                                            invKeys[(invIdx - 1 + invKeys.length) % invKeys.length],
+                                                        )
+                                                    }
+                                                    title='Previous inversion'
+                                                    className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                                    <ChevronLeft />
+                                                </button>
+                                                <span className='text-xs font-semibold text-ink min-w-[4rem] text-center leading-tight'>
+                                                    {selectedScaleChordInversion}
+                                                </span>
+                                                <button
+                                                    onClick={() =>
+                                                        setSelectedScaleChordInversion(
+                                                            invKeys[(invIdx + 1) % invKeys.length],
+                                                        )
+                                                    }
+                                                    title='Next inversion'
+                                                    className='w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors'>
+                                                    <ChevronRight />
+                                                </button>
+                                            </div>
+                                        ) : null;
+                                    })()}
                                 {selectedMode === "chords" && hasAlts && (
                                     <div className='flex items-center gap-1 shrink-0'>
                                         <button
@@ -2093,12 +2418,23 @@ export default function Home() {
                                             onClick={() =>
                                                 setSelectedMode("scales")
                                             }
-                                            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                                            className={`flex-1 py-2.5 text-sm font-medium border-r border-ink transition-colors ${
                                                 selectedMode === "scales"
                                                     ? "bg-sand-4 text-sand-1 font-semibold"
                                                     : "bg-sand-1 text-ink hover:bg-sand-2"
                                             }`}>
                                             Scales
+                                        </button>
+                                        <button
+                                            onClick={() =>
+                                                setSelectedMode("scaleChords")
+                                            }
+                                            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                                                selectedMode === "scaleChords"
+                                                    ? "bg-sand-4 text-sand-1 font-semibold"
+                                                    : "bg-sand-1 text-ink hover:bg-sand-2"
+                                            }`}>
+                                            Scale Chords
                                         </button>
                                     </div>
                                 </div>
@@ -2377,6 +2713,107 @@ export default function Home() {
                                         </>
                                     )}
 
+                                    {/* Scale Chords controls (mobile) */}
+                                    {selectedMode === "scaleChords" && (
+                                        <>
+                                            <div>
+                                                <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
+                                                    Scale
+                                                </p>
+                                                <div className='flex flex-wrap gap-2'>
+                                                    {Object.keys(
+                                                        SCALE_SHAPES[selectedNoteGroup] ?? {},
+                                                    ).map(s => (
+                                                        <button
+                                                            key={s}
+                                                            onClick={() => {
+                                                                setSelectedScale(s);
+                                                                setSelectedScaleChordMode(0);
+                                                                setSelectedScaleChordDegree(0);
+                                                            }}
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                                                selectedScale === s
+                                                                    ? "bg-sand-4 text-sand-1 border-ink"
+                                                                    : "text-ink border-ink/40 hover:border-ink"
+                                                            }`}>
+                                                            {s}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
+                                                    Mode
+                                                </p>
+                                                <div className='flex flex-wrap gap-2'>
+                                                    {(scaleVariants?.[0] ?? []).map((p, i) => (
+                                                        <button
+                                                            key={i}
+                                                            onClick={() => {
+                                                                setSelectedScaleChordMode(i);
+                                                                setSelectedScaleChordDegree(0);
+                                                            }}
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                                                selectedScaleChordMode % N === i
+                                                                    ? "bg-sand-4 text-sand-1 border-ink"
+                                                                    : "text-ink border-ink/40 hover:border-ink"
+                                                            }`}>
+                                                            {p.modeName ?? `Deg. ${i + 1}`}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
+                                                    Voicing
+                                                </p>
+                                                <div className='flex flex-wrap gap-2'>
+                                                    {Object.keys(SCALE_CHORD_SHAPES).map(g => (
+                                                        <button
+                                                            key={g}
+                                                            onClick={() =>
+                                                                setSelectedScaleChordGroup(g)
+                                                            }
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                                                selectedScaleChordGroup === g
+                                                                    ? "bg-sand-4 text-sand-1 border-ink"
+                                                                    : "text-ink border-ink/40 hover:border-ink"
+                                                            }`}>
+                                                            {g}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
+                                                    Shape
+                                                </p>
+                                                <div className='flex flex-wrap gap-2'>
+                                                    {Object.keys(
+                                                        SCALE_CHORD_SHAPES[selectedScaleChordGroup] ?? {},
+                                                    ).map(q => (
+                                                        <button
+                                                            key={q}
+                                                            onClick={() =>
+                                                                setSelectedScaleChordQuality(q)
+                                                            }
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                                                selectedScaleChordQuality === q
+                                                                    ? "bg-sand-4 text-sand-1 border-ink"
+                                                                    : "text-ink border-ink/40 hover:border-ink"
+                                                            }`}>
+                                                            {q}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                        </>
+                                    )}
+
                                     {/* Tuning */}
                                     <div>
                                         <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
@@ -2428,12 +2865,20 @@ export default function Home() {
                                     {selectedMode === "scales" &&
                                     !scalePosition?.modeName
                                         ? `${capoRootNote} ${selectedScale}`
-                                        : wrapAtParen(displayLabel)}
+                                        : selectedMode === "scaleChords"
+                                          ? scaleChordModeName
+                                          : wrapAtParen(displayLabel)}
                                 </span>
                                 {selectedMode === "scales" &&
                                     !scalePosition?.modeName && (
                                         <p className='text-sm font-semibold text-ink/60 mt-0.5'>
                                             {`Position ${selectedScalePosition + 1}`}
+                                        </p>
+                                    )}
+                                {selectedMode === "scaleChords" &&
+                                    scaleChordQualityLabel && (
+                                        <p className='text-sm font-semibold text-ink/60 mt-0.5'>
+                                            {`(${scaleChordQualityLabel})`}
                                         </p>
                                     )}
                             </div>
@@ -2445,7 +2890,7 @@ export default function Home() {
                                     handedness={handedness}
                                     rootNote={capoRootNote}
                                     showIntervals={showIntervals}
-                                    showConnector={selectedMode === "chords"}
+                                    showConnector={selectedMode === "chords" || selectedMode === "scaleChords"}
                                     chordGroups={
                                         capoDisplayGroups.length > 0
                                             ? capoDisplayGroups
@@ -2472,8 +2917,15 @@ export default function Home() {
                                         onClick={() =>
                                             setSelectedMode("scales")
                                         }
-                                        className={`px-6 py-1.5 text-sm font-medium transition-colors ${selectedMode === "scales" ? "bg-sand-4 text-sand-1 font-semibold" : "bg-sand-1 text-ink hover:bg-sand-2"}`}>
+                                        className={`px-6 py-1.5 text-sm font-medium border-r border-ink transition-colors ${selectedMode === "scales" ? "bg-sand-4 text-sand-1 font-semibold" : "bg-sand-1 text-ink hover:bg-sand-2"}`}>
                                         Scales
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            setSelectedMode("scaleChords")
+                                        }
+                                        className={`px-6 py-1.5 text-sm font-medium transition-colors ${selectedMode === "scaleChords" ? "bg-sand-4 text-sand-1 font-semibold" : "bg-sand-1 text-ink hover:bg-sand-2"}`}>
+                                        Scale Chords
                                     </button>
                                 </div>
 
@@ -2810,6 +3262,183 @@ export default function Home() {
                                                 onClick={() =>
                                                     setOctaveUp(o => !o)
                                                 }
+                                                className={`px-4 py-1.5 rounded border text-sm font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "bg-sand-1 text-ink border-ink hover:bg-sand-2"}`}>
+                                                {octaveUp ? "+12" : "-12"}
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+
+                                {/* Scale Chords controls (desktop) */}
+                                {selectedMode === "scaleChords" && (
+                                    <>
+                                        {/* Scale buttons */}
+                                        <div className='flex rounded overflow-hidden border border-ink'>
+                                            {Object.keys(
+                                                SCALE_SHAPES[selectedNoteGroup] ?? {},
+                                            ).map(s => (
+                                                <button
+                                                    key={s}
+                                                    onClick={() => {
+                                                        setSelectedScale(s);
+                                                        setSelectedScaleChordMode(0);
+                                                        setSelectedScaleChordDegree(0);
+                                                    }}
+                                                    className={`px-4 py-1.5 text-sm font-medium border-r border-ink last:border-r-0 transition-colors ${
+                                                        selectedScale === s
+                                                            ? "bg-sand-4 text-sand-1 font-semibold"
+                                                            : "bg-sand-1 text-ink hover:bg-sand-2"
+                                                    }`}>
+                                                    {s}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Mode buttons */}
+                                        <div className='flex flex-wrap gap-1.5'>
+                                            {(scaleVariants?.[0] ?? []).map((p, i) => (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => {
+                                                        setSelectedScaleChordMode(i);
+                                                        setSelectedScaleChordDegree(0);
+                                                    }}
+                                                    className={`px-3 py-1 text-xs font-semibold rounded border transition-colors ${
+                                                        selectedScaleChordMode % N === i
+                                                            ? "bg-sand-4 text-sand-1 border-ink"
+                                                            : "bg-sand-1 text-ink border-ink/40 hover:border-ink"
+                                                    }`}>
+                                                    {p.modeName ?? `Deg. ${i + 1}`}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Voicing group */}
+                                        <div className='flex rounded overflow-hidden border border-ink'>
+                                            {Object.keys(SCALE_CHORD_SHAPES).map(g => (
+                                                <button
+                                                    key={g}
+                                                    onClick={() =>
+                                                        setSelectedScaleChordGroup(g)
+                                                    }
+                                                    className={`px-4 py-1.5 text-sm font-medium border-r border-ink last:border-r-0 transition-colors ${
+                                                        selectedScaleChordGroup === g
+                                                            ? "bg-sand-4 text-sand-1 font-semibold"
+                                                            : "bg-sand-1 text-ink hover:bg-sand-2"
+                                                    }`}>
+                                                    {g}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Shape (quality) */}
+                                        <div className='flex rounded overflow-hidden border border-ink'>
+                                            {Object.keys(
+                                                SCALE_CHORD_SHAPES[selectedScaleChordGroup] ?? {},
+                                            ).map(q => (
+                                                <button
+                                                    key={q}
+                                                    onClick={() =>
+                                                        setSelectedScaleChordQuality(q)
+                                                    }
+                                                    className={`px-4 py-1.5 text-sm font-medium border-r border-ink last:border-r-0 transition-colors ${
+                                                        selectedScaleChordQuality === q
+                                                            ? "bg-sand-4 text-sand-1 font-semibold"
+                                                            : "bg-sand-1 text-ink hover:bg-sand-2"
+                                                    }`}>
+                                                    {q}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Inversion */}
+                                        <div className='flex rounded overflow-hidden border border-ink'>
+                                            {Object.keys(
+                                                SCALE_CHORD_SHAPES[selectedScaleChordGroup]?.[selectedScaleChordQuality] ?? {},
+                                            ).map(inv => (
+                                                <button
+                                                    key={inv}
+                                                    onClick={() =>
+                                                        setSelectedScaleChordInversion(inv)
+                                                    }
+                                                    className={`px-4 py-1.5 text-sm font-medium border-r border-ink last:border-r-0 transition-colors ${
+                                                        selectedScaleChordInversion === inv
+                                                            ? "bg-sand-4 text-sand-1 font-semibold"
+                                                            : "bg-sand-1 text-ink hover:bg-sand-2"
+                                                    }`}>
+                                                    {inv}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Degree stepper */}
+                                        {(() => {
+                                            const intervals = scaleEntry?.intervals ?? [];
+                                            const N = intervals.length || 7;
+                                            const deg = selectedScaleChordDegree % N;
+                                            const rootSemitone = currentRootNote
+                                                ? NOTES.findIndex(p =>
+                                                      p.includes(currentRootNote),
+                                                  )
+                                                : 0;
+                                            const chordRootSemitone =
+                                                (rootSemitone + (intervals[deg] ?? 0)) %
+                                                NOTES.length;
+                                            const chordRootLabel = currentRootNote
+                                                ? NOTES[chordRootSemitone][0]
+                                                : "";
+                                            return (
+                                                <div className='flex items-center gap-2'>
+                                                    <button
+                                                        onClick={() =>
+                                                            setShowAllScaleChords(
+                                                                v => !v,
+                                                            )
+                                                        }
+                                                        className={`px-4 py-1.5 rounded border text-sm font-semibold transition-colors ${
+                                                            showAllScaleChords
+                                                                ? "bg-ink text-sand-1 border-ink"
+                                                                : "bg-sand-1 text-ink border-ink hover:bg-sand-2"
+                                                        }`}>
+                                                        All
+                                                    </button>
+                                                    <div className='flex items-center gap-0 border border-ink rounded'>
+                                                        <button
+                                                            onClick={() => {
+                                                                setShowAllScaleChords(false);
+                                                                setSelectedScaleChordDegree(
+                                                                    d => (d - 1 + N) % N,
+                                                                );
+                                                            }}
+                                                            title='Previous degree'
+                                                            className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-r border-ink rounded-l'>
+                                                            <ChevronLeft />
+                                                        </button>
+                                                        <span className='px-3 text-sm font-medium text-ink min-w-[5rem] text-center'>
+                                                            {showAllScaleChords
+                                                                ? "All"
+                                                                : `Deg. ${deg + 1} — ${chordRootLabel}`}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => {
+                                                                setShowAllScaleChords(false);
+                                                                setSelectedScaleChordDegree(
+                                                                    d => (d + 1) % N,
+                                                                );
+                                                            }}
+                                                            title='Next degree'
+                                                            className='px-2 py-1.5 bg-sand-2 text-ink hover:bg-sand-3 transition-colors border-l border-ink rounded-r'>
+                                                            <ChevronRight />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Scale Chords octave shift (desktop) */}
+                                        {!showAllScaleChords && scaleChordHasOctave && (
+                                            <button
+                                                onClick={() => setOctaveUp(o => !o)}
                                                 className={`px-4 py-1.5 rounded border text-sm font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "bg-sand-1 text-ink border-ink hover:bg-sand-2"}`}>
                                                 {octaveUp ? "+12" : "-12"}
                                             </button>

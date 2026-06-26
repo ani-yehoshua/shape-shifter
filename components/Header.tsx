@@ -403,7 +403,7 @@ export default function Header() {
 
                             {hasPro && (
                                 <a
-                                    href='https://billing.stripe.com/p/login/test_00waEW7qCfxn9JW60Y3ks00'
+                                    href='https://billing.stripe.com/p/login/fZu3cu1XQeGWcxs1lhgUM00'
                                     target='_blank'
                                     rel='noreferrer'
                                     className='flex items-center gap-2 px-4 py-2.5 rounded-full bg-sand-1 text-sand-4 text-sm font-semibold hover:opacity-90 transition-opacity w-fit'>
