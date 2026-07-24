@@ -14,18 +14,6 @@
 - **Randomizer** — Randomize root notes, scales, chord shapes, and more for practice, with fine-grained control over what gets randomized.
 - **Customizable fretboard** — Left- or right-handed orientation, alternate tunings, capo support, note/interval display.
 
-## Getting Started
-
-Run the development server:
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser to see the result.
-
-The main app UI lives in `app/page.tsx`. Chord and scale shape data lives under `lib/Shapes/`.
-
 ## Tech Stack
 
 - [Next.js](https://nextjs.org) (App Router)
