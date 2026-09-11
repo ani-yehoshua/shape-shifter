@@ -10,6 +10,9 @@ type Props = {
     onLoad: (chord: SavedChord) => void;
     /** incremented by parent to trigger a refresh after a save */
     refreshKey?: number;
+    /** called after a chord is deleted, so the parent can re-sync its own
+     *  "is this chord saved?" state (e.g. a bookmark icon's filled state) */
+    onChange?: () => void;
 };
 
 export default function SavedChordsPanel({
@@ -17,6 +20,7 @@ export default function SavedChordsPanel({
     onClose,
     onLoad,
     refreshKey = 0,
+    onChange,
 }: Props) {
     const [chords, setChords] = React.useState<SavedChord[]>([]);
     const [loading, setLoading] = React.useState(false);
@@ -35,6 +39,7 @@ export default function SavedChordsPanel({
     async function handleDelete(id: string) {
         await deleteChord(id).catch(console.error);
         setChords(prev => prev.filter(c => c.id !== id));
+        onChange?.();
     }
 
     async function handleRename(id: string) {
@@ -177,7 +182,9 @@ export default function SavedChordsPanel({
                                                 viewBox='0 0 24 24'
                                                 fill='none'
                                                 stroke='currentColor'
-                                                strokeWidth={2}>
+                                                strokeWidth={2}
+                                                strokeLinecap='round'
+                                                strokeLinejoin='round'>
                                                 <polyline points='3 6 5 6 21 6' />
                                                 <path d='M19 6l-1 14H6L5 6' />
                                                 <path d='M10 11v6M14 11v6' />

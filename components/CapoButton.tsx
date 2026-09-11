@@ -119,7 +119,7 @@ export default function CapoButton({
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                             src='/capo.png'
-                            className={`w-5 h-5 ${isActive ? "invert dark:invert-0" : "dark:invert"}`}
+                            className={`w-5 h-5 ${isActive ? "brightness-0 invert dark:invert-0" : "dark:brightness-0 dark:invert"}`}
                             alt='Capo'
                         />
                         {isActive ? `Capo ${capo}` : "Capo"}
@@ -144,7 +144,7 @@ export default function CapoButton({
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                             src='/capo.png'
-                            className={`w-5 h-5 ${isActive ? "invert dark:invert-0" : "dark:invert"}`}
+                            className={`w-5 h-5 ${isActive ? "brightness-0 invert dark:invert-0" : "dark:brightness-0 dark:invert"}`}
                             alt='Capo'
                         />
                     </button>

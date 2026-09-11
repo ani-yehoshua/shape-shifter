@@ -3222,6 +3222,67 @@ export default function Home() {
                                         <>
                                             <div>
                                                 <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
+                                                    Note Count
+                                                </p>
+                                                <div className='flex flex-wrap gap-2'>
+                                                    {Object.entries(
+                                                        SCALE_SHAPES,
+                                                    ).map(
+                                                        ([
+                                                            group,
+                                                            groupScales,
+                                                        ]) => {
+                                                            const hasScales =
+                                                                Object.keys(
+                                                                    groupScales,
+                                                                ).length > 0;
+                                                            return (
+                                                                <button
+                                                                    key={group}
+                                                                    disabled={
+                                                                        !hasScales
+                                                                    }
+                                                                    onClick={() => {
+                                                                        if (
+                                                                            !hasScales
+                                                                        )
+                                                                            return;
+                                                                        const firstScale =
+                                                                            Object.keys(
+                                                                                groupScales,
+                                                                            )[0] ??
+                                                                            "";
+                                                                        setSelectedNoteGroup(
+                                                                            group,
+                                                                        );
+                                                                        setSelectedScale(
+                                                                            firstScale,
+                                                                        );
+                                                                        setSelectedScaleChordMode(
+                                                                            0,
+                                                                        );
+                                                                        setSelectedScaleChordDegree(
+                                                                            0,
+                                                                        );
+                                                                    }}
+                                                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                                                        selectedNoteGroup ===
+                                                                        group
+                                                                            ? "bg-sand-4 text-sand-1 border-ink"
+                                                                            : hasScales
+                                                                              ? "text-ink border-ink/40 hover:border-ink"
+                                                                              : "text-ink/30 border-ink/20 cursor-not-allowed"
+                                                                    }`}>
+                                                                    {group}
+                                                                </button>
+                                                            );
+                                                        },
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <p className='text-[10px] font-bold text-ink/50 uppercase tracking-widest mb-2'>
                                                     Scale
                                                 </p>
                                                 <div className='flex flex-wrap gap-2'>
@@ -3826,6 +3887,54 @@ export default function Home() {
                                 {/* Scale Chords controls (desktop) */}
                                 {selectedMode === "scaleChords" && (
                                     <>
+                                        {/* Note Count buttons */}
+                                        <div className='flex rounded overflow-hidden border border-ink'>
+                                            {Object.entries(SCALE_SHAPES).map(
+                                                ([group, groupScales]) => {
+                                                    const hasScales =
+                                                        Object.keys(groupScales)
+                                                            .length > 0;
+                                                    return (
+                                                        <button
+                                                            key={group}
+                                                            disabled={
+                                                                !hasScales
+                                                            }
+                                                            onClick={() => {
+                                                                if (!hasScales)
+                                                                    return;
+                                                                const firstScale =
+                                                                    Object.keys(
+                                                                        groupScales,
+                                                                    )[0] ?? "";
+                                                                setSelectedNoteGroup(
+                                                                    group,
+                                                                );
+                                                                setSelectedScale(
+                                                                    firstScale,
+                                                                );
+                                                                setSelectedScaleChordMode(
+                                                                    0,
+                                                                );
+                                                                setSelectedScaleChordDegree(
+                                                                    0,
+                                                                );
+                                                            }}
+                                                            className={`px-4 py-1.5 text-sm font-medium border-r border-ink last:border-r-0 transition-colors ${
+                                                                selectedNoteGroup ===
+                                                                group
+                                                                    ? "bg-sand-4 text-sand-1 font-semibold"
+                                                                    : hasScales
+                                                                      ? "bg-sand-1 text-ink hover:bg-sand-2"
+                                                                      : "bg-sand-1 text-ink/30 cursor-not-allowed"
+                                                            }`}>
+                                                            {group}
+                                                        </button>
+                                                    );
+                                                },
+                                            )}
+                                        </div>
+
                                         {/* Scale buttons */}
                                         <div className='flex rounded overflow-hidden border border-ink'>
                                             {Object.keys(
@@ -4324,6 +4433,7 @@ export default function Home() {
                 onClose={() => setSavedPanelOpen(false)}
                 onLoad={handleLoadSaved}
                 refreshKey={savedRefreshKey}
+                onChange={() => setSavedRefreshKey(k => k + 1)}
             />
 
             {/* ── Progression Builder Panel ─────────────────────── */}
