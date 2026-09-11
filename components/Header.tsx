@@ -469,7 +469,7 @@ export default function Header() {
                             </button>
                             <button
                                 onClick={() => setDeleteOpen(true)}
-                                className='text-xs text-red-600/70 hover:text-red-700 font-semibold transition-colors underline underline-offset-2'>
+                                className='px-4 py-2 rounded-full border border-red-500 text-red-500 text-sm font-semibold hover:bg-red-500 hover:text-sand-1 transition-all'>
                                 Delete account
                             </button>
                         </div>

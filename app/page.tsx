@@ -2831,7 +2831,7 @@ export default function Home() {
                                                 }
                                                 title='Save chord'
                                                 className={`w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors ${isCurrentChordSaved ? "text-yellow-400" : "text-ink"}`}>
-                                                <BookmarkIcon />
+                                                <BookmarkIcon filled={isCurrentChordSaved} />
                                             </button>
                                             <button
                                                 onClick={() => {
@@ -4173,7 +4173,7 @@ export default function Home() {
                                                 }
                                                 title='Save chord'
                                                 className={`flex items-center gap-2 px-4 py-2 rounded-full border border-ink/40 text-sm font-semibold hover:border-ink transition-colors ${isCurrentChordSaved ? "text-yellow-400" : "text-ink"}`}>
-                                                <BookmarkIcon />
+                                                <BookmarkIcon filled={isCurrentChordSaved} />
                                                 Save
                                             </button>
                                             {selectedMode === "scales" && (

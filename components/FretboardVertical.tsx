@@ -112,7 +112,7 @@ const FretboardVertical = ({
                         y1={yForFretLine(i)}
                         x2={diagramWidth - padX}
                         y2={yForFretLine(i)}
-                        stroke='#1f2d3d'
+                        stroke='var(--color-ink)'
                         strokeWidth={i === 0 ? 5 : 1.5}
                     />
                 ))}
@@ -125,7 +125,7 @@ const FretboardVertical = ({
                             y={yForFretLine(0)}
                             width={diagramWidth - padX * 2}
                             height={yForFretLine(capo) - yForFretLine(0)}
-                            fill='#1f2d3d'
+                            fill='var(--color-ink)'
                             opacity={0.06}
                         />
                         <rect
@@ -134,7 +134,7 @@ const FretboardVertical = ({
                             width={diagramWidth - padX * 2 + 8}
                             height={10}
                             rx={5}
-                            fill='#1f2d3d'
+                            fill='var(--color-ink)'
                             opacity={0.5}
                         />
                     </>
@@ -148,7 +148,7 @@ const FretboardVertical = ({
                         y1={padY}
                         x2={xForString(i)}
                         y2={diagramHeight - 15}
-                        stroke='#1f2d3d'
+                        stroke='var(--color-ink)'
                         strokeWidth={1.5}
                     />
                 ))}
@@ -162,7 +162,7 @@ const FretboardVertical = ({
                                 cx={diagramWidth / 2}
                                 cy={yForFretMark(fret)}
                                 r={8}
-                                fill='#d1d1cc'
+                                fill='var(--color-sand-3)'
                             />
                         ),
                 )}
@@ -176,13 +176,13 @@ const FretboardVertical = ({
                                     cx={diagramWidth / 3.03 + 4}
                                     cy={yForFretMark(fret)}
                                     r={8}
-                                    fill='#d1d1cc'
+                                    fill='var(--color-sand-3)'
                                 />
                                 <circle
                                     cx={(diagramWidth * 1.97) / 3}
                                     cy={yForFretMark(fret)}
                                     r={8}
-                                    fill='#d1d1cc'
+                                    fill='var(--color-sand-3)'
                                 />
                             </g>
                         ),
@@ -204,7 +204,7 @@ const FretboardVertical = ({
                                 dominantBaseline='central'
                                 fontSize={12}
                                 fontWeight='bold'
-                                fill='#1f2d3d'>
+                                fill='var(--color-ink)'>
                                 {fret}
                             </text>
                         ),
@@ -246,7 +246,7 @@ const FretboardVertical = ({
                                     y1={a.y + uy * a.r}
                                     x2={b.x - ux * b.r}
                                     y2={b.y - uy * b.r}
-                                    stroke='#1f2d3d'
+                                    stroke='var(--color-ink)'
                                     strokeWidth={2.5}
                                     strokeLinecap='round'
                                 />
@@ -293,7 +293,7 @@ const FretboardVertical = ({
                                     cy={openY}
                                     r={14}
                                     fill='transparent'
-                                    stroke={isRoot ? "#dc2626" : "#1f2d3d"}
+                                    stroke={isRoot ? "var(--color-root-red)" : "var(--color-ink)"}
                                     strokeWidth='2'
                                 />
                                 <text
@@ -303,7 +303,7 @@ const FretboardVertical = ({
                                     dominantBaseline='central'
                                     fontSize={fontSize}
                                     fontWeight={600}
-                                    fill={isRoot ? "#dc2626" : "#1f2d3d"}>
+                                    fill={isRoot ? "var(--color-root-red)" : "var(--color-ink)"}>
                                     {label}
                                 </text>
                             </g>
@@ -322,12 +322,12 @@ const FretboardVertical = ({
                                 r={16}
                                 fill={
                                     isRoot
-                                        ? "#dc2626"
+                                        ? "var(--color-root-red)"
                                         : isHollowTonic
                                           ? "transparent"
-                                          : "#1f2d3d"
+                                          : "var(--color-ink)"
                                 }
-                                stroke={isHollowTonic ? "#1f2d3d" : "none"}
+                                stroke={isHollowTonic ? "var(--color-ink)" : "none"}
                                 strokeWidth={isHollowTonic ? 2 : 0}
                             />
                             <text
@@ -340,9 +340,9 @@ const FretboardVertical = ({
                                 fill={
                                     isRoot || isHollowTonic
                                         ? isRoot
-                                            ? "#f7f7f5"
-                                            : "#1f2d3d"
-                                        : "#f7f7f5"
+                                            ? "var(--color-sand-1)"
+                                            : "var(--color-ink)"
+                                        : "var(--color-sand-1)"
                                 }>
                                 {label}
                             </text>

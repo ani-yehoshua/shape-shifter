@@ -173,7 +173,7 @@ const FretboardHorizontal = ({
                             y1={padY}
                             x2={xForFretLine(i)}
                             y2={diagramHeight - padY}
-                            stroke='#1f2d3d'
+                            stroke='var(--color-ink)'
                             strokeWidth={i === 0 ? 5 : 1.5}
                         />
                     ))}
@@ -186,7 +186,7 @@ const FretboardHorizontal = ({
                             y1={yForString(i)}
                             x2={diagramWidth - padX}
                             y2={yForString(i)}
-                            stroke='#1f2d3d'
+                            stroke='var(--color-ink)'
                             strokeWidth={1.5}
                         />
                     ))}
@@ -204,7 +204,7 @@ const FretboardHorizontal = ({
                                     xForFretLine(0)
                                 }
                                 height={diagramHeight - padY * 2}
-                                fill='#1f2d3d'
+                                fill='var(--color-ink)'
                                 opacity={0.06}
                             />
                             <rect
@@ -213,7 +213,7 @@ const FretboardHorizontal = ({
                                 width={10}
                                 height={diagramHeight - padY * 2 + 8}
                                 rx={5}
-                                fill='#1f2d3d'
+                                fill='var(--color-ink)'
                                 opacity={0.5}
                             />
                         </>
@@ -228,7 +228,7 @@ const FretboardHorizontal = ({
                                     cx={xForFretMark(fret)}
                                     cy={diagramHeight / 1.99}
                                     r={6}
-                                    fill='#d1d1cc'
+                                    fill='var(--color-sand-3)'
                                 />
                             ),
                     )}
@@ -242,13 +242,13 @@ const FretboardHorizontal = ({
                                         cx={xForFretMark(fret)}
                                         cy={diagramHeight / 3 + 4}
                                         r={6}
-                                        fill='#d1d1cc'
+                                        fill='var(--color-sand-3)'
                                     />
                                     <circle
                                         cx={xForFretMark(fret)}
                                         cy={(diagramHeight * 1.96) / 3}
                                         r={6}
-                                        fill='#d1d1cc'
+                                        fill='var(--color-sand-3)'
                                     />
                                 </g>
                             ),
@@ -266,7 +266,7 @@ const FretboardHorizontal = ({
                                     dominantBaseline='auto'
                                     fontSize={11}
                                     fontWeight='bold'
-                                    fill='#1f2d3d'>
+                                    fill='var(--color-ink)'>
                                     {fret}
                                 </text>
                             ),
@@ -308,7 +308,7 @@ const FretboardHorizontal = ({
                                         y1={a.y + uy * a.r}
                                         x2={b.x - ux * b.r}
                                         y2={b.y - uy * b.r}
-                                        stroke='#1f2d3d'
+                                        stroke='var(--color-ink)'
                                         strokeWidth={2.5}
                                         strokeLinecap='round'
                                     />
@@ -357,7 +357,7 @@ const FretboardHorizontal = ({
                                         cy={y}
                                         r={10}
                                         fill='transparent'
-                                        stroke={isRoot ? "#dc2626" : "#1f2d3d"}
+                                        stroke={isRoot ? "var(--color-root-red)" : "var(--color-ink)"}
                                         strokeWidth='2'
                                     />
                                     <text
@@ -367,7 +367,7 @@ const FretboardHorizontal = ({
                                         dominantBaseline='central'
                                         fontSize={fontSize}
                                         fontWeight={600}
-                                        fill={isRoot ? "#dc2626" : "#1f2d3d"}>
+                                        fill={isRoot ? "var(--color-root-red)" : "var(--color-ink)"}>
                                         {label}
                                     </text>
                                 </g>
@@ -388,12 +388,12 @@ const FretboardHorizontal = ({
                                     r={12}
                                     fill={
                                         isRoot
-                                            ? "#dc2626"
+                                            ? "var(--color-root-red)"
                                             : isHollowTonic
                                               ? "transparent"
-                                              : "#1f2d3d"
+                                              : "var(--color-ink)"
                                     }
-                                    stroke={isHollowTonic ? "#1f2d3d" : "none"}
+                                    stroke={isHollowTonic ? "var(--color-ink)" : "none"}
                                     strokeWidth={isHollowTonic ? 2 : 0}
                                 />
                                 <text
@@ -404,7 +404,7 @@ const FretboardHorizontal = ({
                                     fontSize={fontSize}
                                     fontWeight={600}
                                     fill={
-                                        isHollowTonic ? "#1f2d3d" : "#f7f7f5"
+                                        isHollowTonic ? "var(--color-ink)" : "var(--color-sand-1)"
                                     }>
                                     {label}
                                 </text>

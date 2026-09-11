@@ -35,13 +35,15 @@
 }
 
 /* Dark theme — same ramp, inverted. sand-1 (lightest) becomes the darkest
-   page tone, sand-4/ink (darkest) becomes the lightest. */
+   page tone, sand-4/ink (darkest) becomes the lightest. Reuses the exact
+   brand hexes with roles swapped (rather than inventing a near-black tone)
+   so the app still reads as "slate blue + cream", just inverted. */
 :root.dark {
-    --color-sand-1: #10161d;
-    --color-sand-2: #1a2530;
-    --color-sand-3: #2d3d4d;
-    --color-sand-4: #f5f3ef;
-    --color-ink: #f5f3ef;
+    --color-sand-1: #1f2d3d;
+    --color-sand-2: #28384a;
+    --color-sand-3: #3c5066;
+    --color-sand-4: #f7f7f5;
+    --color-ink: #f7f7f5;
     color-scheme: dark;
 }
 

@@ -47,7 +47,7 @@ type Props = {
 function TrashIcon() {
     return (
         <svg
-            className='w-3.5 h-3.5'
+            className='w-5 h-5'
             viewBox='0 0 24 24'
             fill='none'
             stroke='currentColor'
@@ -63,7 +63,7 @@ function TrashIcon() {
 function ChevronUpIcon() {
     return (
         <svg
-            className='w-3.5 h-3.5'
+            className='w-5 h-5'
             viewBox='0 0 24 24'
             fill='none'
             stroke='currentColor'
@@ -77,7 +77,7 @@ function ChevronUpIcon() {
 function ChevronDownIcon() {
     return (
         <svg
-            className='w-3.5 h-3.5'
+            className='w-5 h-5'
             viewBox='0 0 24 24'
             fill='none'
             stroke='currentColor'
@@ -572,17 +572,17 @@ export default function ProgressionPanel({
                                     </div>
 
                                     {/* Reorder */}
-                                    <div className='flex flex-col gap-0.5 shrink-0'>
+                                    <div className='flex flex-col shrink-0'>
                                         <button
                                             onClick={() => moveChord(i, -1)}
                                             disabled={i === 0}
-                                            className='text-ink/30 hover:text-ink/70 disabled:opacity-20 transition-colors'>
+                                            className='p-1 text-ink/30 hover:text-ink/70 disabled:opacity-20 transition-colors'>
                                             <ChevronUpIcon />
                                         </button>
                                         <button
                                             onClick={() => moveChord(i, 1)}
                                             disabled={i === chords.length - 1}
-                                            className='text-ink/30 hover:text-ink/70 disabled:opacity-20 transition-colors'>
+                                            className='p-1 text-ink/30 hover:text-ink/70 disabled:opacity-20 transition-colors'>
                                             <ChevronDownIcon />
                                         </button>
                                     </div>
@@ -607,7 +607,7 @@ export default function ProgressionPanel({
                                             title='Rename'
                                             className='shrink-0 text-ink/30 hover:text-ink/60 transition-colors'>
                                             <svg
-                                                className='w-3.5 h-3.5'
+                                                className='w-5 h-5'
                                                 viewBox='0 0 24 24'
                                                 fill='none'
                                                 stroke='currentColor'
