@@ -2740,34 +2740,51 @@ export default function ChordsScreen() {
 
             {/* Position / alt-shape row */}
             <View style={[styles.stepperRow, styles.chordsStepperRow]}>
-                <TouchableOpacity
-                    onPress={() => setMenuOpen(true)}
-                    style={styles.menuButton}>
-                    <MenuIcon />
-                    <Text style={styles.menuButtonText}>Menu</Text>
-                </TouchableOpacity>
-
-                {((selectedMode === "chords" && voicingInfo?.hasOctave) ||
-                    (selectedMode === "scales" && !showAllScalePositions && scaleOctaveInfo?.hasAlt)) && (
+                {/* Fixed left: Menu + octave toggle, same treatment as
+                    Save/Strum/Root fixed to the right of the action bar
+                    below -- these don't scroll with the position/pattern/
+                    variant groups. */}
+                <View style={styles.stepperFixedLeft}>
                     <TouchableOpacity
-                        onPress={() => setOctaveUp(o => !o)}
-                        style={[
-                            styles.pillButton,
-                            styles.chordsOctavePill,
-                            octaveUp && styles.pillButtonActive,
-                        ]}>
-                        <Text
-                            style={[
-                                styles.pillButtonText,
-                                styles.chordsOctavePillText,
-                                octaveUp && styles.pillButtonTextActive,
-                            ]}>
-                            {octaveUp ? "+12" : "-12"}
-                        </Text>
+                        onPress={() => setMenuOpen(true)}
+                        style={styles.menuButton}>
+                        <MenuIcon />
+                        <Text style={styles.menuButtonText}>Menu</Text>
                     </TouchableOpacity>
-                )}
 
-                <View style={styles.stepperStaticRow}>
+                    {((selectedMode === "chords" && voicingInfo?.hasOctave) ||
+                        (selectedMode === "scales" && !showAllScalePositions && scaleOctaveInfo?.hasAlt)) && (
+                        <TouchableOpacity
+                            onPress={() => setOctaveUp(o => !o)}
+                            style={[
+                                styles.pillButton,
+                                styles.chordsOctavePill,
+                                octaveUp && styles.pillButtonActive,
+                            ]}>
+                            <Text
+                                style={[
+                                    styles.pillButtonText,
+                                    styles.chordsOctavePillText,
+                                    octaveUp && styles.pillButtonTextActive,
+                                ]}>
+                                {octaveUp ? "+12" : "-12"}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Scrollable rest: position/alt groups (Chords) or
+                    position/pattern/variant groups (Scales) -- this is a
+                    website's overflow-x-auto flex-1 div: it visually reads
+                    as static in Chords mode (its content always fits) but
+                    genuinely scrolls in Scales mode, where all three groups
+                    can be showing at once. Can scroll behind the fixed-left
+                    group above. */}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.stepperScroll}
+                    contentContainerStyle={styles.stepperScrollContent}>
                     {selectedMode === "chords" && selectionHierarchy.positions.length > 0 && (
                         <View style={styles.stepperGroup}>
                             <TouchableOpacity
@@ -2953,7 +2970,7 @@ export default function ChordsScreen() {
                                 </>
                             );
                         })()}
-                </View>
+                </ScrollView>
             </View>
 
             {/* Action bar */}
@@ -3455,8 +3472,27 @@ const styles = StyleSheet.create({
     chordsStepperRow: {
         paddingVertical: spacing.sm,
     },
-    stepperStaticRow: {
+    // Same fixed-left/scrollable-rest split as the action bar's Save/Strum/
+    // Root group below, mirrored to the left side. backgroundColor +
+    // zIndex occlude the scrollable group when it overflows (same reason
+    // as actionBarFixedRight -- see that style's comment).
+    stepperFixedLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.xs + 2,
+        backgroundColor: colors.bg,
+        paddingRight: spacing.xs,
+        zIndex: 1,
+    },
+    // A horizontal ScrollView clips its content to its own bounds by
+    // default; `overflow: 'visible'` turns that off so the lock badges on
+    // the alt-shape/variant labels inside aren't cut off (same fix as
+    // actionScroll for the Draw Mode pencil button's Pro badge).
+    stepperScroll: {
         flex: 1,
+        overflow: "visible",
+    },
+    stepperScrollContent: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "flex-end",
