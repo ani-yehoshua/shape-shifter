@@ -52,7 +52,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../lib/auth-context";
 import { usePreferences } from "../lib/preferences-context";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Rect } from "react-native-svg";
 import FretboardVertical from "../components/FretboardVertical";
 import NotesIntervalsToggle from "../components/NotesIntervalsToggle";
 import RootNoteButton from "../components/RootNoteButton";
@@ -68,6 +68,7 @@ import {
     generateFretboardMap,
     NOTES,
     shuffleArray,
+    STANDARD_MIDI,
     type NotePosition,
 } from "../lib/fretboardMap";
 import { STANDARD_TUNING, TUNINGS, type Tuning } from "../lib/tunings";
@@ -107,6 +108,15 @@ function voicingFretRange(v: NotePosition[]) {
         .filter((f): f is number => f != null && f >= 0);
     if (!frets.length) return null;
     return { min: Math.min(...frets), max: Math.max(...frets) };
+}
+
+// Port of ../../app/page.tsx's wrapAtParen -- long scale/mode names with a
+// parenthetical ("Dorian (2nd mode)") read better on two lines. The website
+// does this with a <br/>; RN's Text renders \n natively, so no JSX needed.
+function wrapAtParen(text: string): string {
+    const idx = text.indexOf(" (");
+    if (idx === -1) return text;
+    return `${text.slice(0, idx)}\n${text.slice(idx + 1)}`;
 }
 
 function ChevronIcon({ direction }: { direction: "left" | "right" }) {
@@ -155,6 +165,14 @@ function StrumIcon() {
             viewBox='12.5 7.5 175 175'
             fill={colors.ink}>
             <Path d='M 42 58 C 56 23 144 23 158 58 C 169 80 118 168 100 165 C 82 168 31 80 42 58 Z' />
+        </Svg>
+    );
+}
+
+function StopIcon() {
+    return (
+        <Svg width={20} height={20} viewBox='0 0 24 24' fill={colors.sand1}>
+            <Rect x={5} y={5} width={14} height={14} rx={2} />
         </Svg>
     );
 }
@@ -560,6 +578,16 @@ export default function ChordsScreen() {
 
     const [isDrawMode, setIsDrawMode] = useState(false);
 
+    // Chords vs. Scales, matching the website's selectedMode (which also
+    // has "scaleChords" -- deferred here, see the Phase 2 sequencing notes
+    // elsewhere in this project: Scale Chords needs the website's chord/
+    // scale-generation algorithm refactor done first, so it isn't ported
+    // yet). Everything below in this component is shared between the two
+    // and branches on selectedMode the same way page.tsx does, rather than
+    // being two separate screens -- capo/tuning/handedness/showIntervals/
+    // octaveUp/displayShape are genuinely shared state on the website too.
+    const [selectedMode, setSelectedMode] = useState<"chords" | "scales">("chords");
+
     // ─── Chords mode state ──────────────────────────────────────────────
     const [currentRootNote, setCurrentRootNote] = useState("C");
     const [selectedCategory, setSelectedCategory] = useState("");
@@ -568,6 +596,19 @@ export default function ChordsScreen() {
     const [selectedChordQuality, setSelectedChordQuality] = useState("");
     const [selectedPosition, setSelectedPosition] = useState("All");
     const [selectedAltShape, setSelectedAltShape] = useState(0);
+
+    // ─── Scales mode state ──────────────────────────────────────────────
+    const [selectedNoteGroup, setSelectedNoteGroup] = useState("7-note");
+    const [selectedScale, setSelectedScale] = useState("Major");
+    const [selectedScalePosition, setSelectedScalePosition] = useState(0);
+    const [selectedScalePattern, setSelectedScalePattern] = useState(
+        () => (SCALE_SHAPES as any)["7-note"]["Major"].defaultPattern as string,
+    );
+    const [selectedScaleVariant, setSelectedScaleVariant] = useState(0);
+    const [showAllScalePositions, setShowAllScalePositions] = useState(true);
+    const [playbackSpeed, setPlaybackSpeed] = useState(4);
+    const [isPlayingScale, setIsPlayingScale] = useState(false);
+    const scalePlayRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
     const [showIntervals, setShowIntervals] = useState(false);
     const [octaveUp, setOctaveUp] = useState(false);
@@ -753,6 +794,7 @@ export default function ChordsScreen() {
     ]);
 
     useEffect(() => {
+        if (selectedMode !== "chords") return;
         const formulas = selectionHierarchy.finalFormulas;
         if (!currentRootNote || !formulas) {
             setDisplayShape([]);
@@ -785,11 +827,135 @@ export default function ChordsScreen() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
+        selectedMode,
         currentRootNote,
         selectedPosition,
         selectionHierarchy.finalFormulas,
         fretboardMap,
         voicingInfo,
+        octaveUp,
+        selectedTuning.semitones,
+    ]);
+
+    // ─── Scales mode: octave-alt detection + display effect ────────────
+    // Ported from ../../app/page.tsx's scaleOctaveInfo memo and its
+    // selectedMode === "scales" display effect. NUM_FRETS there is 24,
+    // same as this screen's own fretboardMap.
+    const scaleOctaveInfo = useMemo(() => {
+        if (selectedMode !== "scales") return null;
+        const entry = (SCALE_SHAPES as any)[selectedNoteGroup]?.[selectedScale];
+        if (!entry || !currentRootNote) return null;
+        const variants = entry.altPatterns[selectedScalePattern] ?? [entry.positions];
+        const pos = (variants[selectedScaleVariant] ?? variants[0])[selectedScalePosition];
+        if (!pos) return null;
+        const rootFret = (NOTES.findIndex(p => p.includes(currentRootNote)) - 7 + 12) % 12;
+        const frets = pos.notes.map((n: any) => {
+            const delta = (selectedTuning.semitones[n.string] ?? STANDARD_MIDI[n.string]) - STANDARD_MIDI[n.string];
+            return n.fretOffset + rootFret - delta;
+        });
+        const minFret = Math.min(...frets);
+        return { hasAlt: minFret >= 12 };
+    }, [
+        selectedMode,
+        selectedNoteGroup,
+        selectedScale,
+        selectedScalePosition,
+        selectedScalePattern,
+        selectedScaleVariant,
+        currentRootNote,
+        selectedTuning.semitones,
+    ]);
+
+    useEffect(() => {
+        if (selectedMode !== "scales") return;
+        const entry = (SCALE_SHAPES as any)[selectedNoteGroup]?.[selectedScale];
+        if (!entry || !currentRootNote) {
+            setDisplayShape([]);
+            return;
+        }
+        const rootSemitone = NOTES.findIndex(p => p.includes(currentRootNote));
+        const rootFret = (rootSemitone - 7 + 12) % 12;
+        const variants = entry.altPatterns[selectedScalePattern] ?? [entry.positions];
+        const activePositions = variants[selectedScaleVariant] ?? variants[0];
+        const parentDegrees = entry.degrees.map((d: string) => parseInt(d.match(/\d+/)?.[0] ?? "1"));
+
+        if (showAllScalePositions) {
+            // Overlay every position/box together using the scale's actual
+            // root as a consistent reference, and tile each whole position
+            // at every octave offset that still lands on the fretboard --
+            // needed for scales with fewer positions (pentatonic/hexatonic)
+            // that don't otherwise tile the full neck the way 7-position
+            // patterns do.
+            const seen = new Set<string>();
+            const groups: NotePosition[][] = [];
+            for (const position of activePositions ?? []) {
+                const baseFrets = position.notes.map((n: any) => {
+                    const delta = (selectedTuning.semitones[n.string] ?? STANDARD_MIDI[n.string]) - STANDARD_MIDI[n.string];
+                    return n.fretOffset + rootFret - delta;
+                });
+                if (baseFrets.length === 0) continue;
+                const minBase = Math.min(...baseFrets);
+                const maxBase = Math.max(...baseFrets);
+                const firstK = Math.ceil(-minBase / 12);
+                const lastK = Math.floor((24 - maxBase) / 12);
+                for (let k = firstK; k <= lastK; k++) {
+                    const group: NotePosition[] = [];
+                    position.notes.forEach((n: any, i: number) => {
+                        const fret = baseFrets[i] + k * 12;
+                        const key = `${n.string}:${fret}`;
+                        if (seen.has(key)) return;
+                        seen.add(key);
+                        group.push({
+                            string: n.string,
+                            fret,
+                            semitones: n.semitones,
+                            degree: parentDegrees[n.degree],
+                            isTonic: n.semitones === 0,
+                        });
+                    });
+                    if (group.length > 0) groups.push(group);
+                }
+            }
+            setDisplayGroups(groups);
+            setDisplayShape(groups.flat());
+            return;
+        }
+        setDisplayGroups([]);
+
+        const position = activePositions?.[selectedScalePosition];
+        if (!position) {
+            setDisplayShape([]);
+            return;
+        }
+        // Derive the mode root from the position's lowest note (not just
+        // intervals[selectedScalePosition]) so bebop Std. patterns (7
+        // positions, 8-entry intervals array) resolve correctly.
+        const modeRootScaleNote = position.notes[0];
+        const modeInterval = modeRootScaleNote.semitones;
+        const modeRootParentDeg = parentDegrees[modeRootScaleNote.degree];
+        const rawFrets = position.notes.map((n: any) => {
+            const delta = (selectedTuning.semitones[n.string] ?? STANDARD_MIDI[n.string]) - STANDARD_MIDI[n.string];
+            return n.fretOffset + rootFret - delta;
+        });
+        const octaveOffset = octaveUp && Math.min(...rawFrets) >= 12 ? -12 : 0;
+        setDisplayShape(
+            position.notes.map((n: any, i: number) => ({
+                string: n.string,
+                fret: rawFrets[i] + octaveOffset,
+                semitones: (n.semitones - modeInterval + 12) % 12,
+                degree: ((parentDegrees[n.degree] - modeRootParentDeg + 7) % 7) + 1,
+                isTonic: n.semitones === 0,
+            })),
+        );
+    }, [
+        selectedMode,
+        selectedNoteGroup,
+        selectedScale,
+        selectedScalePosition,
+        selectedScalePattern,
+        selectedScaleVariant,
+        showAllScalePositions,
+        currentRootNote,
         octaveUp,
         selectedTuning.semitones,
     ]);
@@ -817,17 +983,121 @@ export default function ChordsScreen() {
         [displayGroups, capo],
     );
 
+    // ─── Scales mode: derived selectors + handlers ─────────────────────
+    // Ported from ../../app/page.tsx (the "scales" slices only -- the
+    // "scaleChords" branches there are dropped, deferred with the rest of
+    // that mode).
+    const scaleEntry = (SCALE_SHAPES as any)[selectedNoteGroup]?.[selectedScale];
+    const scalePatternKeys: string[] = scaleEntry ? Object.keys(scaleEntry.altPatterns) : [];
+    const scaleVariants: any[] | undefined =
+        scaleEntry?.altPatterns[selectedScalePattern] ?? (scaleEntry ? [scaleEntry.positions] : undefined);
+    const scaleNumVariants = scaleVariants?.length ?? 1;
+    const scaleVariantLocked = !hasPro && scaleNumVariants > 1;
+    const scalePosition = scaleVariants
+        ? (scaleVariants[selectedScaleVariant] ?? scaleVariants[0])[selectedScalePosition]
+        : undefined;
+
+    const handleNoteGroupChange = (group: string) => {
+        const groupScales = (SCALE_SHAPES as any)[group] ?? {};
+        const firstScale = Object.keys(groupScales)[0] ?? "";
+        setSelectedNoteGroup(group);
+        setSelectedScale(firstScale);
+        setSelectedScalePosition(0);
+        setSelectedScalePattern(firstScale ? groupScales[firstScale].defaultPattern : "3nps");
+        setSelectedScaleVariant(0);
+        setOctaveUp(false);
+    };
+
+    const handleSelectScale = (s: string) => {
+        const entry = (SCALE_SHAPES as any)[selectedNoteGroup]?.[s];
+        setSelectedScale(s);
+        setSelectedScalePosition(0);
+        setSelectedScalePattern(entry?.defaultPattern ?? "3nps");
+        setSelectedScaleVariant(0);
+        setOctaveUp(false);
+    };
+
+    const handleScalePatternChange = (pattern: string) => {
+        if (!hasPro && pattern !== scaleEntry?.defaultPattern) {
+            if (!session) setAuthGateReason("pro");
+            return;
+        }
+        setSelectedScalePattern(pattern);
+        setSelectedScaleVariant(0);
+        setOctaveUp(false);
+    };
+
+    const handleScaleVariantChange = (variant: number) => {
+        if (!hasPro && variant > 0) {
+            if (!session) setAuthGateReason("pro");
+            return;
+        }
+        setSelectedScaleVariant(variant);
+        setOctaveUp(false);
+    };
+
+    const stopScale = () => {
+        scalePlayRef.current.forEach(clearTimeout);
+        scalePlayRef.current = [];
+        setIsPlayingScale(false);
+    };
+
+    const playScale = () => {
+        scalePlayRef.current.forEach(clearTimeout);
+        scalePlayRef.current = [];
+        const delay = Math.round(1000 / playbackSpeed);
+        const sorted = [...capoDisplayShape]
+            .filter(n => n.fret != null && n.fret >= 0)
+            .sort((a, b) => {
+                const pa = (selectedTuning.semitones[a.string] ?? 0) + (a.fret ?? 0);
+                const pb = (selectedTuning.semitones[b.string] ?? 0) + (b.fret ?? 0);
+                return pa - pb;
+            });
+        setIsPlayingScale(true);
+        sorted.forEach((note, i) => {
+            const t = setTimeout(() => {
+                playNote(note.string, note.fret!, selectedTuning.freqs);
+                if (i === sorted.length - 1) setIsPlayingScale(false);
+            }, i * delay);
+            scalePlayRef.current.push(t);
+        });
+    };
+
+    // modeRootNote is what's actually shown/edited via the root button --
+    // in "All" or chords mode it's just the picked root, but for a single
+    // scale position it's that position's own tonic (spelled relative to
+    // the picked root), matching the website exactly.
+    const modeRootNote = useMemo(() => {
+        if (selectedMode === "scales" && showAllScalePositions) return currentRootNote;
+        if (selectedMode === "scales") {
+            if (!scaleEntry) return currentRootNote;
+            const rootScaleNote = scalePosition?.notes[0];
+            const modeInterval = rootScaleNote?.semitones ?? scaleEntry.intervals[selectedScalePosition];
+            const degreeNum = rootScaleNote
+                ? parseInt(scaleEntry.degrees[rootScaleNote.degree]?.match(/\d+/)?.[0] ?? "1")
+                : parseInt(scaleEntry.degrees[selectedScalePosition]?.match(/\d+/)?.[0] ?? "1");
+            return spellNote(currentRootNote, modeInterval, degreeNum);
+        }
+        return currentRootNote;
+    }, [selectedMode, selectedNoteGroup, selectedScale, selectedScalePosition, showAllScalePositions, currentRootNote, scalePosition?.notes]);
+
     const capoRootNote = useMemo(() => {
-        if (capo === 0) return currentRootNote;
-        const idx = NOTES.findIndex(pair => pair.includes(currentRootNote));
+        if (capo === 0) return modeRootNote;
+        const idx = NOTES.findIndex(pair => pair.includes(modeRootNote));
         const shifted = NOTES[(idx + capo) % NOTES.length];
         return shifted[shifted.length - 1];
-    }, [currentRootNote, capo]);
+    }, [modeRootNote, capo]);
 
     const chordLabel =
         selectedCategory === "CAGED"
             ? capoRootNote
             : `${capoRootNote} ${selectedChordQuality}`;
+
+    const scaleLabel = scalePosition?.modeName
+        ? `${capoRootNote} ${scalePosition.modeName}`
+        : `${capoRootNote} ${selectedScale} — Pos. ${selectedScalePosition + 1}`;
+
+    const displayLabel = selectedMode === "scales" ? scaleLabel : chordLabel;
 
     const handleGenerateNewRoot = () => {
         const deck = noteDeck.length ? [...noteDeck] : shuffleArray(SEMIS);
@@ -839,6 +1109,14 @@ export default function ChordsScreen() {
             candidates[1] ||
             candidates[0];
         setCurrentRootNote(simple);
+        if (selectedMode === "scales") setSelectedScalePosition(0);
+    };
+
+    // Picking a root from the picker resets to position 0 in scales mode,
+    // same as the website, so the chosen note becomes the displayed tonic.
+    const handleSelectRoot = (note: string) => {
+        setCurrentRootNote(note);
+        if (selectedMode === "scales") setSelectedScalePosition(0);
     };
 
     const handedness = isRight ? "right" : "left";
@@ -1784,6 +2062,7 @@ export default function ChordsScreen() {
             return;
         }
         setIsDrawMode(false);
+        setSelectedMode(ctx.mode);
         setCurrentRootNote(ctx.rootNote);
         setCapo(ctx.capo);
         const t = TUNINGS.find((t) => t.name === ctx.tuningName);
@@ -1795,11 +2074,13 @@ export default function ChordsScreen() {
             setSelectedChordQuality(ctx.chordQuality);
             setSelectedPosition(ctx.position);
             setSelectedAltShape(ctx.altShape);
+        } else {
+            setSelectedNoteGroup(ctx.noteGroup);
+            setSelectedScale(ctx.scale);
+            setSelectedScalePosition(ctx.scalePosition);
+            setSelectedScalePattern(ctx.scalePattern);
+            setSelectedScaleVariant(ctx.scaleVariant);
         }
-        // ctx.mode === "scales" isn't restorable yet -- Scales mode doesn't
-        // exist in this app yet (see the Phase 2 sequencing notes elsewhere
-        // in this project). The chord still shows up in the panel and can
-        // be renamed/deleted, just not loaded.
     };
 
     // Restore a saved Draw Mode chord when handleLoadSaved sets it, same
@@ -1838,7 +2119,7 @@ export default function ChordsScreen() {
             : null
         : capoDisplayShape.length > 0
           ? {
-                label: chordLabel,
+                label: displayLabel,
                 notes: capoDisplayShape,
                 tuningName: selectedTuning.name,
                 tuningFreqs: selectedTuning.freqs,
@@ -2389,7 +2670,21 @@ export default function ChordsScreen() {
             style={styles.safeArea}
             edges={["top"]}>
             <View style={styles.header}>
-                <Text style={styles.headerText}>{chordLabel}</Text>
+                <Text style={styles.headerText}>
+                    {selectedMode === "scales" && (showAllScalePositions || !scalePosition?.modeName)
+                        ? `${capoRootNote} ${selectedScale}`
+                        : wrapAtParen(displayLabel)}
+                </Text>
+                {selectedMode === "scales" &&
+                    (showAllScalePositions ? (
+                        <Text style={styles.headerSubtitle}>All</Text>
+                    ) : (
+                        !scalePosition?.modeName && (
+                            <Text style={styles.headerSubtitle}>
+                                {`Position ${selectedScalePosition + 1}`}
+                            </Text>
+                        )
+                    ))}
             </View>
 
             <View style={styles.fretboardArea}>
@@ -2398,7 +2693,7 @@ export default function ChordsScreen() {
                     handedness={handedness}
                     rootNote={capoRootNote}
                     showIntervals={showIntervals}
-                    showConnector
+                    showConnector={selectedMode === "chords"}
                     chordGroups={
                         capoDisplayGroups.length > 0
                             ? capoDisplayGroups
@@ -2419,7 +2714,8 @@ export default function ChordsScreen() {
                     <Text style={styles.menuButtonText}>Menu</Text>
                 </TouchableOpacity>
 
-                {voicingInfo?.hasOctave && (
+                {((selectedMode === "chords" && voicingInfo?.hasOctave) ||
+                    (selectedMode === "scales" && !showAllScalePositions && scaleOctaveInfo?.hasAlt)) && (
                     <TouchableOpacity
                         onPress={() => setOctaveUp(o => !o)}
                         style={[
@@ -2439,7 +2735,7 @@ export default function ChordsScreen() {
                 )}
 
                 <View style={styles.stepperStaticRow}>
-                    {selectionHierarchy.positions.length > 0 && (
+                    {selectedMode === "chords" && selectionHierarchy.positions.length > 0 && (
                         <View style={styles.stepperGroup}>
                             <TouchableOpacity
                                 onPress={() => handlePositionChange("All")}
@@ -2475,7 +2771,7 @@ export default function ChordsScreen() {
                         </View>
                     )}
 
-                    {hasAlts && (
+                    {selectedMode === "chords" && hasAlts && (
                         <View style={styles.stepperGroup}>
                             <TouchableOpacity
                                 onPress={goPrevAlt}
@@ -2504,6 +2800,126 @@ export default function ChordsScreen() {
                             </TouchableOpacity>
                         </View>
                     )}
+
+                    {selectedMode === "scales" &&
+                        (() => {
+                            const activePositions: any[] = scaleVariants?.[selectedScaleVariant] ?? scaleVariants?.[0] ?? [];
+                            const numPos = activePositions.length;
+                            const patIdx = scalePatternKeys.indexOf(selectedScalePattern);
+                            return (
+                                <>
+                                    <View style={styles.stepperGroup}>
+                                        <TouchableOpacity
+                                            onPress={() => setShowAllScalePositions(v => !v)}
+                                            style={[
+                                                styles.allButton,
+                                                showAllScalePositions && styles.allButtonActive,
+                                            ]}>
+                                            <Text
+                                                style={[
+                                                    styles.allButtonText,
+                                                    showAllScalePositions && styles.allButtonTextActive,
+                                                ]}>
+                                                All
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (showAllScalePositions) {
+                                                    setShowAllScalePositions(false);
+                                                    setSelectedScalePosition(numPos - 1);
+                                                } else {
+                                                    setSelectedScalePosition(p => (p - 1 + numPos) % numPos);
+                                                }
+                                            }}
+                                            style={[styles.chevronButton, styles.chordsChevronButton]}>
+                                            <ChevronIcon direction='left' />
+                                        </TouchableOpacity>
+                                        <Text style={[styles.stepperLabel, styles.chordsStepperLabel]}>
+                                            {showAllScalePositions
+                                                ? "All"
+                                                : activePositions[selectedScalePosition]?.modeName
+                                                  ? "Mode"
+                                                  : `${selectedScalePosition + 1}`}
+                                        </Text>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (showAllScalePositions) {
+                                                    setShowAllScalePositions(false);
+                                                    setSelectedScalePosition(0);
+                                                } else {
+                                                    setSelectedScalePosition(p => (p + 1) % numPos);
+                                                }
+                                            }}
+                                            style={[styles.chevronButton, styles.chordsChevronButton]}>
+                                            <ChevronIcon direction='right' />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {scalePatternKeys.length > 1 && (
+                                        <View style={styles.stepperGroup}>
+                                            <TouchableOpacity
+                                                onPress={() =>
+                                                    handleScalePatternChange(
+                                                        scalePatternKeys[(patIdx - 1 + scalePatternKeys.length) % scalePatternKeys.length],
+                                                    )
+                                                }
+                                                style={[styles.chevronButton, styles.chordsChevronButton]}>
+                                                <ChevronIcon direction='left' />
+                                            </TouchableOpacity>
+                                            <Text style={[styles.stepperLabel, styles.chordsStepperLabel]}>
+                                                {selectedScalePattern}
+                                            </Text>
+                                            <TouchableOpacity
+                                                onPress={() =>
+                                                    handleScalePatternChange(
+                                                        scalePatternKeys[(patIdx + 1) % scalePatternKeys.length],
+                                                    )
+                                                }
+                                                style={[styles.chevronButton, styles.chordsChevronButton]}>
+                                                <ChevronIcon direction='right' />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+
+                                    {scaleNumVariants > 1 && (
+                                        <View style={styles.stepperGroup}>
+                                            <TouchableOpacity
+                                                onPress={() =>
+                                                    handleScaleVariantChange(
+                                                        (selectedScaleVariant - 1 + scaleNumVariants) % scaleNumVariants,
+                                                    )
+                                                }
+                                                style={[styles.chevronButton, styles.chordsChevronButton]}>
+                                                <ChevronIcon direction='left' />
+                                            </TouchableOpacity>
+                                            <View style={styles.altLabelWrap}>
+                                                {scaleVariantLocked && (
+                                                    <View style={styles.lockBadge}>
+                                                        <StarIcon />
+                                                    </View>
+                                                )}
+                                                <Text
+                                                    style={[
+                                                        styles.stepperLabel,
+                                                        styles.chordsStepperLabel,
+                                                        scaleVariantLocked && styles.altLabelLocked,
+                                                    ]}>
+                                                    {`${selectedScaleVariant + 1}/${scaleNumVariants}`}
+                                                </Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                onPress={() =>
+                                                    handleScaleVariantChange((selectedScaleVariant + 1) % scaleNumVariants)
+                                                }
+                                                style={[styles.chevronButton, styles.chordsChevronButton]}>
+                                                <ChevronIcon direction='right' />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+                                </>
+                            );
+                        })()}
                 </View>
             </View>
 
@@ -2551,7 +2967,7 @@ export default function ChordsScreen() {
                         <TouchableOpacity
                             onPress={() => {
                                 setProgressionPendingChord({
-                                    label: chordLabel,
+                                    label: displayLabel,
                                     notes: capoDisplayShape,
                                     tuningName: selectedTuning.name,
                                     tuningFreqs: selectedTuning.freqs,
@@ -2563,49 +2979,84 @@ export default function ChordsScreen() {
                             <ListIcon />
                         </TouchableOpacity>
                     )}
+
+                    {selectedMode === "scales" && (
+                        <View style={styles.playbackSpeedStepper}>
+                            <TouchableOpacity
+                                onPress={() => setPlaybackSpeed(v => Math.max(1, v - 1))}
+                                style={styles.bpmStepButton}>
+                                <Text style={styles.bpmStepButtonText}>-</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.playbackSpeedValue}>{playbackSpeed}</Text>
+                            <TouchableOpacity
+                                onPress={() => setPlaybackSpeed(v => Math.min(8, v + 1))}
+                                style={styles.bpmStepButton}>
+                                <Text style={styles.bpmStepButtonText}>+</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </ScrollView>
 
-                {/* Fixed right: Save + Strum + Root, same grouping as the
-                    website's mobile action bar. */}
+                {/* Fixed right: Save + Strum/Play + Root, same grouping as
+                    the website's mobile action bar. */}
                 <View style={styles.actionBarFixedRight}>
                     {capoDisplayShape.length > 0 && (
                         <>
                             <TouchableOpacity
                                 onPress={() =>
-                                    openSave(capoDisplayShape, chordLabel, {
-                                        source: "library",
-                                        mode: "chords",
-                                        rootNote: capoRootNote,
-                                        tuningName: selectedTuning.name,
-                                        capo,
-                                        category: selectedCategory,
-                                        voicingType: selectedVoicingType,
-                                        stringSet: selectedStringSet,
-                                        chordQuality: selectedChordQuality,
-                                        position: selectedPosition,
-                                        altShape: selectedAltShape,
-                                    })
+                                    openSave(
+                                        capoDisplayShape,
+                                        displayLabel,
+                                        selectedMode === "scales"
+                                            ? {
+                                                  source: "library",
+                                                  mode: "scales",
+                                                  rootNote: currentRootNote,
+                                                  tuningName: selectedTuning.name,
+                                                  capo,
+                                                  noteGroup: selectedNoteGroup,
+                                                  scale: selectedScale,
+                                                  scalePosition: selectedScalePosition,
+                                                  scalePattern: selectedScalePattern,
+                                                  scaleVariant: selectedScaleVariant,
+                                              }
+                                            : {
+                                                  source: "library",
+                                                  mode: "chords",
+                                                  rootNote: currentRootNote,
+                                                  tuningName: selectedTuning.name,
+                                                  capo,
+                                                  category: selectedCategory,
+                                                  voicingType: selectedVoicingType,
+                                                  stringSet: selectedStringSet,
+                                                  chordQuality: selectedChordQuality,
+                                                  position: selectedPosition,
+                                                  altShape: selectedAltShape,
+                                              },
+                                    )
                                 }
                                 style={styles.iconButton}>
                                 <BookmarkIcon filled={isCurrentChordSaved} />
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                onPress={() =>
-                                    playChord(
-                                        capoDisplayShape as any,
-                                        selectedTuning.freqs,
-                                    )
-                                }
-                                style={styles.iconButton}>
-                                <StrumIcon />
+                                onPress={() => {
+                                    if (selectedMode === "scales") {
+                                        if (isPlayingScale) stopScale();
+                                        else playScale();
+                                    } else {
+                                        playChord(capoDisplayShape as any, selectedTuning.freqs);
+                                    }
+                                }}
+                                style={[styles.iconButton, isPlayingScale && styles.iconButtonActive]}>
+                                {selectedMode === "scales" && isPlayingScale ? <StopIcon /> : <StrumIcon />}
                             </TouchableOpacity>
                         </>
                     )}
 
                     <RootNoteButton
-                        root={currentRootNote}
-                        onSelect={setCurrentRootNote}
+                        root={modeRootNote}
+                        onSelect={handleSelectRoot}
                         onRandom={handleGenerateNewRoot}
                         style={styles.rootButton}
                         textStyle={styles.rootButtonText}
@@ -2625,77 +3076,226 @@ export default function ChordsScreen() {
                     <Pressable
                         style={styles.sheet}
                         onPress={() => {}}>
-                        <ScrollView contentContainerStyle={styles.sheetContent}>
-                            <Text style={styles.sheetSectionLabel}>
-                                Category
-                            </Text>
-                            <View style={styles.pillWrap}>
-                                {Object.keys(allChordShapes).map(cat => (
-                                    <TouchableOpacity
-                                        key={cat}
-                                        onPress={() =>
-                                            handleCategoryChange(cat)
-                                        }
-                                        style={[
-                                            styles.pillButton,
-                                            selectedCategory === cat &&
-                                                styles.pillButtonActive,
-                                        ]}>
-                                        <Text
-                                            style={[
-                                                styles.pillButtonText,
-                                                selectedCategory === cat &&
-                                                    styles.pillButtonTextActive,
-                                            ]}>
-                                            {cat}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
+                        <View style={styles.modeToggleWrap}>
+                            <TouchableOpacity
+                                onPress={() => setSelectedMode("chords")}
+                                style={[
+                                    styles.modeToggleButton,
+                                    styles.modeToggleButtonLeft,
+                                    selectedMode === "chords" && styles.modeToggleButtonActive,
+                                ]}>
+                                <Text
+                                    style={[
+                                        styles.modeToggleButtonText,
+                                        selectedMode === "chords" && styles.modeToggleButtonTextActive,
+                                    ]}>
+                                    Chords
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => setSelectedMode("scales")}
+                                style={[
+                                    styles.modeToggleButton,
+                                    selectedMode === "scales" && styles.modeToggleButtonActive,
+                                ]}>
+                                <Text
+                                    style={[
+                                        styles.modeToggleButtonText,
+                                        selectedMode === "scales" && styles.modeToggleButtonTextActive,
+                                    ]}>
+                                    Scales
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
 
-                            {selectionHierarchy.subLevels.map(level => {
-                                const setter = getSetterForLevel(
-                                    level.levelName,
-                                );
-                                const selectedValue =
-                                    level.levelName === "Voicing Types"
-                                        ? selectedVoicingType
-                                        : level.levelName === "String Sets"
-                                          ? selectedStringSet
-                                          : selectedChordQuality;
-                                return (
-                                    <View key={level.levelName}>
-                                        <Text style={styles.sheetSectionLabel}>
-                                            {level.levelName}
-                                        </Text>
-                                        <View style={styles.pillWrap}>
-                                            {level.options.map(option => (
+                        <ScrollView contentContainerStyle={styles.sheetContent}>
+                            {selectedMode === "chords" && (
+                                <>
+                                    <Text style={styles.sheetSectionLabel}>
+                                        Category
+                                    </Text>
+                                    <View style={styles.pillWrap}>
+                                        {Object.keys(allChordShapes).map(cat => (
+                                            <TouchableOpacity
+                                                key={cat}
+                                                onPress={() =>
+                                                    handleCategoryChange(cat)
+                                                }
+                                                style={[
+                                                    styles.pillButton,
+                                                    selectedCategory === cat &&
+                                                        styles.pillButtonActive,
+                                                ]}>
+                                                <Text
+                                                    style={[
+                                                        styles.pillButtonText,
+                                                        selectedCategory === cat &&
+                                                            styles.pillButtonTextActive,
+                                                    ]}>
+                                                    {cat}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+
+                                    {selectionHierarchy.subLevels.map(level => {
+                                        const setter = getSetterForLevel(
+                                            level.levelName,
+                                        );
+                                        const selectedValue =
+                                            level.levelName === "Voicing Types"
+                                                ? selectedVoicingType
+                                                : level.levelName === "String Sets"
+                                                  ? selectedStringSet
+                                                  : selectedChordQuality;
+                                        return (
+                                            <View key={level.levelName}>
+                                                <Text style={styles.sheetSectionLabel}>
+                                                    {level.levelName}
+                                                </Text>
+                                                <View style={styles.pillWrap}>
+                                                    {level.options.map(option => (
+                                                        <TouchableOpacity
+                                                            key={option}
+                                                            onPress={() =>
+                                                                setter(option)
+                                                            }
+                                                            style={[
+                                                                styles.pillButton,
+                                                                selectedValue ===
+                                                                    option &&
+                                                                    styles.pillButtonActive,
+                                                            ]}>
+                                                            <Text
+                                                                style={[
+                                                                    styles.pillButtonText,
+                                                                    selectedValue ===
+                                                                        option &&
+                                                                        styles.pillButtonTextActive,
+                                                                ]}>
+                                                                {option}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </View>
+                                            </View>
+                                        );
+                                    })}
+                                </>
+                            )}
+
+                            {selectedMode === "scales" && (
+                                <>
+                                    <Text style={styles.sheetSectionLabel}>Note Count</Text>
+                                    <View style={styles.pillWrap}>
+                                        {Object.entries(SCALE_SHAPES).map(([group, groupScales]) => {
+                                            const hasScales = Object.keys(groupScales).length > 0;
+                                            return (
                                                 <TouchableOpacity
-                                                    key={option}
-                                                    onPress={() =>
-                                                        setter(option)
-                                                    }
+                                                    key={group}
+                                                    disabled={!hasScales}
+                                                    onPress={() => hasScales && handleNoteGroupChange(group)}
                                                     style={[
                                                         styles.pillButton,
-                                                        selectedValue ===
-                                                            option &&
-                                                            styles.pillButtonActive,
+                                                        selectedNoteGroup === group && styles.pillButtonActive,
+                                                        !hasScales && styles.pillButtonDisabled,
                                                     ]}>
                                                     <Text
                                                         style={[
                                                             styles.pillButtonText,
-                                                            selectedValue ===
-                                                                option &&
-                                                                styles.pillButtonTextActive,
+                                                            selectedNoteGroup === group && styles.pillButtonTextActive,
+                                                            !hasScales && styles.pillButtonTextDisabled,
                                                         ]}>
-                                                        {option}
+                                                        {group}
                                                     </Text>
                                                 </TouchableOpacity>
-                                            ))}
-                                        </View>
+                                            );
+                                        })}
                                     </View>
-                                );
-                            })}
+
+                                    <Text style={styles.sheetSectionLabel}>Scale</Text>
+                                    <View style={styles.pillWrap}>
+                                        {Object.keys((SCALE_SHAPES as any)[selectedNoteGroup] ?? {}).map(s => (
+                                            <TouchableOpacity
+                                                key={s}
+                                                onPress={() => handleSelectScale(s)}
+                                                style={[
+                                                    styles.pillButton,
+                                                    selectedScale === s && styles.pillButtonActive,
+                                                ]}>
+                                                <Text
+                                                    style={[
+                                                        styles.pillButtonText,
+                                                        selectedScale === s && styles.pillButtonTextActive,
+                                                    ]}>
+                                                    {s}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+
+                                    <Text style={styles.sheetSectionLabel}>
+                                        {(scaleVariants?.[selectedScaleVariant] ?? scaleVariants?.[0])?.[0]?.modeName
+                                            ? "Mode"
+                                            : "Position"}
+                                    </Text>
+                                    <View style={styles.pillWrap}>
+                                        {(scaleVariants?.[selectedScaleVariant] ?? scaleVariants?.[0] ?? []).map(
+                                            (pos: any, i: number) => (
+                                                <TouchableOpacity
+                                                    key={i}
+                                                    onPress={() => setSelectedScalePosition(i)}
+                                                    style={[
+                                                        styles.pillButton,
+                                                        selectedScalePosition === i && styles.pillButtonActive,
+                                                    ]}>
+                                                    <Text
+                                                        style={[
+                                                            styles.pillButtonText,
+                                                            selectedScalePosition === i && styles.pillButtonTextActive,
+                                                        ]}>
+                                                        {pos.modeName ? wrapAtParen(pos.modeName) : `${i + 1}`}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ),
+                                        )}
+                                    </View>
+
+                                    {scalePatternKeys.length > 1 && (
+                                        <>
+                                            <Text style={styles.sheetSectionLabel}>Pattern</Text>
+                                            <View style={styles.pillWrap}>
+                                                {scalePatternKeys.map(k => {
+                                                    const locked = !hasPro && k !== scaleEntry?.defaultPattern;
+                                                    return (
+                                                        <TouchableOpacity
+                                                            key={k}
+                                                            onPress={() => handleScalePatternChange(k)}
+                                                            style={[
+                                                                styles.pillButton,
+                                                                selectedScalePattern === k && styles.pillButtonActive,
+                                                            ]}>
+                                                            {locked && (
+                                                                <View style={styles.pillLockBadge}>
+                                                                    <StarIcon />
+                                                                </View>
+                                                            )}
+                                                            <Text
+                                                                style={[
+                                                                    styles.pillButtonText,
+                                                                    selectedScalePattern === k && styles.pillButtonTextActive,
+                                                                    locked && styles.altLabelLocked,
+                                                                ]}>
+                                                                {k}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    );
+                                                })}
+                                            </View>
+                                        </>
+                                    )}
+                                </>
+                            )}
 
                             <Text style={styles.sheetSectionLabel}>Tuning</Text>
                             <View style={styles.pillWrap}>
@@ -2746,12 +3346,19 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: "center",
-        paddingTop: spacing.xs,
+        paddingVertical: spacing.sm,
     },
     headerText: {
         fontFamily: fonts.sans.bold,
         fontSize: 22,
         color: colors.ink,
+        textAlign: "center",
+    },
+    headerSubtitle: {
+        fontFamily: fonts.sans.semiBold,
+        fontSize: 13,
+        color: `${colors.ink}99`,
+        marginTop: 2,
     },
     scaleCaption: {
         fontFamily: fonts.sans.semiBold,
@@ -2975,6 +3582,41 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
     },
+    // Strum/Play button while a scale is actively playing -- matches the
+    // website's `bg-ink text-sand-1 border-ink` state.
+    iconButtonActive: {
+        backgroundColor: colors.ink,
+        borderColor: colors.ink,
+    },
+    // Playback speed control (Scales mode only) -- a +/- stepper instead
+    // of the website's draggable range slider, same reasoning as
+    // ProgressionPanel's BPM stepper (no RN slider without a new dep).
+    playbackSpeedStepper: {
+        flexDirection: "row",
+        alignItems: "center",
+        borderRadius: radius.pill,
+        borderWidth: 1,
+        borderColor: `${colors.ink}4D`,
+        overflow: "hidden",
+    },
+    bpmStepButton: {
+        width: 28,
+        height: 32,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    bpmStepButtonText: {
+        fontFamily: fonts.sans.bold,
+        fontSize: 16,
+        color: colors.ink,
+    },
+    playbackSpeedValue: {
+        fontFamily: fonts.sans.semiBold,
+        fontSize: 12,
+        color: colors.ink,
+        minWidth: 16,
+        textAlign: "center",
+    },
     proBadge: {
         position: "absolute",
         top: -3,
@@ -3014,6 +3656,40 @@ const styles = StyleSheet.create({
         borderTopRightRadius: radius["2xl"],
         paddingTop: spacing.sm,
     },
+    // Chords/Scales mode switcher pinned at the top of the sheet, always
+    // visible above the scrollable content below -- matches the website's
+    // "Mode toggle -- always visible, never scrolls".
+    modeToggleWrap: {
+        flexDirection: "row",
+        marginHorizontal: spacing.md,
+        marginBottom: spacing.sm + 4,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: colors.ink,
+        overflow: "hidden",
+    },
+    modeToggleButton: {
+        flex: 1,
+        paddingVertical: spacing.sm + 4,
+        alignItems: "center",
+        borderLeftWidth: 1,
+        borderLeftColor: colors.ink,
+    },
+    modeToggleButtonLeft: {
+        borderLeftWidth: 0,
+    },
+    modeToggleButtonActive: {
+        backgroundColor: colors.surface,
+    },
+    modeToggleButtonText: {
+        fontFamily: fonts.sans.medium,
+        fontSize: 14,
+        color: colors.ink,
+    },
+    modeToggleButtonTextActive: {
+        fontFamily: fonts.sans.semiBold,
+        color: colors.onSurface,
+    },
     sheetContent: {
         paddingHorizontal: spacing.md,
         paddingBottom: spacing.md,
@@ -3033,6 +3709,7 @@ const styles = StyleSheet.create({
         gap: spacing.xs + 2,
     },
     pillButton: {
+        position: "relative",
         paddingHorizontal: spacing.sm + 4,
         paddingVertical: spacing.xs + 2,
         borderRadius: radius.pill,
@@ -3053,6 +3730,9 @@ const styles = StyleSheet.create({
         backgroundColor: colors.surface,
         borderColor: colors.ink,
     },
+    pillButtonDisabled: {
+        borderColor: `${colors.ink}33`,
+    },
     pillButtonText: {
         fontFamily: fonts.sans.semiBold,
         fontSize: 14,
@@ -3060,6 +3740,23 @@ const styles = StyleSheet.create({
     },
     pillButtonTextActive: {
         color: colors.onSurface,
+    },
+    pillButtonTextDisabled: {
+        color: `${colors.ink}4D`,
+    },
+    // Corner lock badge for a Pro-gated scale pattern pill -- same
+    // treatment as lockBadge/proBadge elsewhere in this screen.
+    pillLockBadge: {
+        position: "absolute",
+        top: -6,
+        right: -6,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: colors.olive,
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1,
     },
     sheetDoneButton: {
         marginHorizontal: spacing.md,
