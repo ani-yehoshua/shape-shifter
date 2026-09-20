@@ -2940,10 +2940,19 @@ const styles = StyleSheet.create({
     },
     // Save + Strum + Root, matching the website's fixed-right group
     // (gap-2 = 8px) -- these don't scroll with the rest of the action bar.
+    // The website's version needs no background here since overflow-x-auto
+    // genuinely clips scrolled-off content; RN's `overflow: 'visible'` on
+    // actionScroll (needed for the pencil button's Pro badge) clips
+    // neither axis, so scrolled content can still render underneath this
+    // group. An opaque background matching the bar's own paints over that
+    // regardless of how much the row overflows.
     actionBarFixedRight: {
         flexDirection: "row",
         alignItems: "center",
         gap: spacing.xs + 4,
+        backgroundColor: colors.bg,
+        paddingLeft: spacing.xs,
+        zIndex: 1,
     },
     actionScrollContent: {
         flexDirection: "row",
