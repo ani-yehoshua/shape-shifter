@@ -2390,6 +2390,12 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "flex-end",
         gap: spacing.xs,
+        // A horizontal ScrollView clips its content to its own bounds, which
+        // are sized to exactly fit the tallest child (the chevron buttons).
+        // lockBadge sits at top: -8 relative to its button, so without this
+        // padding the badge's top few pixels get clipped by the ScrollView
+        // itself rather than rendering above the row.
+        paddingTop: 10,
     },
     stepperGroup: {
         flexDirection: "row",
@@ -2512,6 +2518,10 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: spacing.md,
+        // See stepperScrollContent's paddingTop comment -- proBadge sits at
+        // top: -4 relative to the pencil button, and the ScrollView clips
+        // it without this room above the row.
+        paddingTop: 6,
         paddingRight: spacing.sm,
     },
     iconButton: {
