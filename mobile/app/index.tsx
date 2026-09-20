@@ -2415,11 +2415,13 @@ export default function ChordsScreen() {
                         onPress={() => setOctaveUp(o => !o)}
                         style={[
                             styles.pillButton,
+                            styles.chordsOctavePill,
                             octaveUp && styles.pillButtonActive,
                         ]}>
                         <Text
                             style={[
                                 styles.pillButtonText,
+                                styles.chordsStepperLabel,
                                 octaveUp && styles.pillButtonTextActive,
                             ]}>
                             {octaveUp ? "+12" : "-12"}
@@ -2427,11 +2429,7 @@ export default function ChordsScreen() {
                     </TouchableOpacity>
                 )}
 
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.stepperScroll}
-                    contentContainerStyle={styles.stepperScrollContent}>
+                <View style={styles.stepperStaticRow}>
                     {selectionHierarchy.positions.length > 0 && (
                         <View style={styles.stepperGroup}>
                             <TouchableOpacity
@@ -2452,17 +2450,17 @@ export default function ChordsScreen() {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={goPrevPos}
-                                style={styles.chevronButton}>
+                                style={[styles.chevronButton, styles.chordsChevronButton]}>
                                 <ChevronIcon direction='left' />
                             </TouchableOpacity>
-                            <Text style={styles.stepperLabel}>
+                            <Text style={[styles.stepperLabel, styles.chordsStepperLabel]}>
                                 {selectionHierarchy.finalFormulas?.[
                                     selectedPosition
                                 ]?.name || selectedPosition}
                             </Text>
                             <TouchableOpacity
                                 onPress={goNextPos}
-                                style={styles.chevronButton}>
+                                style={[styles.chevronButton, styles.chordsChevronButton]}>
                                 <ChevronIcon direction='right' />
                             </TouchableOpacity>
                         </View>
@@ -2472,7 +2470,7 @@ export default function ChordsScreen() {
                         <View style={styles.stepperGroup}>
                             <TouchableOpacity
                                 onPress={goPrevAlt}
-                                style={styles.chevronButton}>
+                                style={[styles.chevronButton, styles.chordsChevronButton]}>
                                 <ChevronIcon direction='left' />
                             </TouchableOpacity>
                             <View style={styles.altLabelWrap}>
@@ -2484,6 +2482,7 @@ export default function ChordsScreen() {
                                 <Text
                                     style={[
                                         styles.stepperLabel,
+                                        styles.chordsStepperLabel,
                                         altsLocked && styles.altLabelLocked,
                                     ]}>
                                     {`${selectedAltShape + 1}/${availableAlts.length}`}
@@ -2491,12 +2490,12 @@ export default function ChordsScreen() {
                             </View>
                             <TouchableOpacity
                                 onPress={goNextAlt}
-                                style={styles.chevronButton}>
+                                style={[styles.chevronButton, styles.chordsChevronButton]}>
                                 <ChevronIcon direction='right' />
                             </TouchableOpacity>
                         </View>
                     )}
-                </ScrollView>
+                </View>
             </View>
 
             {/* Action bar */}
@@ -2790,45 +2789,55 @@ const styles = StyleSheet.create({
     chordsStepperRow: {
         paddingVertical: spacing.sm,
     },
-    // A horizontal ScrollView clips its content to its own bounds by
-    // default (same as `overflow: hidden` on the web), which is why
-    // lockBadge's negative `top` offset was getting cut off -- unlike the
-    // website's `overflow-x-auto`, which only affects the x axis and
-    // leaves vertical overflow visible. `overflow: 'visible'` here turns
-    // off RN's clipping the same way, without needing extra padding that
-    // would grow the row's height.
-    stepperScroll: {
+    // Replaces a horizontal ScrollView that wrapped the position/alt-shape
+    // groups -- on the website this row never actually scrolls (it only
+    // ever shows a subset of Menu/octave/position/alt at once), so it
+    // shouldn't be scrollable here either. A plain flex row also means
+    // lockBadge's corner overlay no longer needs the `overflow: 'visible'`
+    // workaround a ScrollView required (plain Views don't clip).
+    stepperStaticRow: {
         flex: 1,
-        overflow: "visible",
-    },
-    stepperScrollContent: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "flex-end",
-        gap: spacing.xs,
+        gap: spacing.sm,
     },
     stepperGroup: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 4,
+        gap: 6,
+    },
+    // Bigger than the shared chevronButton/stepperLabel (used by Draw
+    // Mode's own stepper rows too) -- removing the scroll freed up the
+    // horizontal space these buttons used to compete with a scrollbar
+    // for, so they can grow to fill it instead of leaving it as bare
+    // whitespace around "Root"/"1/3".
+    chordsChevronButton: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+    },
+    chordsStepperLabel: {
+        fontSize: 13,
+        minWidth: 44,
     },
     menuButton: {
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: spacing.sm + 4,
-        paddingVertical: spacing.xs + 2,
+        paddingHorizontal: spacing.sm + 6,
+        paddingVertical: spacing.xs + 4,
         borderRadius: radius.pill,
         borderWidth: 1,
         borderColor: `${colors.ink}66`,
     },
     menuButtonText: {
         fontFamily: fonts.sans.semiBold,
-        fontSize: 12,
+        fontSize: 13,
         color: colors.ink,
     },
     allButton: {
-        paddingHorizontal: spacing.xs + 4,
-        paddingVertical: 4,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
         borderRadius: radius.pill,
         borderWidth: 1,
         borderColor: `${colors.ink}66`,
@@ -2839,7 +2848,7 @@ const styles = StyleSheet.create({
     },
     allButtonText: {
         fontFamily: fonts.sans.bold,
-        fontSize: 11,
+        fontSize: 12,
         color: colors.ink,
     },
     allButtonTextActive: {
@@ -3020,6 +3029,12 @@ const styles = StyleSheet.create({
         borderRadius: radius.pill,
         borderWidth: 1,
         borderColor: `${colors.ink}66`,
+    },
+    // Bigger than the shared pillButton (also used for the Menu sheet's
+    // category/tuning pills) -- see chordsChevronButton's comment.
+    chordsOctavePill: {
+        paddingHorizontal: spacing.sm + 6,
+        paddingVertical: spacing.xs + 4,
     },
     pillButtonActive: {
         backgroundColor: colors.surface,
