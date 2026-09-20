@@ -2476,6 +2476,11 @@ export default function ChordsScreen() {
                                 <ChevronIcon direction='left' />
                             </TouchableOpacity>
                             <View style={styles.altLabelWrap}>
+                                {altsLocked && (
+                                    <View style={styles.lockBadge}>
+                                        <StarIcon />
+                                    </View>
+                                )}
                                 <Text
                                     style={[
                                         styles.stepperLabel,
@@ -2483,11 +2488,6 @@ export default function ChordsScreen() {
                                     ]}>
                                     {`${selectedAltShape + 1}/${availableAlts.length}`}
                                 </Text>
-                                {altsLocked && (
-                                    <View style={styles.lockBadge}>
-                                        <StarIcon />
-                                    </View>
-                                )}
                             </View>
                             <TouchableOpacity
                                 onPress={goNextAlt}
@@ -2785,11 +2785,12 @@ const styles = StyleSheet.create({
         minHeight: 44,
     },
     // A horizontal ScrollView clips its content to its own bounds by
-    // default (same as `overflow: hidden` on the web) -- kept here as a
-    // harmless default in case a future absolutely-positioned badge in
-    // this row needs to poke outside its button the way proBadge does in
-    // actionScroll below (lockBadge itself is inline now, not absolute,
-    // so it no longer depends on this).
+    // default (same as `overflow: hidden` on the web), which is why
+    // lockBadge's negative `top` offset was getting cut off -- unlike the
+    // website's `overflow-x-auto`, which only affects the x axis and
+    // leaves vertical overflow visible. `overflow: 'visible'` here turns
+    // off RN's clipping the same way, without needing extra padding that
+    // would grow the row's height.
     stepperScroll: {
         flex: 1,
         overflow: "visible",
@@ -2887,17 +2888,25 @@ const styles = StyleSheet.create({
         textAlign: "center",
     },
     altLabelWrap: {
-        flexDirection: "row",
+        position: "relative",
         alignItems: "center",
-        gap: 4,
+        justifyContent: "center",
     },
+    // Top-right corner overlay, same treatment as proBadge on the Draw
+    // Mode pencil button -- relies on stepperScroll's `overflow: 'visible'`
+    // to render outside the label without being clipped by the row's
+    // horizontal ScrollView.
     lockBadge: {
+        position: "absolute",
+        top: -3,
+        right: -6,
         width: 16,
         height: 16,
         borderRadius: 8,
         backgroundColor: colors.olive,
         alignItems: "center",
         justifyContent: "center",
+        zIndex: 1,
     },
     altLabelLocked: {
         opacity: 0.5,
