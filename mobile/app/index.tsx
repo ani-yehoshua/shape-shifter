@@ -127,6 +127,14 @@ function ChevronIcon({ direction }: { direction: "left" | "right" }) {
     );
 }
 
+function MenuIcon() {
+    return (
+        <Svg width={14} height={14} fill='none' stroke={colors.ink} strokeWidth={2} viewBox='0 0 24 24'>
+            <Path strokeLinecap='round' strokeLinejoin='round' d='M4 6h16M4 12h16M4 18h16' />
+        </Svg>
+    );
+}
+
 function StarIcon() {
     return (
         <Svg
@@ -2407,6 +2415,7 @@ export default function ChordsScreen() {
                 <TouchableOpacity
                     onPress={() => setMenuOpen(true)}
                     style={styles.menuButton}>
+                    <MenuIcon />
                     <Text style={styles.menuButtonText}>Menu</Text>
                 </TouchableOpacity>
 
@@ -2421,7 +2430,7 @@ export default function ChordsScreen() {
                         <Text
                             style={[
                                 styles.pillButtonText,
-                                styles.chordsStepperLabel,
+                                styles.chordsOctavePillText,
                                 octaveUp && styles.pillButtonTextActive,
                             ]}>
                             {octaveUp ? "+12" : "-12"}
@@ -2522,17 +2531,6 @@ export default function ChordsScreen() {
                     />
 
                     <TouchableOpacity
-                        onPress={() =>
-                            playChord(
-                                capoDisplayShape as any,
-                                selectedTuning.freqs,
-                            )
-                        }
-                        style={styles.iconButton}>
-                        <StrumIcon />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
                         onPress={handleToggleDrawMode}
                         style={styles.iconButton}>
                         {!hasPro && (
@@ -2542,28 +2540,6 @@ export default function ChordsScreen() {
                         )}
                         <PencilIcon />
                     </TouchableOpacity>
-
-                    {capoDisplayShape.length > 0 && (
-                        <TouchableOpacity
-                            onPress={() =>
-                                openSave(capoDisplayShape, chordLabel, {
-                                    source: "library",
-                                    mode: "chords",
-                                    rootNote: capoRootNote,
-                                    tuningName: selectedTuning.name,
-                                    capo,
-                                    category: selectedCategory,
-                                    voicingType: selectedVoicingType,
-                                    stringSet: selectedStringSet,
-                                    chordQuality: selectedChordQuality,
-                                    position: selectedPosition,
-                                    altShape: selectedAltShape,
-                                })
-                            }
-                            style={styles.iconButton}>
-                            <BookmarkIcon filled={isCurrentChordSaved} />
-                        </TouchableOpacity>
-                    )}
 
                     <TouchableOpacity
                         onPress={() => setSavedPanelOpen(true)}
@@ -2589,13 +2565,52 @@ export default function ChordsScreen() {
                     )}
                 </ScrollView>
 
-                <RootNoteButton
-                    root={currentRootNote}
-                    onSelect={setCurrentRootNote}
-                    onRandom={handleGenerateNewRoot}
-                    style={styles.rootButton}
-                    textStyle={styles.rootButtonText}
-                />
+                {/* Fixed right: Save + Strum + Root, same grouping as the
+                    website's mobile action bar. */}
+                <View style={styles.actionBarFixedRight}>
+                    {capoDisplayShape.length > 0 && (
+                        <>
+                            <TouchableOpacity
+                                onPress={() =>
+                                    openSave(capoDisplayShape, chordLabel, {
+                                        source: "library",
+                                        mode: "chords",
+                                        rootNote: capoRootNote,
+                                        tuningName: selectedTuning.name,
+                                        capo,
+                                        category: selectedCategory,
+                                        voicingType: selectedVoicingType,
+                                        stringSet: selectedStringSet,
+                                        chordQuality: selectedChordQuality,
+                                        position: selectedPosition,
+                                        altShape: selectedAltShape,
+                                    })
+                                }
+                                style={styles.iconButton}>
+                                <BookmarkIcon filled={isCurrentChordSaved} />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() =>
+                                    playChord(
+                                        capoDisplayShape as any,
+                                        selectedTuning.freqs,
+                                    )
+                                }
+                                style={styles.iconButton}>
+                                <StrumIcon />
+                            </TouchableOpacity>
+                        </>
+                    )}
+
+                    <RootNoteButton
+                        root={currentRootNote}
+                        onSelect={setCurrentRootNote}
+                        onRandom={handleGenerateNewRoot}
+                        style={styles.rootButton}
+                        textStyle={styles.rootButtonText}
+                    />
+                </View>
             </View>
 
             {/* Menu sheet: category -> voicing type -> string set -> chord quality, tuning */}
@@ -2783,47 +2798,34 @@ const styles = StyleSheet.create({
         backgroundColor: colors.bg,
         minHeight: 44,
     },
-    // The website's Chords/Scales menu+octave+position/alt row uses py-2
-    // (8px) -- a touch more than Draw Mode's anchor/position rows (py-1.5,
-    // 6px, already matched by stepperRow above), which also use stepperRow.
     chordsStepperRow: {
         paddingVertical: spacing.sm,
     },
-    // Replaces a horizontal ScrollView that wrapped the position/alt-shape
-    // groups -- on the website this row never actually scrolls (it only
-    // ever shows a subset of Menu/octave/position/alt at once), so it
-    // shouldn't be scrollable here either. A plain flex row also means
-    // lockBadge's corner overlay no longer needs the `overflow: 'visible'`
-    // workaround a ScrollView required (plain Views don't clip).
     stepperStaticRow: {
         flex: 1,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "flex-end",
-        gap: spacing.sm,
+        gap: spacing.xs + 2,
     },
     stepperGroup: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 6,
+        gap: 4,
     },
-    // Bigger than the shared chevronButton/stepperLabel (used by Draw
-    // Mode's own stepper rows too) -- removing the scroll freed up the
-    // horizontal space these buttons used to compete with a scrollbar
-    // for, so they can grow to fill it instead of leaving it as bare
-    // whitespace around "Root"/"1/3".
     chordsChevronButton: {
-        width: 34,
-        height: 34,
+        width: 30,
+        height: 30,
         borderRadius: 17,
     },
     chordsStepperLabel: {
-        fontSize: 13,
+        fontSize: 14,
         minWidth: 44,
     },
     menuButton: {
         flexDirection: "row",
         alignItems: "center",
+        gap: 6,
         paddingHorizontal: spacing.sm + 6,
         paddingVertical: spacing.xs + 4,
         borderRadius: radius.pill,
@@ -2832,7 +2834,7 @@ const styles = StyleSheet.create({
     },
     menuButtonText: {
         fontFamily: fonts.sans.semiBold,
-        fontSize: 13,
+        fontSize: 14,
         color: colors.ink,
     },
     allButton: {
@@ -2848,7 +2850,7 @@ const styles = StyleSheet.create({
     },
     allButtonText: {
         fontFamily: fonts.sans.bold,
-        fontSize: 12,
+        fontSize: 14,
         color: colors.ink,
     },
     allButtonTextActive: {
@@ -2907,14 +2909,10 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
     },
-    // Top-right corner overlay, same treatment as proBadge on the Draw
-    // Mode pencil button -- relies on stepperScroll's `overflow: 'visible'`
-    // to render outside the label without being clipped by the row's
-    // horizontal ScrollView.
     lockBadge: {
         position: "absolute",
-        top: -10,
-        right: 6,
+        top: -8,
+        right: 0,
         width: 16,
         height: 16,
         borderRadius: 8,
@@ -2929,9 +2927,7 @@ const styles = StyleSheet.create({
     actionBar: {
         flexDirection: "row",
         alignItems: "center",
-        // Matches the website's mobile action bar: gap-3 (12px) between the
-        // scrollable icon row and the fixed root-note button.
-        gap: spacing.sm + 4,
+        gap: spacing.sm,
         paddingHorizontal: spacing.sm + 8,
         paddingVertical: spacing.sm,
         paddingBottom: spacing.md,
@@ -2939,18 +2935,19 @@ const styles = StyleSheet.create({
         borderTopColor: `${colors.ink}33`,
         backgroundColor: colors.bg,
     },
-    // See stepperScroll's comment -- same overflow-visible fix for
-    // proBadge on the pencil (Draw Mode) button in this row.
     actionScroll: {
         overflow: "visible",
+    },
+    // Save + Strum + Root, matching the website's fixed-right group
+    // (gap-2 = 8px) -- these don't scroll with the rest of the action bar.
+    actionBarFixedRight: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.xs + 4,
     },
     actionScrollContent: {
         flexDirection: "row",
         alignItems: "center",
-        // gap-3 (12px) and py-2.5 (10px) on the website's inner scrollable
-        // row -- the vertical padding in particular was missing here,
-        // which is most of why this bar read as tighter/smaller than the
-        // website's.
         gap: spacing.sm + 4,
         paddingVertical: spacing.sm + 2,
         paddingRight: spacing.sm,
@@ -2966,8 +2963,6 @@ const styles = StyleSheet.create({
     },
     proBadge: {
         position: "absolute",
-        // See lockBadge's comment -- actionScroll's `overflow: 'visible'`
-        // is what keeps this negative top offset from being clipped.
         top: -3,
         right: -4,
         width: 16,
@@ -3030,11 +3025,18 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: `${colors.ink}66`,
     },
-    // Bigger than the shared pillButton (also used for the Menu sheet's
-    // category/tuning pills) -- see chordsChevronButton's comment.
+    // Fits its label instead of the shared pillButton's typical width --
+    // this is a standalone toggle, not a stepper flanked by chevrons, so
+    // it doesn't need chordsStepperLabel's reserved minWidth.
     chordsOctavePill: {
-        paddingHorizontal: spacing.sm + 6,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: spacing.sm,
         paddingVertical: spacing.xs + 4,
+    },
+    chordsOctavePillText: {
+        fontSize: 13,
+        textAlign: "center",
     },
     pillButtonActive: {
         backgroundColor: colors.surface,
@@ -3042,7 +3044,7 @@ const styles = StyleSheet.create({
     },
     pillButtonText: {
         fontFamily: fonts.sans.semiBold,
-        fontSize: 12,
+        fontSize: 14,
         color: colors.ink,
     },
     pillButtonTextActive: {
