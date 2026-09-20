@@ -12,6 +12,7 @@ import {
     Montserrat_700Bold,
 } from '@expo-google-fonts/montserrat';
 import { AuthProvider, useAuth } from '../lib/auth-context';
+import AccountButton from '../components/AccountButton';
 import { colors } from '../lib/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -72,5 +73,13 @@ function AuthGate() {
         return <Redirect href="/" />;
     }
 
-    return <Slot />;
+    return (
+        <>
+            <Slot />
+            {/* Mounted globally (like the website's Header) so it's visible
+                over every screen -- except sign-in itself, where tapping it
+                would just be a no-op link back to the page you're already on. */}
+            {pathname !== '/sign-in' && <AccountButton />}
+        </>
+    );
 }
