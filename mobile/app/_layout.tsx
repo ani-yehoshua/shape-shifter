@@ -60,10 +60,14 @@ function AuthGate() {
         );
     }
 
-    if (!session && pathname !== '/sign-in') {
-        return <Redirect href="/sign-in" />;
-    }
-
+    // No forced sign-in on launch, matching the website (which doesn't
+    // require an account just to browse Chords/Draw Mode). Screens that
+    // need an account -- saving a chord, unlocking Pro -- prompt sign-in
+    // inline via their own auth-gate modal (see app/index.tsx) instead of a
+    // global redirect. /sign-in itself stays reachable at any time (it's how
+    // that inline prompt gets you there), and only redirects away once
+    // there's already a session, so you don't land back on it after signing
+    // in from elsewhere.
     if (session && pathname === '/sign-in') {
         return <Redirect href="/" />;
     }

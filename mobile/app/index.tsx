@@ -48,6 +48,8 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { useAuth } from "../lib/auth-context";
 import Svg, { Path } from "react-native-svg";
 import FretboardVertical from "../components/FretboardVertical";
 import NotesIntervalsToggle from "../components/NotesIntervalsToggle";
@@ -481,6 +483,19 @@ function firstEnharmonic(cell: string): string {
 
 export default function ChordsScreen() {
     const hasPro = useSubscription();
+    const { session } = useAuth();
+    const router = useRouter();
+
+    // Unlike the earlier version of this app, sign-in is no longer forced on
+    // launch (see app/_layout.tsx) -- the website doesn't require an account
+    // just to browse Chords/Draw Mode either. This gate is what replaces
+    // that: it only prompts sign-in for actions that actually need an
+    // account (a Pro-gated feature today; saving a chord once that screen
+    // exists). Being signed in but not Pro is a separate, already-handled
+    // case -- see the deferred-paywall notes on handleAltChange/
+    // handleToggleDrawMode below -- so this only fires when there's no
+    // session at all.
+    const [authGateReason, setAuthGateReason] = useState<"save" | "pro" | null>(null);
 
     // ─── Shared state (Chords + Draw Mode both use these) ─────────────────
     const [capo, setCapo] = useState(0);
@@ -615,7 +630,14 @@ export default function ChordsScreen() {
     const altsLocked = hasAlts && !hasPro;
 
     const handleAltChange = (i: number) => {
-        if (i > 0 && !hasPro) return;
+        if (i > 0 && !hasPro) {
+            // No session at all -> prompt sign-in, since Pro isn't reachable
+            // without an account. Signed in but not Pro -> deferred (no
+            // paywall/upgrade screen exists yet), same lock-badge-only
+            // treatment as before.
+            if (!session) setAuthGateReason("pro");
+            return;
+        }
         setSelectedAltShape(i);
         setOctaveUp(octaveFromDisplay());
     };
@@ -767,7 +789,10 @@ export default function ChordsScreen() {
 
     const handleToggleDrawMode = () => {
         if (!isDrawMode) {
-            if (!hasPro) return;
+            if (!hasPro) {
+                if (!session) setAuthGateReason("pro");
+                return;
+            }
             setIsDrawMode(true);
         } else {
             setIsDrawMode(false);
@@ -1621,6 +1646,47 @@ export default function ChordsScreen() {
         drawEffectiveRoot,
     ]);
 
+    const authGateCopy =
+        authGateReason === "save"
+            ? {
+                  title: "Sign in to save",
+                  body: "Create a free account to save chords and access them anywhere.",
+              }
+            : {
+                  title: "Sign in to unlock Pro",
+                  body: "Create a free account, then upgrade to Pro for alt shapes, Draw Mode, and more.",
+              };
+
+    const authGateModal = (
+        <Modal
+            visible={authGateReason !== null}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setAuthGateReason(null)}>
+            <Pressable
+                style={styles.authGateBackdrop}
+                onPress={() => setAuthGateReason(null)}>
+                <Pressable style={styles.authGateCard} onPress={() => {}}>
+                    <Text style={styles.authGateTitle}>{authGateCopy.title}</Text>
+                    <Text style={styles.authGateBody}>{authGateCopy.body}</Text>
+                    <TouchableOpacity
+                        style={styles.authGateSignInButton}
+                        onPress={() => {
+                            setAuthGateReason(null);
+                            router.push("/sign-in");
+                        }}>
+                        <Text style={styles.authGateSignInText}>Sign in</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.authGateCancelButton}
+                        onPress={() => setAuthGateReason(null)}>
+                        <Text style={styles.authGateCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                </Pressable>
+            </Pressable>
+        </Modal>
+    );
+
     if (isDrawMode) {
         return (
             <SafeAreaView
@@ -2024,6 +2090,8 @@ export default function ChordsScreen() {
                         </Pressable>
                     </Pressable>
                 </Modal>
+
+                {authGateModal}
             </SafeAreaView>
         );
     }
@@ -2322,6 +2390,8 @@ export default function ChordsScreen() {
                     </Pressable>
                 </Pressable>
             </Modal>
+
+            {authGateModal}
         </SafeAreaView>
     );
 }
@@ -2815,5 +2885,55 @@ const styles = StyleSheet.create({
     },
     rootGridButtonTextActive: {
         color: colors.sand1,
+    },
+    // ─── Auth gate modal ────────────────────────────────────────────────
+    authGateBackdrop: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(0,0,0,0.4)",
+        padding: spacing.md,
+    },
+    authGateCard: {
+        width: "100%",
+        maxWidth: 320,
+        backgroundColor: colors.bg,
+        borderRadius: radius["2xl"],
+        padding: spacing.lg,
+        gap: spacing.sm,
+    },
+    authGateTitle: {
+        fontFamily: fonts.sans.bold,
+        fontSize: 18,
+        color: colors.ink,
+        textAlign: "center",
+    },
+    authGateBody: {
+        fontFamily: fonts.sans.regular,
+        fontSize: 13,
+        color: `${colors.ink}99`,
+        textAlign: "center",
+        lineHeight: 18,
+        marginBottom: spacing.xs,
+    },
+    authGateSignInButton: {
+        backgroundColor: colors.ink,
+        borderRadius: radius.pill,
+        paddingVertical: spacing.sm + 4,
+        alignItems: "center",
+    },
+    authGateSignInText: {
+        fontFamily: fonts.sans.bold,
+        fontSize: 14,
+        color: colors.sand1,
+    },
+    authGateCancelButton: {
+        paddingVertical: spacing.xs + 4,
+        alignItems: "center",
+    },
+    authGateCancelText: {
+        fontFamily: fonts.sans.semiBold,
+        fontSize: 13,
+        color: `${colors.ink}80`,
     },
 });
