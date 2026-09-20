@@ -12,6 +12,7 @@ import {
     Montserrat_700Bold,
 } from '@expo-google-fonts/montserrat';
 import { AuthProvider, useAuth } from '../lib/auth-context';
+import { PreferencesProvider } from '../lib/preferences-context';
 import AccountButton from '../components/AccountButton';
 import { colors } from '../lib/theme';
 
@@ -42,8 +43,10 @@ export default function RootLayout() {
     return (
         <SafeAreaProvider>
             <AuthProvider>
-                <StatusBar style="dark" />
-                <AuthGate />
+                <PreferencesProvider>
+                    <StatusBar style="dark" />
+                    <AuthGate />
+                </PreferencesProvider>
             </AuthProvider>
         </SafeAreaProvider>
     );

@@ -43,6 +43,7 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     useWindowDimensions,
     View,
@@ -50,6 +51,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "../lib/auth-context";
+import { usePreferences } from "../lib/preferences-context";
 import Svg, { Path } from "react-native-svg";
 import FretboardVertical from "../components/FretboardVertical";
 import NotesIntervalsToggle from "../components/NotesIntervalsToggle";
@@ -79,6 +81,8 @@ import { noteNameToSemitone, spellNote } from "../lib/MusicTheory";
 import { CHORD_SHAPES } from "../lib/Shapes/Chords";
 import { SCALE_SHAPES } from "../lib/Shapes/Scales";
 import { colors, fonts, radius, spacing } from "../lib/theme";
+import { fetchSavedChords, saveChord, type SavedChord, type SavedChordContext } from "../lib/savedChords";
+import SavedChordsPanel from "../components/SavedChordsPanel";
 
 type ChordLevel = {
     levelName?: string;
@@ -167,6 +171,20 @@ function PencilIcon() {
             viewBox='0 0 640 640'
             fill={colors.ink}>
             <Path d='M100.4 417.2C104.5 402.6 112.2 389.3 123 378.5L304.2 197.3L338.1 163.4C354.7 180 389.4 214.7 442.1 267.4L476 301.3L442.1 335.2L260.9 516.4C250.2 527.1 236.8 534.9 222.2 539L94.4 574.6C86.1 576.9 77.1 574.6 71 568.4C64.9 562.2 62.6 553.3 64.9 545L100.4 417.2zM156 413.5C151.6 418.2 148.4 423.9 146.7 430.1L122.6 517L209.5 492.9C215.9 491.1 221.7 487.8 226.5 483.2L155.9 413.5zM510 267.4C493.4 250.8 458.7 216.1 406 163.4L372 129.5C398.5 103 413.4 88.1 416.9 84.6C430.4 71 448.8 63.4 468 63.4C487.2 63.4 505.6 71 519.1 84.6L554.8 120.3C568.4 133.9 576 152.3 576 171.4C576 190.5 568.4 209 554.8 222.5C551.3 226 536.4 240.9 509.9 267.4z' />
+        </Svg>
+    );
+}
+
+function BookmarkIcon({ filled = false }: { filled?: boolean }) {
+    return (
+        <Svg
+            width={18}
+            height={18}
+            viewBox="0 0 24 24"
+            fill={filled ? colors.ink : "none"}
+            stroke={colors.ink}
+            strokeWidth={2}>
+            <Path strokeLinecap="round" strokeLinejoin="round" d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
         </Svg>
     );
 }
@@ -498,9 +516,31 @@ export default function ChordsScreen() {
     const [authGateReason, setAuthGateReason] = useState<"save" | "pro" | null>(null);
 
     // ─── Shared state (Chords + Draw Mode both use these) ─────────────────
+    // Handedness and default tuning are persisted preferences on the
+    // website (lib/contexts/PreferencesContext.tsx, backed by
+    // localStorage); ported to ../lib/preferences-context.tsx here, backed
+    // by AsyncStorage. Draw Mode does NOT read from these -- its own
+    // handedness/tuning state is local and independent, same split as the
+    // website (DrawMode.tsx owns that state itself).
+    const preferences = usePreferences();
+    const isRight = preferences.handedness === "right";
+    const setIsRight = (v: boolean) => preferences.setHandedness(v ? "right" : "left");
+
     const [capo, setCapo] = useState(0);
-    const [selectedTuning, setSelectedTuning] =
-        useState<Tuning>(STANDARD_TUNING);
+    const [selectedTuning, setSelectedTuningRaw] = useState<Tuning>(
+        () => TUNINGS.find((t) => t.name === preferences.tuningName) ?? STANDARD_TUNING,
+    );
+    const setSelectedTuning = (t: Tuning) => {
+        setSelectedTuningRaw(t);
+        preferences.setTuningName(t.name);
+    };
+    // Sync when the preference loads in (it starts as the "Standard"
+    // default and resolves from AsyncStorage a tick later) or changes from
+    // the settings drawer.
+    useEffect(() => {
+        setSelectedTuningRaw(TUNINGS.find((t) => t.name === preferences.tuningName) ?? STANDARD_TUNING);
+    }, [preferences.tuningName]);
+
     const [isDrawMode, setIsDrawMode] = useState(false);
 
     // ─── Chords mode state ──────────────────────────────────────────────
@@ -512,7 +552,6 @@ export default function ChordsScreen() {
     const [selectedPosition, setSelectedPosition] = useState("All");
     const [selectedAltShape, setSelectedAltShape] = useState(0);
 
-    const [isRight, setIsRight] = useState(true);
     const [showIntervals, setShowIntervals] = useState(false);
     const [octaveUp, setOctaveUp] = useState(false);
     const [noteDeck, setNoteDeck] = useState<number[]>([]);
@@ -1646,6 +1685,120 @@ export default function ChordsScreen() {
         drawEffectiveRoot,
     ]);
 
+    // ─── Saved chords (both modes) ──────────────────────────────────────
+    // Port of the "saved chords" slice of ../../app/page.tsx plus
+    // ../../components/SavedChordsPanel.tsx. openSave/handleSaveConfirm/
+    // handleLoadSaved live here (rather than split per-mode) since they're
+    // genuinely shared logic on the website too -- one save dialog, one
+    // panel, fed by whichever mode's "Save" button was tapped.
+    const userId = session?.user?.id ?? null;
+    const [savedChordKeys, setSavedChordKeys] = useState<Set<string>>(new Set());
+    const [savedPanelOpen, setSavedPanelOpen] = useState(false);
+    const [savedRefreshKey, setSavedRefreshKey] = useState(0);
+    const [saveDialog, setSaveDialog] = useState<{
+        label: string;
+        notes: NotePosition[];
+        context: SavedChordContext;
+    } | null>(null);
+    const [saveLabel, setSaveLabel] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [drawPreloadNotes, setDrawPreloadNotes] = useState<NotePosition[] | null>(null);
+
+    const chordSignature = (notes: NotePosition[]) =>
+        `${selectedTuning.name}|${capo}|${notes
+            .map((n) => `${n.string}:${n.fret}`)
+            .sort()
+            .join(",")}`;
+
+    useEffect(() => {
+        if (!userId) {
+            setSavedChordKeys(new Set());
+            return;
+        }
+        fetchSavedChords()
+            .then((chords) => {
+                setSavedChordKeys(
+                    new Set(
+                        chords.map(
+                            (c) =>
+                                `${c.context.tuningName}|${c.context.capo}|${c.notes
+                                    .map((n) => `${n.string}:${n.fret}`)
+                                    .sort()
+                                    .join(",")}`,
+                        ),
+                    ),
+                );
+            })
+            .catch(() => {});
+    }, [userId, savedRefreshKey]);
+
+    const openSave = (notes: NotePosition[], label: string, context: SavedChordContext) => {
+        if (!userId) {
+            setAuthGateReason("save");
+            return;
+        }
+        setSaveLabel(label);
+        setSaveDialog({ label, notes, context });
+    };
+
+    const handleSaveConfirm = async () => {
+        if (!saveDialog) return;
+        setSaving(true);
+        try {
+            await saveChord({ ...saveDialog, label: saveLabel.trim() || saveDialog.label });
+            setSavedChordKeys((prev) => new Set([...prev, chordSignature(saveDialog.notes)]));
+            setSaveDialog(null);
+            setSavedRefreshKey((k) => k + 1);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleLoadSaved = (chord: SavedChord) => {
+        const ctx = chord.context;
+        if (ctx.source === "draw") {
+            // Matches the website exactly -- a saved Draw Mode chord
+            // restores the drawn notes but not capo/tuning (DrawMode.tsx's
+            // preloadNotes prop only ever touched `selected`).
+            setIsDrawMode(true);
+            setDrawPreloadNotes(chord.notes);
+            return;
+        }
+        setIsDrawMode(false);
+        setCurrentRootNote(ctx.rootNote);
+        setCapo(ctx.capo);
+        const t = TUNINGS.find((t) => t.name === ctx.tuningName);
+        if (t) setSelectedTuning(t);
+        if (ctx.mode === "chords") {
+            setSelectedCategory(ctx.category);
+            setSelectedVoicingType(ctx.voicingType);
+            setSelectedStringSet(ctx.stringSet);
+            setSelectedChordQuality(ctx.chordQuality);
+            setSelectedPosition(ctx.position);
+            setSelectedAltShape(ctx.altShape);
+        }
+        // ctx.mode === "scales" isn't restorable yet -- Scales mode doesn't
+        // exist in this app yet (see the Phase 2 sequencing notes elsewhere
+        // in this project). The chord still shows up in the panel and can
+        // be renamed/deleted, just not loaded.
+    };
+
+    // Restore a saved Draw Mode chord when handleLoadSaved sets it, same
+    // effect DrawMode.tsx runs on its preloadNotes prop.
+    useEffect(() => {
+        if (!drawPreloadNotes?.length) return;
+        setDrawSelected(new Set(drawPreloadNotes.map((n) => `${n.string}:${n.fret}`)));
+        setDrawBrowsedVoicing(null);
+        setDrawMatchInfo(null);
+        setDrawPreloadNotes(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [drawPreloadNotes]);
+
+    const isCurrentChordSaved = capoDisplayShape.length > 0 && savedChordKeys.has(chordSignature(capoDisplayShape));
+    const isDrawChordSaved = drawChordShape.length > 0 && savedChordKeys.has(chordSignature(drawChordShape));
+
     const authGateCopy =
         authGateReason === "save"
             ? {
@@ -1685,6 +1838,46 @@ export default function ChordsScreen() {
                 </Pressable>
             </Pressable>
         </Modal>
+    );
+
+    const saveDialogModal = (
+        <Modal visible={saveDialog !== null} transparent animationType="fade" onRequestClose={() => setSaveDialog(null)}>
+            <Pressable style={styles.authGateBackdrop} onPress={() => setSaveDialog(null)}>
+                <Pressable style={styles.authGateCard} onPress={() => {}}>
+                    <Text style={styles.authGateTitle}>Save chord</Text>
+                    <TextInput
+                        autoFocus
+                        style={styles.saveInput}
+                        value={saveLabel}
+                        onChangeText={setSaveLabel}
+                        placeholder="Chord name…"
+                        placeholderTextColor={`${colors.ink}66`}
+                        onSubmitEditing={handleSaveConfirm}
+                    />
+                    <View style={styles.saveDialogRow}>
+                        <TouchableOpacity style={styles.saveDialogCancel} onPress={() => setSaveDialog(null)}>
+                            <Text style={styles.saveDialogCancelText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.saveDialogConfirm, saving && styles.saveDialogConfirmDisabled]}
+                            onPress={handleSaveConfirm}
+                            disabled={saving}>
+                            <Text style={styles.saveDialogConfirmText}>{saving ? "Saving…" : "Save"}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Pressable>
+        </Modal>
+    );
+
+    const savedChordsPanel = (
+        <SavedChordsPanel
+            visible={savedPanelOpen}
+            onClose={() => setSavedPanelOpen(false)}
+            onLoad={handleLoadSaved}
+            refreshKey={savedRefreshKey}
+            onChange={() => setSavedRefreshKey((k) => k + 1)}
+        />
     );
 
     if (isDrawMode) {
@@ -2024,6 +2217,24 @@ export default function ChordsScreen() {
                         )}
                         {drawChordShape.length > 0 && (
                             <TouchableOpacity
+                                onPress={() =>
+                                    openSave(
+                                        drawChordShape,
+                                        drawAutoChordLabel || drawChordLabel || drawRoot,
+                                        { source: "draw", tuningName: selectedTuning.name, capo },
+                                    )
+                                }
+                                style={styles.iconButton}>
+                                <BookmarkIcon filled={isDrawChordSaved} />
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                            onPress={() => setSavedPanelOpen(true)}
+                            style={styles.iconButton}>
+                            <BookmarkIcon filled />
+                        </TouchableOpacity>
+                        {drawChordShape.length > 0 && (
+                            <TouchableOpacity
                                 onPress={handleDrawAnchor}
                                 style={[
                                     styles.anchorButton,
@@ -2092,6 +2303,8 @@ export default function ChordsScreen() {
                 </Modal>
 
                 {authGateModal}
+                {saveDialogModal}
+                {savedChordsPanel}
             </SafeAreaView>
         );
     }
@@ -2231,7 +2444,7 @@ export default function ChordsScreen() {
                     />
 
                     <TouchableOpacity
-                        onPress={() => setIsRight(r => !r)}
+                        onPress={() => setIsRight(!isRight)}
                         style={styles.iconButton}>
                         <HandIcon flipped={!isRight} />
                     </TouchableOpacity>
@@ -2261,6 +2474,34 @@ export default function ChordsScreen() {
                             </View>
                         )}
                         <PencilIcon />
+                    </TouchableOpacity>
+
+                    {capoDisplayShape.length > 0 && (
+                        <TouchableOpacity
+                            onPress={() =>
+                                openSave(capoDisplayShape, chordLabel, {
+                                    source: "library",
+                                    mode: "chords",
+                                    rootNote: capoRootNote,
+                                    tuningName: selectedTuning.name,
+                                    capo,
+                                    category: selectedCategory,
+                                    voicingType: selectedVoicingType,
+                                    stringSet: selectedStringSet,
+                                    chordQuality: selectedChordQuality,
+                                    position: selectedPosition,
+                                    altShape: selectedAltShape,
+                                })
+                            }
+                            style={styles.iconButton}>
+                            <BookmarkIcon filled={isCurrentChordSaved} />
+                        </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                        onPress={() => setSavedPanelOpen(true)}
+                        style={styles.iconButton}>
+                        <BookmarkIcon filled />
                     </TouchableOpacity>
                 </ScrollView>
 
@@ -2392,6 +2633,8 @@ export default function ChordsScreen() {
             </Modal>
 
             {authGateModal}
+            {saveDialogModal}
+            {savedChordsPanel}
         </SafeAreaView>
     );
 }
@@ -2560,7 +2803,7 @@ const styles = StyleSheet.create({
         // pokes the badge above that clip line and gets cut off; keeping it
         // flush with the button's top edge avoids that without having to
         // pad the row (which would make the whole stepper row taller).
-        top: 0,
+        top: -3,
         right: -6,
         width: 16,
         height: 16,
@@ -2604,7 +2847,7 @@ const styles = StyleSheet.create({
         // See lockBadge's comment -- flush with the button's top edge so
         // the enclosing horizontal ScrollView doesn't clip it, without
         // padding the row taller.
-        top: 0,
+        top: -3,
         right: -4,
         width: 16,
         height: 16,
@@ -2612,7 +2855,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.olive,
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 1,
+        zIndex: 99,
     },
     rootButton: {
         paddingHorizontal: spacing.md + 4,
@@ -2935,5 +3178,51 @@ const styles = StyleSheet.create({
         fontFamily: fonts.sans.semiBold,
         fontSize: 13,
         color: `${colors.ink}80`,
+    },
+    // ─── Save dialog (shares authGateBackdrop/authGateCard) ──────────────
+    saveInput: {
+        width: "100%",
+        backgroundColor: colors.sand2,
+        borderRadius: radius.xl,
+        borderWidth: 1,
+        borderColor: `${colors.ink}33`,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm + 4,
+        fontFamily: fonts.sans.regular,
+        fontSize: 14,
+        color: colors.ink,
+    },
+    saveDialogRow: {
+        flexDirection: "row",
+        gap: spacing.sm,
+        width: "100%",
+    },
+    saveDialogCancel: {
+        flex: 1,
+        paddingVertical: spacing.sm + 4,
+        borderRadius: radius.pill,
+        borderWidth: 1,
+        borderColor: `${colors.ink}4D`,
+        alignItems: "center",
+    },
+    saveDialogCancelText: {
+        fontFamily: fonts.sans.semiBold,
+        fontSize: 13,
+        color: colors.ink,
+    },
+    saveDialogConfirm: {
+        flex: 1,
+        paddingVertical: spacing.sm + 4,
+        borderRadius: radius.pill,
+        backgroundColor: colors.ink,
+        alignItems: "center",
+    },
+    saveDialogConfirmDisabled: {
+        opacity: 0.5,
+    },
+    saveDialogConfirmText: {
+        fontFamily: fonts.sans.bold,
+        fontSize: 13,
+        color: colors.sand1,
     },
 });
