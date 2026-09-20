@@ -2403,7 +2403,7 @@ export default function ChordsScreen() {
             </View>
 
             {/* Position / alt-shape row */}
-            <View style={styles.stepperRow}>
+            <View style={[styles.stepperRow, styles.chordsStepperRow]}>
                 <TouchableOpacity
                     onPress={() => setMenuOpen(true)}
                     style={styles.menuButton}>
@@ -2784,6 +2784,12 @@ const styles = StyleSheet.create({
         backgroundColor: colors.bg,
         minHeight: 44,
     },
+    // The website's Chords/Scales menu+octave+position/alt row uses py-2
+    // (8px) -- a touch more than Draw Mode's anchor/position rows (py-1.5,
+    // 6px, already matched by stepperRow above), which also use stepperRow.
+    chordsStepperRow: {
+        paddingVertical: spacing.sm,
+    },
     // A horizontal ScrollView clips its content to its own bounds by
     // default (same as `overflow: hidden` on the web), which is why
     // lockBadge's negative `top` offset was getting cut off -- unlike the
@@ -2898,8 +2904,8 @@ const styles = StyleSheet.create({
     // horizontal ScrollView.
     lockBadge: {
         position: "absolute",
-        top: -3,
-        right: -6,
+        top: -10,
+        right: 6,
         width: 16,
         height: 16,
         borderRadius: 8,
@@ -2914,7 +2920,9 @@ const styles = StyleSheet.create({
     actionBar: {
         flexDirection: "row",
         alignItems: "center",
-        gap: spacing.sm,
+        // Matches the website's mobile action bar: gap-3 (12px) between the
+        // scrollable icon row and the fixed root-note button.
+        gap: spacing.sm + 4,
         paddingHorizontal: spacing.sm + 8,
         paddingVertical: spacing.sm,
         paddingBottom: spacing.md,
@@ -2930,7 +2938,12 @@ const styles = StyleSheet.create({
     actionScrollContent: {
         flexDirection: "row",
         alignItems: "center",
-        gap: spacing.md,
+        // gap-3 (12px) and py-2.5 (10px) on the website's inner scrollable
+        // row -- the vertical padding in particular was missing here,
+        // which is most of why this bar read as tighter/smaller than the
+        // website's.
+        gap: spacing.sm + 4,
+        paddingVertical: spacing.sm + 2,
         paddingRight: spacing.sm,
     },
     iconButton: {
@@ -3116,17 +3129,22 @@ const styles = StyleSheet.create({
     controlStrip: {
         flexDirection: "row",
         alignItems: "center",
+        // Matches the website's Draw Mode control strip: pt-2 (8px, was
+        // 4px here) and gap-2 (8px) between the scrollable controls and
+        // the fixed strum/save/anchor/clear group.
+        gap: spacing.xs + 4,
         borderTopWidth: 1,
         borderTopColor: `${colors.ink}33`,
         backgroundColor: colors.sand1,
-        paddingTop: spacing.xs,
+        paddingTop: spacing.sm,
         paddingBottom: spacing.md,
         paddingRight: spacing.md,
     },
     controlScrollContent: {
         flexGrow: 1,
         alignItems: "center",
-        gap: spacing.sm,
+        // gap-3 (12px) on the website's inner scrollable row.
+        gap: spacing.sm + 4,
         paddingHorizontal: spacing.md,
     },
     rootCircleButton: {
