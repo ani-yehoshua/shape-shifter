@@ -83,6 +83,7 @@ import { SCALE_SHAPES } from "../lib/Shapes/Scales";
 import { colors, fonts, radius, spacing } from "../lib/theme";
 import { fetchSavedChords, saveChord, type SavedChord, type SavedChordContext } from "../lib/savedChords";
 import SavedChordsPanel from "../components/SavedChordsPanel";
+import ProgressionPanel from "../components/ProgressionPanel";
 
 type ChordLevel = {
     levelName?: string;
@@ -185,6 +186,14 @@ function BookmarkIcon({ filled = false }: { filled?: boolean }) {
             stroke={colors.ink}
             strokeWidth={2}>
             <Path strokeLinecap="round" strokeLinejoin="round" d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+        </Svg>
+    );
+}
+
+function ListIcon() {
+    return (
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.ink} strokeWidth={2} strokeLinecap="round">
+            <Path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
         </Svg>
     );
 }
@@ -1799,6 +1808,36 @@ export default function ChordsScreen() {
     const isCurrentChordSaved = capoDisplayShape.length > 0 && savedChordKeys.has(chordSignature(capoDisplayShape));
     const isDrawChordSaved = drawChordShape.length > 0 && savedChordKeys.has(chordSignature(drawChordShape));
 
+    // ─── Progression builder (both modes) ──────────────────────────────
+    const [progressionPanelOpen, setProgressionPanelOpen] = useState(false);
+    const [progressionPendingChord, setProgressionPendingChord] = useState<{
+        label: string;
+        notes: NotePosition[];
+        tuningName: string;
+        tuningFreqs?: number[];
+        capo: number;
+    } | null>(null);
+
+    const currentChordForProgression = isDrawMode
+        ? drawChordShape.length > 0
+            ? {
+                  label: drawAutoChordLabel || drawChordLabel || drawRoot,
+                  notes: drawChordShape,
+                  tuningName: selectedTuning.name,
+                  tuningFreqs: drawTuningFreqs,
+                  capo,
+              }
+            : null
+        : capoDisplayShape.length > 0
+          ? {
+                label: chordLabel,
+                notes: capoDisplayShape,
+                tuningName: selectedTuning.name,
+                tuningFreqs: selectedTuning.freqs,
+                capo,
+            }
+          : null;
+
     const authGateCopy =
         authGateReason === "save"
             ? {
@@ -1877,6 +1916,17 @@ export default function ChordsScreen() {
             onLoad={handleLoadSaved}
             refreshKey={savedRefreshKey}
             onChange={() => setSavedRefreshKey((k) => k + 1)}
+        />
+    );
+
+    const progressionPanel = (
+        <ProgressionPanel
+            visible={progressionPanelOpen}
+            onClose={() => setProgressionPanelOpen(false)}
+            currentChord={currentChordForProgression}
+            onAuthRequired={() => setAuthGateReason("save")}
+            pendingChord={progressionPendingChord}
+            onPendingConsumed={() => setProgressionPendingChord(null)}
         />
     );
 
@@ -2235,6 +2285,22 @@ export default function ChordsScreen() {
                         </TouchableOpacity>
                         {drawChordShape.length > 0 && (
                             <TouchableOpacity
+                                onPress={() => {
+                                    setProgressionPendingChord({
+                                        label: drawAutoChordLabel || drawChordLabel || drawRoot,
+                                        notes: drawChordShape,
+                                        tuningName: selectedTuning.name,
+                                        tuningFreqs: drawTuningFreqs,
+                                        capo,
+                                    });
+                                    setProgressionPanelOpen(true);
+                                }}
+                                style={styles.iconButton}>
+                                <ListIcon />
+                            </TouchableOpacity>
+                        )}
+                        {drawChordShape.length > 0 && (
+                            <TouchableOpacity
                                 onPress={handleDrawAnchor}
                                 style={[
                                     styles.anchorButton,
@@ -2305,6 +2371,7 @@ export default function ChordsScreen() {
                 {authGateModal}
                 {saveDialogModal}
                 {savedChordsPanel}
+                {progressionPanel}
             </SafeAreaView>
         );
     }
@@ -2503,6 +2570,23 @@ export default function ChordsScreen() {
                         style={styles.iconButton}>
                         <BookmarkIcon filled />
                     </TouchableOpacity>
+
+                    {capoDisplayShape.length > 0 && (
+                        <TouchableOpacity
+                            onPress={() => {
+                                setProgressionPendingChord({
+                                    label: chordLabel,
+                                    notes: capoDisplayShape,
+                                    tuningName: selectedTuning.name,
+                                    tuningFreqs: selectedTuning.freqs,
+                                    capo,
+                                });
+                                setProgressionPanelOpen(true);
+                            }}
+                            style={styles.iconButton}>
+                            <ListIcon />
+                        </TouchableOpacity>
+                    )}
                 </ScrollView>
 
                 <RootNoteButton
@@ -2635,6 +2719,7 @@ export default function ChordsScreen() {
             {authGateModal}
             {saveDialogModal}
             {savedChordsPanel}
+            {progressionPanel}
         </SafeAreaView>
     );
 }
