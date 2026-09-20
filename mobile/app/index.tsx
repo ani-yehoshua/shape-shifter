@@ -38,6 +38,7 @@
 // - Real audio: playChord/playNote are stubbed (see ../../lib/guitarAudio).
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+    Animated,
     Modal,
     Pressable,
     ScrollView,
@@ -101,6 +102,10 @@ type ChordLevel = {
 };
 
 const SEMIS = [...Array(12).keys()];
+
+// Lets the Menu sheet's backdrop animate its own opacity while remaining
+// tappable-to-dismiss (Animated.View isn't pressable on its own).
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 function voicingFretRange(v: NotePosition[]) {
     const frets = v
@@ -202,14 +207,23 @@ function PencilIcon() {
     );
 }
 
-function BookmarkIcon({ filled = false }: { filled?: boolean }) {
+// Tailwind's yellow-400 -- the website's saved-chord color (text-yellow-400).
+const SAVED_YELLOW = "#facc15";
+
+// Website's BookmarkIcon uses fill/stroke="currentColor" for both, so the
+// per-chord Save button's saved/unsaved color swap (ink -> yellow-400) just
+// falls out of the button's own text-color className. RN has no
+// currentColor equivalent, so that swap is an explicit `color` prop here
+// instead -- the "My Chords" panel-open buttons don't pass one and stay
+// ink, same as the website (they're never wrapped in that yellow class).
+function BookmarkIcon({ filled = false, color = colors.ink }: { filled?: boolean; color?: string }) {
     return (
         <Svg
             width={18}
             height={18}
             viewBox="0 0 24 24"
-            fill={filled ? colors.ink : "none"}
-            stroke={colors.ink}
+            fill={filled ? color : "none"}
+            stroke={color}
             strokeWidth={2}>
             <Path strokeLinecap="round" strokeLinejoin="round" d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
         </Svg>
@@ -617,6 +631,25 @@ export default function ChordsScreen() {
     const [displayShape, setDisplayShape] = useState<NotePosition[]>([]);
     const [displayGroups, setDisplayGroups] = useState<NotePosition[][]>([]);
     const [menuOpen, setMenuOpen] = useState(false);
+    // Drives the Menu sheet's entrance/exit: backdrop opacity fades on its
+    // own while the sheet itself slides (see the Modal below) -- RN's
+    // built-in animationType="slide" animates the whole modal (backdrop
+    // included) as one sliding block, which is the "dark background
+    // slides up with it" look this replaces. The Modal's own `visible`
+    // lags one animation behind menuOpen so the closing slide-down
+    // actually plays instead of the modal just vanishing mid-animation.
+    const [menuModalVisible, setMenuModalVisible] = useState(false);
+    const menuAnim = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        if (menuOpen) {
+            setMenuModalVisible(true);
+            Animated.timing(menuAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+        } else {
+            Animated.timing(menuAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(({ finished }) => {
+                if (finished) setMenuModalVisible(false);
+            });
+        }
+    }, [menuOpen, menuAnim]);
 
     const fretboardMap = useMemo(
         () => generateFretboardMap(selectedTuning.notes, 24),
@@ -2564,7 +2597,7 @@ export default function ChordsScreen() {
                                     )
                                 }
                                 style={styles.iconButton}>
-                                <BookmarkIcon filled={isDrawChordSaved} />
+                                <BookmarkIcon filled={isDrawChordSaved} color={isDrawChordSaved ? SAVED_YELLOW : colors.ink} />
                             </TouchableOpacity>
                         )}
                         <TouchableOpacity
@@ -3036,7 +3069,7 @@ export default function ChordsScreen() {
                                     )
                                 }
                                 style={styles.iconButton}>
-                                <BookmarkIcon filled={isCurrentChordSaved} />
+                                <BookmarkIcon filled={isCurrentChordSaved} color={isCurrentChordSaved ? SAVED_YELLOW : colors.ink} />
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -3066,16 +3099,30 @@ export default function ChordsScreen() {
 
             {/* Menu sheet: category -> voicing type -> string set -> chord quality, tuning */}
             <Modal
-                visible={menuOpen}
+                visible={menuModalVisible}
                 transparent
-                animationType='slide'
+                animationType='none'
                 onRequestClose={() => setMenuOpen(false)}>
-                <Pressable
-                    style={styles.sheetBackdrop}
-                    onPress={() => setMenuOpen(false)}>
-                    <Pressable
-                        style={styles.sheet}
-                        onPress={() => {}}>
+                <View style={styles.sheetModalContainer}>
+                    <AnimatedPressable
+                        style={[styles.sheetBackdropAnimated, { opacity: menuAnim }]}
+                        onPress={() => setMenuOpen(false)}
+                    />
+                    <Animated.View
+                        style={[
+                            styles.sheet,
+                            styles.sheetPositioned,
+                            {
+                                transform: [
+                                    {
+                                        translateY: menuAnim.interpolate({
+                                            inputRange: [0, 1],
+                                            outputRange: [screenHeight, 0],
+                                        }),
+                                    },
+                                ],
+                            },
+                        ]}>
                         <View style={styles.modeToggleWrap}>
                             <TouchableOpacity
                                 onPress={() => setSelectedMode("chords")}
@@ -3327,8 +3374,8 @@ export default function ChordsScreen() {
                             style={styles.sheetDoneButton}>
                             <Text style={styles.sheetDoneText}>Done</Text>
                         </TouchableOpacity>
-                    </Pressable>
-                </Pressable>
+                    </Animated.View>
+                </View>
             </Modal>
 
             {authGateModal}
@@ -3535,10 +3582,6 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: spacing.sm,
-        // Left inset only -- the right inset lives on actionBarFixedRight
-        // instead (see its comment) so that group's opaque background
-        // reaches the true screen edge instead of leaving a gap the
-        // scrolled/overflowing row can still show through.
         paddingLeft: spacing.sm + 8,
         paddingVertical: spacing.sm,
         paddingBottom: spacing.md,
@@ -3555,14 +3598,6 @@ const styles = StyleSheet.create({
         gap: spacing.xs + 4,
         backgroundColor: colors.bg,
         paddingLeft: spacing.sm,
-        // This is actionBar's own right inset, moved here instead: padding
-        // added to a right-aligned box doesn't move the box itself, it
-        // only adds space *inside* it -- so if actionBar keeps this
-        // padding, the box (and its opaque background) stops short of the
-        // real edge no matter how this group's own padding is set, leaving
-        // a gap the overflowing row can still show through when scrolled
-        // far enough. Moving it here means the background itself extends
-        // all the way to the edge, with this as breathing room inside it.
         paddingRight: spacing.sm + 8,
         zIndex: 1,
     },
@@ -3644,6 +3679,27 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: "flex-end",
         backgroundColor: "rgba(0,0,0,0.35)",
+    },
+    // Menu sheet only: backdrop and sheet are separately animated (see
+    // menuAnim) instead of relying on Modal's own slide animation, so they
+    // need their own absolutely-positioned container instead of
+    // sheetBackdrop's flex layout.
+    sheetModalContainer: {
+        flex: 1,
+    },
+    sheetBackdropAnimated: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.35)",
+    },
+    sheetPositioned: {
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
     },
     plainBackdrop: {
         flex: 1,
