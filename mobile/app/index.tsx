@@ -2430,7 +2430,7 @@ export default function ChordsScreen() {
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    style={{ flex: 1 }}
+                    style={styles.stepperScroll}
                     contentContainerStyle={styles.stepperScrollContent}>
                     {selectionHierarchy.positions.length > 0 && (
                         <View style={styles.stepperGroup}>
@@ -2504,6 +2504,7 @@ export default function ChordsScreen() {
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
+                    style={styles.actionScroll}
                     contentContainerStyle={styles.actionScrollContent}>
                     <NotesIntervalsToggle
                         showIntervals={showIntervals}
@@ -2783,6 +2784,17 @@ const styles = StyleSheet.create({
         backgroundColor: colors.bg,
         minHeight: 44,
     },
+    // A horizontal ScrollView clips its content to its own bounds by
+    // default (same as `overflow: hidden` on the web), which is why
+    // lockBadge/proBadge's negative `top` offsets were getting cut off --
+    // unlike the website's `overflow-x-auto`, which only affects the x
+    // axis and leaves vertical overflow visible. `overflow: 'visible'`
+    // here turns off RN's clipping the same way, without needing extra
+    // padding that would grow the row's height.
+    stepperScroll: {
+        flex: 1,
+        overflow: "visible",
+    },
     stepperScrollContent: {
         flexDirection: "row",
         alignItems: "center",
@@ -2882,12 +2894,10 @@ const styles = StyleSheet.create({
     },
     lockBadge: {
         position: "absolute",
-        // top: 0 rather than a negative offset -- this sits inside a
-        // horizontal ScrollView, which clips its content to its own bounds
-        // (sized to exactly fit the row's tallest child). A negative top
-        // pokes the badge above that clip line and gets cut off; keeping it
-        // flush with the button's top edge avoids that without having to
-        // pad the row (which would make the whole stepper row taller).
+        // This sits inside a horizontal ScrollView, which clips its
+        // content to its own bounds by default -- see stepperScroll's
+        // `overflow: 'visible'`, which turns that off so this negative
+        // top offset (poking the badge above its button) isn't cut off.
         top: -3,
         right: -6,
         width: 16,
@@ -2912,6 +2922,11 @@ const styles = StyleSheet.create({
         borderTopColor: `${colors.ink}33`,
         backgroundColor: colors.bg,
     },
+    // See stepperScroll's comment -- same overflow-visible fix for
+    // proBadge on the pencil (Draw Mode) button in this row.
+    actionScroll: {
+        overflow: "visible",
+    },
     actionScrollContent: {
         flexDirection: "row",
         alignItems: "center",
@@ -2929,9 +2944,8 @@ const styles = StyleSheet.create({
     },
     proBadge: {
         position: "absolute",
-        // See lockBadge's comment -- flush with the button's top edge so
-        // the enclosing horizontal ScrollView doesn't clip it, without
-        // padding the row taller.
+        // See lockBadge's comment -- actionScroll's `overflow: 'visible'`
+        // is what keeps this negative top offset from being clipped.
         top: -3,
         right: -4,
         width: 16,
