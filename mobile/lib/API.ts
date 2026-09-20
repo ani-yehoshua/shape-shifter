@@ -1,10 +1,9 @@
-// Trimmed port of ../lib/API.ts on the website: only what Chords mode
-// actually needs. The website's version also has account-management
+// Trimmed port of ../lib/API.ts on the website: only what Chords mode and
+// Draw Mode actually need. The website's version also has account-management
 // helpers (deleteAccount/updateEmail/updatePassword/getSettings) that call
 // relative /api/* routes -- those only exist on the Next.js server, so
 // they'll need to point at the deployed website's absolute URL once a
-// Settings screen is built here. getFinalFormulasFromMatch is Draw Mode
-// only, and follows once that's ported.
+// Settings screen is built here.
 import { CHORD_SHAPES } from './Shapes/Chords';
 
 export const allChordShapes = {
@@ -13,6 +12,114 @@ export const allChordShapes = {
     Sevenths: (CHORD_SHAPES as any).Sevenths,
     Shells: (CHORD_SHAPES as any).Shells,
 };
+
+type MatchInfo = {
+    difficulty?: string;
+    category?: string;
+    posKey?: string;
+    altIdx?: number;
+    positionsMap?: unknown;
+    voicingType?: string;
+    stringSet?: string;
+    quality?: string;
+    trail?: string[];
+} | null;
+
+// Helper for Draw Mode to search chord library and return drawn chord info
+export function getFinalFormulasFromMatch(
+    shapes: Record<string, unknown>,
+    matchInfo: MatchInfo,
+): {
+    finalFormulas: Record<string, unknown> | null;
+    availableAlts: unknown[];
+    posKey: string;
+    altIdx: number;
+} {
+    if (!matchInfo) {
+        return {
+            finalFormulas: null,
+            availableAlts: [],
+            posKey: '',
+            altIdx: 0,
+        };
+    }
+
+    if (matchInfo.positionsMap && typeof matchInfo.positionsMap === 'object') {
+        const fm = matchInfo.positionsMap as Record<string, any>;
+        const base = fm[matchInfo.posKey ?? ''];
+        const availableAlts = base
+            ? [base, ...(Array.isArray(base.altShapes) ? base.altShapes : [])]
+            : [];
+        return {
+            finalFormulas: fm,
+            availableAlts,
+            posKey: matchInfo.posKey ?? '',
+            altIdx: matchInfo.altIdx ?? 0,
+        };
+    }
+
+    const {
+        difficulty,
+        category,
+        voicingType,
+        stringSet,
+        quality,
+        posKey = '',
+        altIdx = 0,
+    } = matchInfo;
+
+    let node: any = (shapes as any)?.[difficulty!]?.[category!];
+    if (!node)
+        return {
+            finalFormulas: null,
+            availableAlts: [],
+            posKey: '',
+            altIdx: 0,
+        };
+
+    const go = (levelName: string, key: string | undefined) => {
+        if (!key) return;
+        if (node?.levelName === levelName && node.options?.[key]) {
+            node = node.options[key];
+        } else if (node?.options?.[key]) {
+            node = node.options[key];
+        }
+    };
+
+    go('Voicing Types', voicingType);
+    go('String Sets', stringSet);
+    go('Chord Qualities', quality);
+
+    const isPositionBag = (bag: unknown): boolean => {
+        if (!bag || typeof bag !== 'object') return false;
+        const vals = Object.values(bag as object);
+        if (!vals.length) return false;
+        const v = vals[0] as any;
+        return (
+            v &&
+            typeof v === 'object' &&
+            ('pattern' in v ||
+                'altShapes' in v ||
+                ('rootString' in v && 'name' in v))
+        );
+    };
+
+    const finalFormulas =
+        node?.options && isPositionBag(node.options)
+            ? (node.options as Record<string, unknown>)
+            : null;
+
+    let availableAlts: unknown[] = [];
+    if (finalFormulas && posKey && finalFormulas[posKey]) {
+        const base = finalFormulas[posKey] as any;
+        availableAlts = [
+            base,
+            ...(Array.isArray(base.altShapes) ? base.altShapes : []),
+        ];
+    }
+
+    return { finalFormulas, availableAlts, posKey, altIdx };
+}
 
 // Helpers for +/- position cycling buttons
 export function useCycleList<T>(
