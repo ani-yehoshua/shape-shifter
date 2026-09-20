@@ -2928,7 +2928,11 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: spacing.sm,
-        paddingHorizontal: spacing.sm + 8,
+        // Left inset only -- the right inset lives on actionBarFixedRight
+        // instead (see its comment) so that group's opaque background
+        // reaches the true screen edge instead of leaving a gap the
+        // scrolled/overflowing row can still show through.
+        paddingLeft: spacing.sm + 8,
         paddingVertical: spacing.sm,
         paddingBottom: spacing.md,
         borderTopWidth: 1,
@@ -2938,20 +2942,21 @@ const styles = StyleSheet.create({
     actionScroll: {
         overflow: "visible",
     },
-    // Save + Strum + Root, matching the website's fixed-right group
-    // (gap-2 = 8px) -- these don't scroll with the rest of the action bar.
-    // The website's version needs no background here since overflow-x-auto
-    // genuinely clips scrolled-off content; RN's `overflow: 'visible'` on
-    // actionScroll (needed for the pencil button's Pro badge) clips
-    // neither axis, so scrolled content can still render underneath this
-    // group. An opaque background matching the bar's own paints over that
-    // regardless of how much the row overflows.
     actionBarFixedRight: {
         flexDirection: "row",
         alignItems: "center",
         gap: spacing.xs + 4,
         backgroundColor: colors.bg,
-        paddingLeft: spacing.xs,
+        paddingLeft: spacing.sm,
+        // This is actionBar's own right inset, moved here instead: padding
+        // added to a right-aligned box doesn't move the box itself, it
+        // only adds space *inside* it -- so if actionBar keeps this
+        // padding, the box (and its opaque background) stops short of the
+        // real edge no matter how this group's own padding is set, leaving
+        // a gap the overflowing row can still show through when scrolled
+        // far enough. Moving it here means the background itself extends
+        // all the way to the edge, with this as breathing room inside it.
+        paddingRight: spacing.sm + 8,
         zIndex: 1,
     },
     actionScrollContent: {
@@ -2983,14 +2988,14 @@ const styles = StyleSheet.create({
         zIndex: 99,
     },
     rootButton: {
-        paddingHorizontal: spacing.md + 4,
-        paddingVertical: spacing.sm + 2,
+        paddingHorizontal: spacing.md + 5,
+        paddingVertical: spacing.sm + 3,
         borderRadius: radius.pill,
         backgroundColor: colors.ink,
     },
     rootButtonText: {
         fontFamily: fonts.sans.bold,
-        fontSize: 14,
+        fontSize: 18,
         color: colors.sand1,
     },
     sheetBackdrop: {
@@ -3034,9 +3039,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: `${colors.ink}66`,
     },
-    // Fits its label instead of the shared pillButton's typical width --
-    // this is a standalone toggle, not a stepper flanked by chevrons, so
-    // it doesn't need chordsStepperLabel's reserved minWidth.
     chordsOctavePill: {
         alignItems: "center",
         justifyContent: "center",
@@ -3155,9 +3157,6 @@ const styles = StyleSheet.create({
     controlStrip: {
         flexDirection: "row",
         alignItems: "center",
-        // Matches the website's Draw Mode control strip: pt-2 (8px, was
-        // 4px here) and gap-2 (8px) between the scrollable controls and
-        // the fixed strum/save/anchor/clear group.
         gap: spacing.xs + 4,
         borderTopWidth: 1,
         borderTopColor: `${colors.ink}33`,
@@ -3169,7 +3168,6 @@ const styles = StyleSheet.create({
     controlScrollContent: {
         flexGrow: 1,
         alignItems: "center",
-        // gap-3 (12px) on the website's inner scrollable row.
         gap: spacing.sm + 4,
         paddingHorizontal: spacing.md,
     },
