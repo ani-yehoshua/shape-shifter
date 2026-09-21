@@ -3386,11 +3386,13 @@ export default function ChordsScreen() {
                             </View>
                         </ScrollView>
 
-                        <TouchableOpacity
-                            onPress={() => setMenuOpen(false)}
-                            style={styles.sheetDoneButton}>
-                            <Text style={styles.sheetDoneText}>Done</Text>
-                        </TouchableOpacity>
+                        <View style={styles.sheetFooter}>
+                            <TouchableOpacity
+                                onPress={() => setMenuOpen(false)}
+                                style={styles.sheetDoneButton}>
+                                <Text style={styles.sheetDoneText}>Done</Text>
+                            </TouchableOpacity>
+                        </View>
                     </Animated.View>
                 </View>
             </Modal>
@@ -3472,10 +3474,6 @@ const styles = StyleSheet.create({
     chordsStepperRow: {
         paddingVertical: spacing.sm,
     },
-    // Same fixed-left/scrollable-rest split as the action bar's Save/Strum/
-    // Root group below, mirrored to the left side. backgroundColor +
-    // zIndex occlude the scrollable group when it overflows (same reason
-    // as actionBarFixedRight -- see that style's comment).
     stepperFixedLeft: {
         flexDirection: "row",
         alignItems: "center",
@@ -3484,10 +3482,6 @@ const styles = StyleSheet.create({
         paddingRight: spacing.xs,
         zIndex: 1,
     },
-    // A horizontal ScrollView clips its content to its own bounds by
-    // default; `overflow: 'visible'` turns that off so the lock badges on
-    // the alt-shape/variant labels inside aren't cut off (same fix as
-    // actionScroll for the Draw Mode pencil button's Pro badge).
     stepperScroll: {
         flex: 1,
         overflow: "visible",
@@ -3653,15 +3647,10 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
     },
-    // Strum/Play button while a scale is actively playing -- matches the
-    // website's `bg-ink text-sand-1 border-ink` state.
     iconButtonActive: {
         backgroundColor: colors.ink,
         borderColor: colors.ink,
     },
-    // Playback speed control (Scales mode only) -- a +/- stepper instead
-    // of the website's draggable range slider, same reasoning as
-    // ProgressionPanel's BPM stepper (no RN slider without a new dep).
     playbackSpeedStepper: {
         flexDirection: "row",
         alignItems: "center",
@@ -3716,10 +3705,6 @@ const styles = StyleSheet.create({
         justifyContent: "flex-end",
         backgroundColor: "rgba(0,0,0,0.35)",
     },
-    // Menu sheet only: backdrop and sheet are separately animated (see
-    // menuAnim) instead of relying on Modal's own slide animation, so they
-    // need their own absolutely-positioned container instead of
-    // sheetBackdrop's flex layout.
     sheetModalContainer: {
         flex: 1,
     },
@@ -3748,9 +3733,6 @@ const styles = StyleSheet.create({
         borderTopRightRadius: radius["2xl"],
         paddingTop: spacing.sm,
     },
-    // Chords/Scales mode switcher pinned at the top of the sheet, always
-    // visible above the scrollable content below -- matches the website's
-    // "Mode toggle -- always visible, never scrolls".
     modeToggleWrap: {
         flexDirection: "row",
         marginHorizontal: spacing.md,
@@ -3775,7 +3757,7 @@ const styles = StyleSheet.create({
     },
     modeToggleButtonText: {
         fontFamily: fonts.sans.medium,
-        fontSize: 14,
+        fontSize: 18,
         color: colors.ink,
     },
     modeToggleButtonTextActive: {
@@ -3789,11 +3771,10 @@ const styles = StyleSheet.create({
     },
     sheetSectionLabel: {
         fontFamily: fonts.sans.bold,
-        fontSize: 10,
+        fontSize: 12,
         letterSpacing: 1,
         textTransform: "uppercase",
         color: `${colors.ink}80`,
-        marginBottom: spacing.xs,
     },
     pillWrap: {
         flexDirection: "row",
@@ -3836,8 +3817,6 @@ const styles = StyleSheet.create({
     pillButtonTextDisabled: {
         color: `${colors.ink}4D`,
     },
-    // Corner lock badge for a Pro-gated scale pattern pill -- same
-    // treatment as lockBadge/proBadge elsewhere in this screen.
     pillLockBadge: {
         position: "absolute",
         top: -6,
@@ -3850,9 +3829,20 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         zIndex: 1,
     },
+    // Sibling of the ScrollView above (not part of its scrollable content),
+    // so this space is always visible regardless of scroll position --
+    // this is what actually separates the Done button from whatever
+    // content happens to be scrolled to the bottom, rather than padding
+    // added inside the ScrollView itself (which you'd have to scroll past
+    // instead of it just being there). paddingTop here is what "raises"
+    // this footer's own height for that gap, rather than the button
+    // carrying it as its own marginTop.
+    sheetFooter: {
+        paddingTop: spacing.sm + 4,
+        paddingHorizontal: spacing.md,
+        paddingBottom: spacing.xl,
+    },
     sheetDoneButton: {
-        marginHorizontal: spacing.md,
-        marginBottom: spacing.lg,
         paddingVertical: spacing.sm + 4,
         borderRadius: radius.pill,
         backgroundColor: colors.ink,
@@ -3860,7 +3850,7 @@ const styles = StyleSheet.create({
     },
     sheetDoneText: {
         fontFamily: fonts.sans.bold,
-        fontSize: 14,
+        fontSize: 18,
         color: colors.sand1,
     },
     // ─── Draw Mode styles ───────────────────────────────────────────────
