@@ -3,6 +3,20 @@
 // own via @supabase/ssr's createBrowserClient -- that package is Next.js/
 // cookie-based and doesn't apply here; the RN client from ../supabase
 // already persists the session via AsyncStorage.
+//
+// Unlike the website's version, this wires the Supabase auth listener and
+// Realtime channel exactly once at module scope instead of per-hook-call.
+// This hook is called from several components at once here (the Chords
+// screen, AccountButton, ProgressionPanel), and each one wiring its own
+// channel named `subs-${uid}` -- the same topic, since it's the same
+// signed-in user -- caused two or three simultaneous subscriptions to the
+// identical Realtime topic, which throws "cannot add postgres_changes
+// callbacks for realtime:subs-<uid> after subscribe()". Making the
+// subscription a shared singleton that every hook instance just listens to
+// (via a small pub/sub) fixes that regardless of how many components use
+// the hook at once, and also guards against onAuthStateChange re-firing
+// for a uid that's already wired (token refreshes, etc.), which was the
+// other way to trigger the same conflict.
 import * as React from 'react';
 import { supabase } from '../supabase';
 
@@ -16,61 +30,91 @@ function isPro(sub: unknown): boolean {
     );
 }
 
-export function useSubscription(): boolean {
-    const [hasPro, setHasPro] = React.useState(false);
+let currentHasPro = false;
+let currentUid: string | null = null;
+let channel: ReturnType<typeof supabase.channel> | null = null;
+let authSub: { unsubscribe: () => void } | null = null;
+let listenerCount = 0;
+const listeners = new Set<(v: boolean) => void>();
 
-    React.useEffect(() => {
-        let channel: ReturnType<typeof supabase.channel> | null = null;
-        let authSub: { unsubscribe: () => void } | null = null;
+function notify(v: boolean) {
+    currentHasPro = v;
+    listeners.forEach((fn) => fn(v));
+}
 
-        async function wire(uid: string) {
+async function wire(uid: string) {
+    if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+    }
+    const { data } = await supabase
+        .from('subscriptions')
+        .select('status,current_period_end')
+        .eq('user_id', uid)
+        .maybeSingle();
+    notify(isPro(data));
+    channel = supabase
+        .channel(`subs-${uid}`)
+        .on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'subscriptions',
+                filter: `user_id=eq.${uid}`,
+            },
+            (payload: { new: Record<string, unknown>; old: Record<string, unknown> }) => {
+                notify(isPro(payload.new || payload.old || null));
+            },
+        )
+        .subscribe();
+}
+
+function ensureWired() {
+    if (authSub) return;
+    // onAuthStateChange fires INITIAL_SESSION immediately with the current
+    // user, so no separate getSession() call is needed. It also refires
+    // for events like TOKEN_REFRESHED with the same uid -- the `newUid ===
+    // currentUid && channel` guard skips re-wiring (and re-subscribing to
+    // the same Realtime topic) when nothing about the signed-in user
+    // actually changed.
+    authSub = supabase.auth.onAuthStateChange((_evt, newSession) => {
+        const newUid = newSession?.user?.id ?? null;
+        if (newUid === currentUid && channel) return;
+        currentUid = newUid;
+        if (!newUid) {
             if (channel) {
                 supabase.removeChannel(channel);
                 channel = null;
             }
-            const { data } = await supabase
-                .from('subscriptions')
-                .select('status,current_period_end')
-                .eq('user_id', uid)
-                .maybeSingle();
-            setHasPro(isPro(data));
-            channel = supabase
-                .channel(`subs-${uid}`)
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'subscriptions',
-                        filter: `user_id=eq.${uid}`,
-                    },
-                    (payload: {
-                        new: Record<string, unknown>;
-                        old: Record<string, unknown>;
-                    }) => {
-                        setHasPro(isPro(payload.new || payload.old || null));
-                    },
-                )
-                .subscribe();
+            notify(false);
+            return;
         }
+        wire(newUid);
+    }).data.subscription;
+}
 
-        // onAuthStateChange fires INITIAL_SESSION immediately with the current
-        // user, so we don't need a separate getSession() call -- that caused
-        // wire() to be called twice concurrently for the same uid, producing
-        // the "cannot add postgres_changes callbacks after subscribe()" error.
-        authSub = supabase.auth.onAuthStateChange((_evt, newSession) => {
-            const newUid = newSession?.user?.id;
-            if (!newUid) {
-                setHasPro(false);
-                if (channel) supabase.removeChannel(channel);
-                return;
-            }
-            wire(newUid);
-        }).data.subscription;
+function teardown() {
+    if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+    }
+    authSub?.unsubscribe();
+    authSub = null;
+    currentUid = null;
+}
 
+export function useSubscription(): boolean {
+    const [hasPro, setHasPro] = React.useState(currentHasPro);
+
+    React.useEffect(() => {
+        listenerCount += 1;
+        listeners.add(setHasPro);
+        ensureWired();
         return () => {
-            if (channel) supabase.removeChannel(channel);
-            authSub?.unsubscribe();
+            listeners.delete(setHasPro);
+            listenerCount -= 1;
+            if (listenerCount === 0) teardown();
         };
     }, []);
 
