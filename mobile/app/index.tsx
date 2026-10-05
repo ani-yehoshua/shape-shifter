@@ -41,6 +41,7 @@ import {
     Animated,
     Modal,
     Pressable,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -3382,6 +3383,9 @@ export default function ChordsScreen() {
                                 ],
                             },
                         ]}>
+                        <View style={styles.sheetHandleWrap}>
+                            <View style={styles.sheetHandle} />
+                        </View>
                         <View style={styles.modeToggleWrap}>
                             <TouchableOpacity
                                 onPress={() => setSelectedMode("chords")}
@@ -3417,31 +3421,30 @@ export default function ChordsScreen() {
                         <ScrollView contentContainerStyle={styles.sheetContent}>
                             {selectedMode === "chords" && (
                                 <>
-                                    <Text style={styles.sheetSectionLabel}>
-                                        Category
-                                    </Text>
-                                    <View style={styles.pillWrap}>
-                                        {Object.keys(allChordShapes).map(cat => (
-                                            <TouchableOpacity
-                                                key={cat}
-                                                onPress={() =>
-                                                    handleCategoryChange(cat)
-                                                }
-                                                style={[
-                                                    styles.pillButton,
-                                                    selectedCategory === cat &&
-                                                        styles.pillButtonActive,
-                                                ]}>
-                                                <Text
+<View>
+                                        <Text style={styles.sheetSectionLabel}>
+                                            Type
+                                        </Text>
+                                        <View style={styles.typeToggleWrap}>
+                                            {selectionHierarchy.categories.map((cat, idx) => (
+                                                <TouchableOpacity
+                                                    key={cat}
+                                                    onPress={() => handleCategoryChange(cat)}
                                                     style={[
-                                                        styles.pillButtonText,
-                                                        selectedCategory === cat &&
-                                                            styles.pillButtonTextActive,
+                                                        styles.typeToggleButton,
+                                                        idx === 0 && styles.typeToggleButtonFirst,
+                                                        selectedCategory === cat && styles.typeToggleButtonActive,
                                                     ]}>
-                                                    {cat}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ))}
+                                                    <Text
+                                                        style={[
+                                                            styles.typeToggleButtonText,
+                                                            selectedCategory === cat && styles.typeToggleButtonTextActive,
+                                                        ]}>
+                                                        {cat === "Sevenths" ? "7ths" : cat}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
                                     </View>
 
                                     {selectionHierarchy.subLevels.map(level => {
@@ -3457,7 +3460,11 @@ export default function ChordsScreen() {
                                         return (
                                             <View key={level.levelName}>
                                                 <Text style={styles.sheetSectionLabel}>
-                                                    {level.levelName}
+                                                    {level.levelName === "Voicing Types"
+                                                        ? "Voicing"
+                                                        : level.levelName === "String Sets"
+                                                          ? "String Set"
+                                                          : "Chord"}
                                                 </Text>
                                                 <View style={styles.pillWrap}>
                                                     {level.options.map(option => (
@@ -3479,7 +3486,10 @@ export default function ChordsScreen() {
                                                                         option &&
                                                                         styles.pillButtonTextActive,
                                                                 ]}>
-                                                                {option}
+                                                                {level.levelName === "String Sets" &&
+                                                                option.includes("String Set")
+                                                                    ? option.trim().split(/\s+/, 1)[0]
+                                                                    : option}
                                                             </Text>
                                                         </TouchableOpacity>
                                                     ))}
@@ -3603,8 +3613,9 @@ export default function ChordsScreen() {
                                 </>
                             )}
 
+                            <View>
                             <Text style={styles.sheetSectionLabel}>Tuning</Text>
-                            <View style={styles.pillWrap}>
+                            <View style={[styles.pillWrap, styles.pillWrapTight]}>
                                 {TUNINGS.map(t => (
                                     <TouchableOpacity
                                         key={t.name}
@@ -3625,6 +3636,12 @@ export default function ChordsScreen() {
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
+                            </View>
+                            {selectedTuning.name !== "Standard" && (
+                                <Text style={styles.tuningNotes}>
+                                    {[...selectedTuning.notes].reverse().join(" · ")}
+                                </Text>
+                            )}
                             </View>
                         </ScrollView>
 
@@ -3997,20 +4014,19 @@ const styles = StyleSheet.create({
         backgroundColor: colors.bg,
         borderTopLeftRadius: radius["2xl"],
         borderTopRightRadius: radius["2xl"],
-        paddingTop: spacing.sm,
     },
     modeToggleWrap: {
         flexDirection: "row",
         marginHorizontal: spacing.md,
         marginBottom: spacing.sm + 4,
-        borderRadius: radius.lg,
+        borderRadius: radius.xl,
         borderWidth: 1,
         borderColor: colors.ink,
         overflow: "hidden",
     },
     modeToggleButton: {
         flex: 1,
-        paddingVertical: spacing.sm + 4,
+        paddingVertical: spacing.sm + 2,
         alignItems: "center",
         borderLeftWidth: 1,
         borderLeftColor: colors.ink,
@@ -4033,20 +4049,60 @@ const styles = StyleSheet.create({
     sheetContent: {
         paddingHorizontal: spacing.md,
         paddingBottom: spacing.md,
-        gap: spacing.md,
+        gap: spacing.md + 4,
     },
     sheetSectionLabel: {
         fontFamily: fonts.sans.bold,
-        fontSize: 12,
+        fontSize: 10,
         letterSpacing: 1,
         textTransform: "uppercase",
         color: `${colors.ink}80`,
+        marginBottom: spacing.sm,
     },
     pillWrap: {
         flexDirection: "row",
         flexWrap: "wrap",
+        gap: spacing.sm,
+    },
+    // Website's Tuning pills use gap-1.5 where the other sections use gap-2.
+    pillWrapTight: {
         gap: spacing.xs + 2,
     },
+    tuningNotes: {
+        marginTop: spacing.xs + 2,
+        fontSize: 10,
+        color: `${colors.ink}66`,
+        fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+    },
+    // Website's Type toggle: rounded-xl bordered group, py-2.5 text-xs cells.
+    typeToggleWrap: {
+        flexDirection: "row",
+        borderRadius: radius.xl,
+        borderWidth: 1,
+        borderColor: colors.ink,
+        overflow: "hidden",
+    },
+    typeToggleButton: {
+        flex: 1,
+        paddingVertical: spacing.sm + 2,
+        alignItems: "center",
+        borderLeftWidth: 1,
+        borderLeftColor: colors.ink,
+        backgroundColor: colors.sand1,
+    },
+    typeToggleButtonFirst: { borderLeftWidth: 0 },
+    typeToggleButtonActive: { backgroundColor: colors.surface },
+    typeToggleButtonText: {
+        fontFamily: fonts.sans.medium,
+        fontSize: 12,
+        color: colors.ink,
+    },
+    typeToggleButtonTextActive: {
+        fontFamily: fonts.sans.semiBold,
+        color: colors.onSurface,
+    },
+    sheetHandleWrap: { paddingVertical: spacing.sm + 4, alignItems: "center" },
+    sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: `${colors.ink}33` },
     pillButton: {
         position: "relative",
         paddingHorizontal: spacing.sm + 4,
@@ -4074,7 +4130,7 @@ const styles = StyleSheet.create({
     },
     pillButtonText: {
         fontFamily: fonts.sans.semiBold,
-        fontSize: 14,
+        fontSize: 12,
         color: colors.ink,
     },
     pillButtonTextActive: {
