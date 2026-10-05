@@ -79,13 +79,24 @@ import {
     useDrawModeIndex,
 } from "../lib/hooks/useDrawModeIndex";
 import { useSubscription } from "../lib/hooks/useSubscription";
-import { noteNameToSemitone, spellNote } from "../lib/MusicTheory";
+import {
+    MAJOR_SCALE_OFFSETS,
+    noteNameToSemitone,
+    spellInterval,
+    spellNote,
+} from "../lib/MusicTheory";
 import { CHORD_SHAPES } from "../lib/Shapes/Chords";
 import { SCALE_SHAPES } from "../lib/Shapes/Scales";
 import { colors, fonts, radius, spacing } from "../lib/theme";
 import { fetchSavedChords, saveChord, type SavedChord, type SavedChordContext } from "../lib/savedChords";
 import SavedChordsPanel from "../components/SavedChordsPanel";
 import ProgressionPanel from "../components/ProgressionPanel";
+import RandomizeSheet, {
+    EMPTY_CHORD_RANDOMIZE,
+    EMPTY_SCALE_RANDOMIZE,
+    type ChordRandomizeConfig,
+    type ScaleRandomizeConfig,
+} from "../components/RandomizeSheet";
 
 type ChordLevel = {
     levelName?: string;
@@ -170,6 +181,26 @@ function StrumIcon() {
             viewBox='12.5 7.5 175 175'
             fill={colors.ink}>
             <Path d='M 42 58 C 56 23 144 23 158 58 C 169 80 118 168 100 165 C 82 168 31 80 42 58 Z' />
+        </Svg>
+    );
+}
+
+function RandomizeIcon({ color = colors.ink }: { color?: string }) {
+    return (
+        <Svg
+            width={16}
+            height={16}
+            fill='none'
+            stroke={color}
+            strokeWidth={2}
+            viewBox='0 0 24 24'
+            strokeLinecap='round'
+            strokeLinejoin='round'>
+            <Path d='M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.8-1.1 2-1.7 3.3-1.7H22' />
+            <Path d='m18 2 4 4-4 4' />
+            <Path d='M2 6h1.9c1.5 0 2.9.9 3.5 2.2' />
+            <Path d='M22 18h-5.9c-1.3 0-2.5-.7-3.1-1.8l-.5-.8' />
+            <Path d='m18 14 4 4-4 4' />
         </Svg>
     );
 }
@@ -623,6 +654,11 @@ export default function ChordsScreen() {
     const [playbackSpeed, setPlaybackSpeed] = useState(4);
     const [isPlayingScale, setIsPlayingScale] = useState(false);
     const scalePlayRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+    const [randomizeOn, setRandomizeOn] = useState(false);
+    const [randomizeSheetOpen, setRandomizeSheetOpen] = useState(false);
+    const [chordRandomize, setChordRandomize] = useState<ChordRandomizeConfig>(EMPTY_CHORD_RANDOMIZE);
+    const [scaleRandomize, setScaleRandomize] = useState<ScaleRandomizeConfig>(EMPTY_SCALE_RANDOMIZE);
 
     const [showIntervals, setShowIntervals] = useState(false);
     const [octaveUp, setOctaveUp] = useState(false);
@@ -1150,6 +1186,197 @@ export default function ChordsScreen() {
     const handleSelectRoot = (note: string) => {
         setCurrentRootNote(note);
         if (selectedMode === "scales") setSelectedScalePosition(0);
+    };
+
+    // ─── Randomize ──────────────────────────────────────────────────────
+    // Ported from ../../app/page.tsx's handleRandomize (chords and scales
+    // branches; scaleChords is deferred with that mode). Pinned config
+    // values narrow the pool at each level; an empty pin means "all".
+    function pick<T>(arr: T[]): T {
+        return arr[Math.floor(Math.random() * arr.length)];
+    }
+    function pickFrom<T>(pool: T[], all: T[]): T {
+        return pick(pool.length ? pool : all);
+    }
+
+    const handleRandomize = () => {
+        if (selectedMode === "scales") {
+            const shapes = SCALE_SHAPES as Record<string, Record<string, any>>;
+            // The currently displayed tonic (what the root button shows),
+            // so "don't randomize root" can keep it fixed across modes.
+            const currentRootIdx = NOTES.findIndex(p => p.includes(currentRootNote));
+            const currentEntry = shapes[selectedNoteGroup]?.[selectedScale];
+            const currentVariants =
+                currentEntry?.altPatterns[selectedScalePattern] ??
+                (currentEntry ? [currentEntry.positions] : undefined);
+            const currentPosition = currentVariants
+                ? (currentVariants[selectedScaleVariant] ?? currentVariants[0])?.[selectedScalePosition]
+                : undefined;
+            const currentModeScaleNote = currentPosition?.notes[0];
+            const currentModeInterval =
+                currentModeScaleNote?.semitones ?? currentEntry?.intervals[selectedScalePosition] ?? 0;
+            const currentDegreeNum = currentModeScaleNote
+                ? parseInt((currentEntry?.degrees[currentModeScaleNote.degree] ?? "1").match(/\d+/)?.[0] ?? "1")
+                : parseInt((currentEntry?.degrees[selectedScalePosition] ?? "1").match(/\d+/)?.[0] ?? "1");
+            const displayedTonicIdx = (currentRootIdx + currentModeInterval) % 12;
+            const tonicNoteStr = spellNote(currentRootNote, currentModeInterval, currentDegreeNum);
+            const tonicLetterIdx = "ABCDEFG".indexOf(tonicNoteStr[0]);
+
+            const allGroups = Object.keys(shapes);
+            const group = pickFrom(scaleRandomize.noteGroups, allGroups);
+            const allScales = Object.keys(shapes[group] ?? {});
+            const pool =
+                scaleRandomize.scales.length > 0
+                    ? scaleRandomize.scales.filter(s => allScales.includes(s))
+                    : allScales;
+            const eligibleScales =
+                scaleRandomize.modes.length > 0
+                    ? (() => {
+                          const f = pool.filter(s =>
+                              ((shapes[group]?.[s]?.positions ?? []) as any[]).some(
+                                  p => p.modeName && scaleRandomize.modes.includes(p.modeName),
+                              ),
+                          );
+                          return f.length > 0 ? f : pool;
+                      })()
+                    : pool;
+            const scale = pickFrom(eligibleScales, allScales);
+            const entry = shapes[group]?.[scale];
+            if (!entry) return;
+            const positionCount = entry.positions.length;
+            const eligibleIndices: number[] =
+                scaleRandomize.modes.length > 0
+                    ? (entry.positions as any[])
+                          .map((p, i) => ({ p, i }))
+                          .filter(({ p }) => p.modeName && scaleRandomize.modes.includes(p.modeName))
+                          .map(({ i }) => i)
+                    : Array.from({ length: positionCount }, (_, i) => i);
+            const position =
+                eligibleIndices.length > 0 ? eligibleIndices[Math.floor(Math.random() * eligibleIndices.length)] : 0;
+            setSelectedNoteGroup(group);
+            setSelectedScale(scale);
+            setSelectedScalePosition(position);
+            setSelectedScalePattern(entry.defaultPattern);
+            setSelectedScaleVariant(0);
+            setShowAllScalePositions(false);
+
+            let newRoot: string;
+            if (scaleRandomize.randomizeRoot) {
+                const naturals = NOTES[Math.floor(Math.random() * 12)].filter(n => !n.includes("#") && !n.includes("b"));
+                newRoot = pick(naturals.length ? naturals : NOTES[0]);
+            } else {
+                // Back-calculate the parent scale root so the displayed tonic
+                // stays fixed: parent letter = tonic letter - (degree-1) in
+                // ABCDEFG space.
+                const newModeInterval = entry.intervals[position];
+                const parentIdx = (displayedTonicIdx - newModeInterval + 12) % 12;
+                const pair = NOTES[parentIdx];
+                const newDegreeNum = parseInt((entry.degrees[position] ?? "1").match(/\d+/)?.[0] ?? "1");
+                const parentLetterIdx = (((tonicLetterIdx - (newDegreeNum - 1)) % 7) + 7) % 7;
+                const parentLetter = "ABCDEFG"[parentLetterIdx];
+                newRoot =
+                    pair.find(n => n[0] === parentLetter) ?? pair.find(n => !n.includes("#")) ?? pair[0];
+            }
+
+            // If the new position sits entirely above fret 12, start on the
+            // octave-shifted copy.
+            const pos = entry.positions[position];
+            if (pos?.notes?.length) {
+                const newRootFret = (NOTES.findIndex(p => p.includes(newRoot)) - 7 + 12) % 12;
+                const posFrets = pos.notes.map((n: any) => {
+                    const delta =
+                        (selectedTuning.semitones[n.string] ?? STANDARD_MIDI[n.string]) - STANDARD_MIDI[n.string];
+                    return n.fretOffset + newRootFret - delta;
+                });
+                setOctaveUp(Math.max(...posFrets) > 24 && Math.min(...posFrets) >= 12);
+            } else {
+                setOctaveUp(false);
+            }
+
+            setCurrentRootNote(newRoot);
+            return;
+        }
+
+        // Chords mode
+        const cfg = chordRandomize;
+        const allCats = Object.keys(allChordShapes);
+        const cat = pickFrom(cfg.categories, allCats);
+
+        const newSelections = { voicingType: "", stringSet: "", quality: "", position: "", altShape: 0 };
+        let cursor: ChordLevel | undefined = (allChordShapes as Record<string, ChordLevel>)[cat];
+        while (cursor && cursor.options && cursor.levelName !== "Positions") {
+            const levelName = cursor.levelName;
+            const options: Record<string, ChordLevel> = cursor.options;
+            const allKeys = Object.keys(options);
+            let poolKeys: string[];
+            if (levelName === "Voicing Types") {
+                const directFilter = cfg.voicingTypes.filter(v => allKeys.includes(v));
+                if (directFilter.length > 0) {
+                    poolKeys = directFilter;
+                } else if (cfg.stringSets.length > 0) {
+                    // Exclude voicing types with no String Sets level, then
+                    // narrow to those containing the selected set(s).
+                    const hasStringSets = allKeys.filter(k => options[k]?.levelName === "String Sets");
+                    const hasMatchingSet = hasStringSets.filter(k =>
+                        cfg.stringSets.some(ss => options[k].options && ss in options[k].options!),
+                    );
+                    poolKeys =
+                        hasMatchingSet.length > 0 ? hasMatchingSet : hasStringSets.length > 0 ? hasStringSets : allKeys;
+                } else {
+                    poolKeys = allKeys;
+                }
+            } else if (levelName === "String Sets") poolKeys = cfg.stringSets.filter(v => allKeys.includes(v));
+            else if (levelName === "Chord Qualities") poolKeys = cfg.qualities.filter(v => allKeys.includes(v));
+            else poolKeys = [];
+            const chosen = pickFrom(poolKeys, allKeys);
+            if (levelName === "Voicing Types") newSelections.voicingType = chosen;
+            else if (levelName === "String Sets") newSelections.stringSet = chosen;
+            else if (levelName === "Chord Qualities") newSelections.quality = chosen;
+            cursor = options[chosen];
+        }
+
+        if (!cursor?.options) return;
+        const posKeys = Object.keys(cursor.options);
+        const filteredPosKeys = cfg.inversions.length ? posKeys.filter(k => cfg.inversions.includes(k)) : posKeys;
+        newSelections.position = pick(filteredPosKeys.length ? filteredPosKeys : posKeys);
+        const pd = cursor.options[newSelections.position];
+        const alts = Array.isArray(pd.altShapes) && pd.altShapes.length ? pd.altShapes : [];
+        newSelections.altShape = hasPro && alts.length ? Math.floor(Math.random() * alts.length) : 0;
+
+        setSelectedCategory(cat);
+        setSelectedVoicingType(newSelections.voicingType);
+        setSelectedStringSet(newSelections.stringSet);
+        setSelectedChordQuality(newSelections.quality);
+        setSelectedPosition(newSelections.position);
+        setSelectedAltShape(newSelections.altShape);
+
+        if (cfg.randomizeRoot) {
+            const positionData: any = cursor.options[newSelections.position];
+            const formula = Array.isArray(positionData.altShapes)
+                ? positionData.altShapes[newSelections.altShape]
+                : positionData;
+            const pattern = formula?.pattern as Array<{ semitones: number; degree: number }> | undefined;
+            const naturalRoot = (candidates: string[]) =>
+                candidates.find(r => !r.includes("#") && !r.includes("b")) ?? candidates[0];
+            const candidates = NOTES[Math.floor(Math.random() * 12)];
+            if (pattern) {
+                // Only roots whose spelling stays clean for every interval in
+                // the shape (no double accidentals, no B#/E#).
+                const isCleanRoot = (root: string) => {
+                    if (root === "B#" || root === "E#") return false;
+                    return pattern.every(({ semitones, degree }) => {
+                        const label = spellInterval(root, semitones, degree);
+                        return degree !== 1 && MAJOR_SCALE_OFFSETS[degree] !== semitones
+                            ? /^[#b][2-7]$/.test(label)
+                            : !/^[#b]/.test(label);
+                    });
+                };
+                const valid = candidates.filter(isCleanRoot);
+                setCurrentRootNote(valid.length ? pick(valid) : naturalRoot(candidates));
+            } else {
+                setCurrentRootNote(naturalRoot(candidates));
+            }
+        }
     };
 
     const handedness = isRight ? "right" : "left";
@@ -2980,6 +3207,15 @@ export default function ChordsScreen() {
                     showsHorizontalScrollIndicator={false}
                     style={styles.actionScroll}
                     contentContainerStyle={styles.actionScrollContent}>
+                    <TouchableOpacity
+                        onPress={() => {
+                            if (randomizeOn) setRandomizeOn(false);
+                            else setRandomizeSheetOpen(true);
+                        }}
+                        style={[styles.iconButton, randomizeOn && styles.iconButtonActive]}>
+                        <RandomizeIcon color={randomizeOn ? colors.sand1 : colors.ink} />
+                    </TouchableOpacity>
+
                     <NotesIntervalsToggle
                         showIntervals={showIntervals}
                         onToggle={setShowIntervals}
@@ -3104,13 +3340,19 @@ export default function ChordsScreen() {
                         </>
                     )}
 
-                    <RootNoteButton
+                    {randomizeOn ? (
+                        <TouchableOpacity onPress={handleRandomize} style={styles.randomAgainButton}>
+                            <RandomizeIcon color={colors.sand1} />
+                        </TouchableOpacity>
+                    ) : (
+                        <RootNoteButton
                         root={modeRootNote}
                         onSelect={handleSelectRoot}
                         onRandom={handleGenerateNewRoot}
                         style={styles.rootButton}
                         textStyle={styles.rootButtonText}
                     />
+                    )}
                 </View>
             </View>
 
@@ -3397,6 +3639,20 @@ export default function ChordsScreen() {
                 </View>
             </Modal>
 
+            <RandomizeSheet
+                visible={randomizeSheetOpen}
+                mode={selectedMode}
+                chordCfg={chordRandomize}
+                setChordCfg={setChordRandomize}
+                scaleCfg={scaleRandomize}
+                setScaleCfg={setScaleRandomize}
+                onClose={() => setRandomizeSheetOpen(false)}
+                onDone={() => {
+                    handleRandomize();
+                    setRandomizeOn(true);
+                    setRandomizeSheetOpen(false);
+                }}
+            />
             {authGateModal}
             {saveDialogModal}
             {savedChordsPanel}
@@ -3644,6 +3900,16 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         borderWidth: 1,
         borderColor: `${colors.ink}66`,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    // Website's w-10 h-10 bg-ink "randomize again" button that replaces
+    // the root note button while randomize is on.
+    randomAgainButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.ink,
         alignItems: "center",
         justifyContent: "center",
     },
