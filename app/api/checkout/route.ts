@@ -39,7 +39,13 @@ export async function POST(req: Request) {
         } = authHeader?.startsWith('Bearer ')
             ? await supabase.auth.getUser(authHeader.slice(7))
             : await supabase.auth.getUser();
-        if (error || !user) {
+        // The mobile app lets people buy Pro before they have an account
+        // (source === 'app'): Checkout collects their email, the webhook
+        // stores the subscription as pending against it, and it's claimed
+        // when they sign in with that email. The website still requires a
+        // signed-in user.
+        const anonymous = (error || !user) && source === 'app';
+        if ((error || !user) && !anonymous) {
             return NextResponse.json(
                 { error: 'Not signed in' },
                 { status: 401 },
@@ -47,29 +53,31 @@ export async function POST(req: Request) {
         }
 
         let stripeCustomerId: string | null = null;
-        const { data: existing } = await supabase
-            .from('subscriptions')
-            .select('stripe_cust_id')
-            .eq('user_id', user.id)
-            .not('stripe_cust_id', 'is', null)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        stripeCustomerId = existing?.stripe_cust_id ?? null;
-
-        if (!stripeCustomerId) {
-            const customer = await stripe.customers.create({
-                email: email || user.email || undefined,
-                metadata: { supabase_user_id: user.id },
-            });
-            stripeCustomerId = customer.id;
-            await supabase
+        if (user) {
+            const { data: existing } = await supabase
                 .from('subscriptions')
-                .upsert(
-                    { user_id: user.id, stripe_cust_id: stripeCustomerId },
-                    { onConflict: 'user_id' },
-                );
+                .select('stripe_cust_id')
+                .eq('user_id', user.id)
+                .not('stripe_cust_id', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            stripeCustomerId = existing?.stripe_cust_id ?? null;
+
+            if (!stripeCustomerId) {
+                const customer = await stripe.customers.create({
+                    email: email || user.email || undefined,
+                    metadata: { supabase_user_id: user.id },
+                });
+                stripeCustomerId = customer.id;
+                await supabase
+                    .from('subscriptions')
+                    .upsert(
+                        { user_id: user.id, stripe_cust_id: stripeCustomerId },
+                        { onConflict: 'user_id' },
+                    );
+            }
         }
 
         const siteUrl =
@@ -78,11 +86,15 @@ export async function POST(req: Request) {
         const session = await stripe.checkout.sessions.create({
             mode: 'subscription',
             line_items: [{ price: priceId, quantity: 1 }],
-            customer: stripeCustomerId,
-            subscription_data: {
-                metadata: { supabase_user_id: user.id },
-            },
-            client_reference_id: user.id,
+            ...(user
+                ? {
+                      customer: stripeCustomerId ?? undefined,
+                      subscription_data: {
+                          metadata: { supabase_user_id: user.id },
+                      },
+                      client_reference_id: user.id,
+                  }
+                : {}),
             // The app's in-app browser session closes when it sees the
             // shapeshifter:// redirect that /api/app-return issues.
             success_url:
