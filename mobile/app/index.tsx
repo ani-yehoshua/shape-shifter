@@ -121,6 +121,8 @@ const SEMIS = [...Array(12).keys()];
 // Same shape as the website's SessionState, minus the scaleChords fields
 // (that mode isn't ported yet).
 const SESSION_STORAGE_KEY = "shapeshifter_session_v1";
+const PENDING_INTENT_KEY = "ss_pending_intent";
+const PENDING_INTENT_MAX_AGE_MS = 15 * 60 * 1000;
 type SessionState = {
     selectedMode?: "chords" | "scales";
     currentRootNote?: string;
@@ -852,6 +854,23 @@ export default function ChordsScreen() {
         };
     }, []);
 
+    // Resume a pending Pro-gated action (Draw Mode) once the user has signed
+    // in and their Pro status has resolved. Same as the website's
+    // ss_pending_intent handling, but in AsyncStorage since sign-in is a
+    // separate screen here and this one unmounts while it's open.
+    useEffect(() => {
+        if (!hasPro || !sessionLoaded) return;
+        AsyncStorage.getItem(PENDING_INTENT_KEY)
+            .then((raw) => {
+                if (!raw) return;
+                AsyncStorage.removeItem(PENDING_INTENT_KEY).catch(() => {});
+                const pending = JSON.parse(raw) as { intent?: string; ts?: number };
+                if (pending.ts && Date.now() - pending.ts > PENDING_INTENT_MAX_AGE_MS) return;
+                if (pending.intent === "drawmode") setIsDrawMode(true);
+            })
+            .catch(() => {});
+    }, [hasPro, sessionLoaded]);
+
     useEffect(() => {
         if (!sessionLoaded) return;
         const snapshot: SessionState = {
@@ -1506,7 +1525,14 @@ export default function ChordsScreen() {
     const handleToggleDrawMode = () => {
         if (!isDrawMode) {
             if (!hasPro) {
-                if (!session) setAuthGateReason("pro");
+                if (!session) {
+                    // Remember what they were after so it resumes post sign-in.
+                    AsyncStorage.setItem(
+                        PENDING_INTENT_KEY,
+                        JSON.stringify({ intent: "drawmode", ts: Date.now() }),
+                    ).catch(() => {});
+                    setAuthGateReason("pro");
+                }
                 return;
             }
             setIsDrawMode(true);
