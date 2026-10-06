@@ -340,10 +340,10 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
                                 <SignOutIcon />
                                 <Text style={styles.signOutText}>{signingOut ? 'Signing out…' : 'Sign out'}</Text>
                             </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setDeleteOpen(true)} style={styles.deleteButton}>
+                                <Text style={styles.deleteButtonText}>Delete account</Text>
+                            </TouchableOpacity>
                         </View>
-                        <TouchableOpacity onPress={() => setDeleteOpen(true)} style={styles.deleteLink}>
-                            <Text style={styles.deleteLinkText}>Delete account</Text>
-                        </TouchableOpacity>
                     </View>
                 </Animated.View>
 
@@ -482,8 +482,14 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     supportLink: { alignSelf: 'center' },
     footerLink: { fontFamily: fonts.sans.semiBold, fontSize: 14, color: colors.sand1 },
-    deleteLink: { alignSelf: 'flex-start', marginTop: spacing.md },
-    deleteLinkText: { fontFamily: fonts.sans.semiBold, fontSize: 12, color: '#f87171' },
+    deleteButton: {
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderRadius: radius.pill,
+        borderWidth: 1,
+        borderColor: '#ef4444',
+    },
+    deleteButtonText: { fontFamily: fonts.sans.semiBold, fontSize: 14, color: '#ef4444' },
     signOutButton: {
         alignSelf: 'flex-start',
         flexDirection: 'row',
