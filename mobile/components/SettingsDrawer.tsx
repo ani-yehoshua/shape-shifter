@@ -57,6 +57,19 @@ function CloseIcon() {
     );
 }
 
+function ShieldCheckIcon() {
+    const { colors } = useTheme();
+    return (
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.sand4} strokeWidth={2}>
+            <Path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+            />
+        </Svg>
+    );
+}
+
 function SignOutIcon() {
     const { colors } = useTheme();
     return (
@@ -187,6 +200,10 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
                     </View>
 
                     <ScrollView contentContainerStyle={styles.body}>
+                        <TouchableOpacity style={styles.supportLink} onPress={() => setSupportOpen(true)}>
+                            <Text style={styles.footerLink}>Support 🛠️</Text>
+                        </TouchableOpacity>
+
                         <View style={styles.group}>
                             <Text style={styles.groupTitle}>Preferences</Text>
 
@@ -311,6 +328,7 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
                             <TouchableOpacity
                                 style={styles.manageButton}
                                 onPress={() => Linking.openURL(BILLING_PORTAL_URL)}>
+                                <ShieldCheckIcon />
                                 <Text style={styles.manageButtonText}>Manage Subscription</Text>
                             </TouchableOpacity>
                         )}
@@ -321,9 +339,6 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
                             <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} disabled={signingOut}>
                                 <SignOutIcon />
                                 <Text style={styles.signOutText}>{signingOut ? 'Signing out…' : 'Sign out'}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setSupportOpen(true)}>
-                                <Text style={styles.footerLink}>Support 🛠️</Text>
                             </TouchableOpacity>
                         </View>
                         <TouchableOpacity onPress={() => setDeleteOpen(true)} style={styles.deleteLink}>
@@ -449,6 +464,9 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     noticeErr: { color: '#fecaca', backgroundColor: '#7f1d1d99', borderColor: '#991b1b99' },
     manageButton: {
         alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.sm + 2,
         borderRadius: radius.pill,
@@ -462,6 +480,7 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
         borderTopColor: `${colors.ink}33`,
     },
     footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    supportLink: { alignSelf: 'flex-start' },
     footerLink: { fontFamily: fonts.sans.semiBold, fontSize: 14, color: colors.sand1 },
     deleteLink: { alignSelf: 'flex-start', marginTop: spacing.md },
     deleteLinkText: { fontFamily: fonts.sans.semiBold, fontSize: 12, color: '#f87171' },
