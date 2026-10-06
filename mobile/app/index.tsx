@@ -121,7 +121,7 @@ const SEMIS = [...Array(12).keys()];
 // (that mode isn't ported yet).
 const SESSION_STORAGE_KEY = "shapeshifter_session_v1";
 const PENDING_INTENT_KEY = "ss_pending_intent";
-type PendingIntent = { intent?: string; ts?: number; signedOut?: boolean };
+type PendingIntent = { intent?: string; value?: string | number; ts?: number; signedOut?: boolean };
 const PENDING_INTENT_MAX_AGE_MS = 15 * 60 * 1000;
 type SessionState = {
     selectedMode?: "chords" | "scales";
@@ -642,12 +642,19 @@ export default function ChordsScreen() {
     const [paywallOpen, setPaywallOpen] = useState(false);
     const [proWelcomeOpen, setProWelcomeOpen] = useState(false);
     const [signInToUnlockOpen, setSignInToUnlockOpen] = useState(false);
-    // The pending intent records what they were after ("drawmode", or a
-    // generic "paywall") and whether they were signed out when the paywall
-    // opened, so signing in afterwards can resume it (see the effects
-    // below).
-    const openPaywall = (intent?: string) => {
-        const pending: PendingIntent = { intent: intent ?? "paywall", ts: Date.now(), signedOut: !session };
+    // The pending intent records what they were after -- the Pro-gated
+    // action ("drawmode", "alt" + index, "scalePattern" + key, "scaleVariant"
+    // + index, "progressions", or a generic "paywall") -- and whether they
+    // were signed out when the paywall opened, so that once they're Pro
+    // (right after paying, or after signing in) it's applied and they're
+    // back where they were (see the effects below).
+    const openPaywall = (intent?: string, value?: string | number) => {
+        const pending: PendingIntent = {
+            intent: intent ?? "paywall",
+            value,
+            ts: Date.now(),
+            signedOut: !session,
+        };
         AsyncStorage.setItem(PENDING_INTENT_KEY, JSON.stringify(pending)).catch(() => {});
         setPaywallOpen(true);
     };
@@ -885,10 +892,15 @@ export default function ChordsScreen() {
         };
     }, []);
 
-    // Resume a pending Pro-gated action (Draw Mode) once the user has signed
-    // in and their Pro status has resolved. Same as the website's
-    // ss_pending_intent handling, but in AsyncStorage since sign-in is a
-    // separate screen here and this one unmounts while it's open.
+    // Resume a pending Pro-gated action once the user is Pro (right after
+    // checkout, or after signing in): Draw Mode, the alt shape / scale
+    // pattern / scale variant they tapped, or the progression panel. Same as
+    // the website's ss_pending_intent handling, but in AsyncStorage since
+    // sign-in is a separate screen here and this one unmounts while it's
+    // open. The selection context (mode, root, chord/scale choices) comes
+    // back through the persisted session, so only the action is replayed --
+    // through the same handlers the taps use, which this render's closure
+    // sees with hasPro now true.
     useEffect(() => {
         if (!hasPro || !sessionLoaded) return;
         AsyncStorage.getItem(PENDING_INTENT_KEY)
@@ -897,9 +909,16 @@ export default function ChordsScreen() {
                 AsyncStorage.removeItem(PENDING_INTENT_KEY).catch(() => {});
                 const pending = JSON.parse(raw) as PendingIntent;
                 if (pending.ts && Date.now() - pending.ts > PENDING_INTENT_MAX_AGE_MS) return;
-                if (pending.intent === "drawmode") setIsDrawMode(true);
+                const { intent, value } = pending;
+                if (intent === "drawmode") setIsDrawMode(true);
+                else if (intent === "alt" && typeof value === "number" && value < availableAlts.length)
+                    handleAltChange(value);
+                else if (intent === "scalePattern" && typeof value === "string") handleScalePatternChange(value);
+                else if (intent === "scaleVariant" && typeof value === "number") handleScaleVariantChange(value);
+                else if (intent === "progressions") setProgressionPanelOpen(true);
             })
             .catch(() => {});
+        // Deliberately keyed on Pro landing, not on every selection change.
     }, [hasPro, sessionLoaded]);
 
     // The other half of sign-in-then-paywall: they opened the paywall signed
@@ -994,8 +1013,9 @@ export default function ChordsScreen() {
     const handleAltChange = (i: number) => {
         if (i > 0 && !hasPro) {
             // The paywall opens signed in or not (signed-out buyers are tied
-            // to their checkout email and sign in afterwards).
-            openPaywall();
+            // to their checkout email and sign in afterwards); the tapped
+            // alt is remembered so it's applied once they're Pro.
+            openPaywall("alt", i);
             return;
         }
         setSelectedAltShape(i);
@@ -1282,7 +1302,7 @@ export default function ChordsScreen() {
 
     const handleScalePatternChange = (pattern: string) => {
         if (!hasPro && pattern !== scaleEntry?.defaultPattern) {
-            openPaywall();
+            openPaywall("scalePattern", pattern);
             return;
         }
         setSelectedScalePattern(pattern);
@@ -1292,7 +1312,7 @@ export default function ChordsScreen() {
 
     const handleScaleVariantChange = (variant: number) => {
         if (!hasPro && variant > 0) {
-            openPaywall();
+            openPaywall("scaleVariant", variant);
             return;
         }
         setSelectedScaleVariant(variant);
@@ -2709,7 +2729,7 @@ export default function ChordsScreen() {
             onClose={() => setProgressionPanelOpen(false)}
             currentChord={currentChordForProgression}
             onAuthRequired={() => setAuthGateReason("save")}
-            onProRequired={() => openPaywall()}
+            onProRequired={() => openPaywall("progressions")}
             pendingChord={progressionPendingChord}
             onPendingConsumed={() => setProgressionPendingChord(null)}
         />
