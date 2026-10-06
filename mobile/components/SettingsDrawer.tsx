@@ -30,6 +30,7 @@ import { fonts, radius, spacing, type Palette } from '../lib/theme';
 import { useTheme, useThemedStyles, type ThemeSetting } from '../lib/theme-context';
 import { TUNINGS } from '../lib/tunings';
 import { DeleteAccountDialog, SupportDialog } from './AccountDialogs';
+import { replayTour } from './AppTour';
 
 // Same billing portal link as the website's Header.tsx "Manage Subscription".
 const BILLING_PORTAL_URL = 'https://billing.stripe.com/p/login/fZu3cu1XQeGWcxs1lhgUM00';
@@ -324,6 +325,17 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
                             </View>
                         </View>
 
+                        <TouchableOpacity
+                            style={styles.replayButton}
+                            onPress={() => {
+                                onClose();
+                                // Wait out the drawer's slide-out: iOS drops a
+                                // Modal presented while another is dismissing.
+                                setTimeout(replayTour, 350);
+                            }}>
+                            <Text style={styles.replayText}>Replay app tour</Text>
+                        </TouchableOpacity>
+
                         {hasPro && (
                             <TouchableOpacity
                                 style={styles.manageButton}
@@ -481,6 +493,15 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     },
     footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     supportLink: { alignSelf: 'center' },
+    replayButton: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: spacing.sm + 4,
+        paddingVertical: spacing.xs + 2,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: `${colors.sand1}33`,
+    },
+    replayText: { fontFamily: fonts.sans.medium, fontSize: 12, color: `${colors.sand1}B3` },
     footerLink: { fontFamily: fonts.sans.semiBold, fontSize: 14, color: colors.sand1 },
     deleteButton: {
         paddingHorizontal: spacing.md,

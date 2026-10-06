@@ -14,6 +14,7 @@ import {
 import { AuthProvider, useAuth } from '../lib/auth-context';
 import { PreferencesProvider } from '../lib/preferences-context';
 import AccountButton from '../components/AccountButton';
+import AppTour from '../components/AppTour';
 import { ThemeProvider, useTheme } from '../lib/theme-context';
 
 SplashScreen.preventAutoHideAsync();
@@ -93,6 +94,7 @@ function AuthGate() {
                 over every screen -- except sign-in itself, where tapping it
                 would just be a no-op link back to the page you're already on. */}
             {pathname !== '/sign-in' && <AccountButton />}
+            {pathname !== '/sign-in' && <AppTour />}
         </>
     );
 }
