@@ -26,7 +26,13 @@
       "expo-router",
       "expo-splash-screen",
       "expo-font",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ShapeShifter accesses your photos so you can attach a screenshot to a support request."
+        }
+      ]
     ]
   }
 }

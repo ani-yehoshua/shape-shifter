@@ -49,12 +49,19 @@ export async function deleteAccount(): Promise<void> {
     }
 }
 
-// Same multipart body as the website's SubmitFeedback (no screenshots yet --
-// that needs an image picker module this app doesn't have).
-export async function submitFeedback(email: string, message: string): Promise<boolean> {
+export type FeedbackFile = { uri: string; name: string; type: string };
+
+// Same multipart body as the website's SubmitFeedback: email, message, and
+// zero or more "files" parts (React Native's FormData takes {uri,name,type}).
+export async function submitFeedback(
+    email: string,
+    message: string,
+    files: FeedbackFile[] = [],
+): Promise<boolean> {
     const formData = new FormData();
     formData.append('email', email);
     formData.append('message', message);
+    files.forEach((f) => formData.append('files', f as unknown as Blob));
     const res = await fetch(apiUrl('/api/report-issue'), { method: 'POST', body: formData });
     const result = await res.json().catch(() => ({}));
     return !!result.success;

@@ -14,7 +14,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { deleteAccount, emailRegex, submitFeedback } from '../lib/account';
+import * as ImagePicker from 'expo-image-picker';
+import { deleteAccount, emailRegex, submitFeedback, type FeedbackFile } from '../lib/account';
 import { fonts, radius, spacing, type Palette } from '../lib/theme';
 import { useThemedStyles } from '../lib/theme-context';
 
@@ -137,12 +138,31 @@ export function SupportDialog({
     const styles = useThemedStyles(makeStyles);
     const [email, setEmail] = useState(initialEmail);
     const [message, setMessage] = useState('');
+    const [files, setFiles] = useState<FeedbackFile[]>([]);
     const [loading, setLoading] = useState(false);
     const [notice, setNotice] = useState<Notice>(null);
 
     const close = () => {
         setNotice(null);
         onClose();
+    };
+
+    const pickFiles = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsMultipleSelection: true,
+        });
+        if (result.canceled) return;
+        setFiles((prev) => [
+            ...prev,
+            ...result.assets
+                .filter((a) => !prev.some((p) => p.uri === a.uri))
+                .map((a, i) => ({
+                    uri: a.uri,
+                    name: a.fileName ?? `screenshot-${Date.now()}-${i}.jpg`,
+                    type: a.mimeType ?? 'image/jpeg',
+                })),
+        ]);
     };
 
     const handleSubmit = async () => {
@@ -157,10 +177,11 @@ export function SupportDialog({
         setLoading(true);
         setNotice(null);
         try {
-            const ok = await submitFeedback(email.trim(), message);
+            const ok = await submitFeedback(email.trim(), message, files);
             if (ok) {
                 setNotice({ msg: 'Feedback submitted! Check your spam folder for confirmation.', ok: true });
                 setMessage('');
+                setFiles([]);
                 await new Promise((r) => setTimeout(r, 2500));
                 close();
             } else {
@@ -210,6 +231,22 @@ export function SupportDialog({
                         textAlignVertical="top"
                         style={[styles.input, styles.textarea]}
                     />
+                </View>
+                <View style={styles.field}>
+                    <Text style={styles.fieldLabel}>Screenshot (optional)</Text>
+                    <TouchableOpacity style={styles.uploadButton} onPress={pickFiles}>
+                        <Text style={styles.uploadButtonText}>Upload files</Text>
+                    </TouchableOpacity>
+                    {files.map((f) => (
+                        <View key={f.uri} style={styles.fileRow}>
+                            <Text style={styles.fileName} numberOfLines={1}>
+                                {f.name}
+                            </Text>
+                            <TouchableOpacity onPress={() => setFiles((prev) => prev.filter((p) => p.uri !== f.uri))}>
+                                <Text style={styles.fileRemove}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ))}
                 </View>
                 <NoticeText notice={notice} />
             </View>
@@ -279,6 +316,17 @@ const makeStyles = (colors: Palette) =>
             paddingVertical: spacing.sm,
         },
         textarea: { minHeight: 110 },
+        uploadButton: {
+            alignSelf: 'flex-start',
+            backgroundColor: colors.ink,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+            borderRadius: radius.lg,
+        },
+        uploadButtonText: { fontFamily: fonts.sans.semiBold, fontSize: 14, color: colors.sand1 },
+        fileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+        fileName: { flex: 1, fontFamily: fonts.sans.regular, fontSize: 12, color: `${colors.sand1}CC` },
+        fileRemove: { fontSize: 14, color: `${colors.ink}80` },
         placeholder: { color: `${colors.sand1}66` },
         confirmLabel: { fontFamily: fonts.sans.regular, fontSize: 12, color: `${colors.sand1}99`, textAlign: 'center' },
         confirmWord: { fontFamily: fonts.sans.bold, letterSpacing: 2, color: `${colors.sand1}CC` },
