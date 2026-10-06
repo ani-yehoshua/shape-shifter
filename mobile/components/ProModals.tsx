@@ -61,8 +61,11 @@ export function PaywallModal({
     onClose,
     onAlreadyPro,
     onSubscribed,
+    onSignIn,
 }: {
     visible: boolean;
+    /** shown as "Already subscribed? Sign in" when given (signed-out users) */
+    onSignIn?: () => void;
     /** dismissed ("Maybe later" / backdrop) */
     onClose: () => void;
     /** Pro status resolved while the paywall was up -- just hide it */
@@ -162,6 +165,14 @@ export function PaywallModal({
                                 </Text>
                             )}
                         </TouchableOpacity>
+
+                        {onSignIn && (
+                            <TouchableOpacity onPress={onSignIn} style={styles.later}>
+                                <Text style={[styles.laterText, styles.signInLink]}>
+                                    Already subscribed? Sign in
+                                </Text>
+                            </TouchableOpacity>
+                        )}
 
                         <TouchableOpacity onPress={onClose} style={styles.later}>
                             <Text style={styles.laterText}>Maybe later</Text>
@@ -351,4 +362,5 @@ const makeStyles = (colors: Palette) =>
         ctaText: { fontFamily: fonts.sans.bold, fontSize: 14, letterSpacing: 0.3, color: colors.sand4 },
         later: { alignItems: 'center', paddingVertical: 4 },
         laterText: { fontFamily: fonts.sans.regular, fontSize: 12, color: `${colors.sand1}66` },
+        signInLink: { fontFamily: fonts.sans.semiBold, color: `${colors.sand1}99`, textDecorationLine: 'underline' },
     });

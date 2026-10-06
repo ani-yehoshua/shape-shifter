@@ -80,7 +80,7 @@ import {
     keyFromSelection,
     useDrawModeIndex,
 } from "../lib/hooks/useDrawModeIndex";
-import { useSubscription } from "../lib/hooks/useSubscription";
+import { useSubscriptionStatus } from "../lib/hooks/useSubscription";
 import {
     MAJOR_SCALE_OFFSETS,
     noteNameToSemitone,
@@ -121,6 +121,7 @@ const SEMIS = [...Array(12).keys()];
 // (that mode isn't ported yet).
 const SESSION_STORAGE_KEY = "shapeshifter_session_v1";
 const PENDING_INTENT_KEY = "ss_pending_intent";
+type PendingIntent = { intent?: string; ts?: number; signedOut?: boolean };
 const PENDING_INTENT_MAX_AGE_MS = 15 * 60 * 1000;
 type SessionState = {
     selectedMode?: "chords" | "scales";
@@ -620,7 +621,7 @@ function firstEnharmonic(cell: string): string {
 export default function ChordsScreen() {
     const { colors } = useTheme();
     const styles = useThemedStyles(makeStyles);
-    const hasPro = useSubscription();
+    const { hasPro, loaded: subLoaded } = useSubscriptionStatus();
     const { session } = useAuth();
     const router = useRouter();
 
@@ -641,11 +642,25 @@ export default function ChordsScreen() {
     const [paywallOpen, setPaywallOpen] = useState(false);
     const [proWelcomeOpen, setProWelcomeOpen] = useState(false);
     const [signInToUnlockOpen, setSignInToUnlockOpen] = useState(false);
+    // The pending intent records what they were after ("drawmode", or a
+    // generic "paywall") and whether they were signed out when the paywall
+    // opened, so signing in afterwards can resume it (see the effects
+    // below).
     const openPaywall = (intent?: string) => {
-        if (intent) {
-            AsyncStorage.setItem(PENDING_INTENT_KEY, JSON.stringify({ intent, ts: Date.now() })).catch(() => {});
-        }
+        const pending: PendingIntent = { intent: intent ?? "paywall", ts: Date.now(), signedOut: !session };
+        AsyncStorage.setItem(PENDING_INTENT_KEY, JSON.stringify(pending)).catch(() => {});
         setPaywallOpen(true);
+    };
+    // They paid without an account: signing in next is to claim that
+    // purchase, not to be sent back to the paywall.
+    const markIntentPurchased = () => {
+        AsyncStorage.getItem(PENDING_INTENT_KEY)
+            .then((raw) => {
+                if (!raw) return;
+                const pending = JSON.parse(raw) as PendingIntent;
+                return AsyncStorage.setItem(PENDING_INTENT_KEY, JSON.stringify({ ...pending, signedOut: false }));
+            })
+            .catch(() => {});
     };
     const dismissPaywall = useCallback(() => {
         setPaywallOpen(false);
@@ -880,12 +895,36 @@ export default function ChordsScreen() {
             .then((raw) => {
                 if (!raw) return;
                 AsyncStorage.removeItem(PENDING_INTENT_KEY).catch(() => {});
-                const pending = JSON.parse(raw) as { intent?: string; ts?: number };
+                const pending = JSON.parse(raw) as PendingIntent;
                 if (pending.ts && Date.now() - pending.ts > PENDING_INTENT_MAX_AGE_MS) return;
                 if (pending.intent === "drawmode") setIsDrawMode(true);
             })
             .catch(() => {});
     }, [hasPro, sessionLoaded]);
+
+    // The other half of sign-in-then-paywall: they opened the paywall signed
+    // out, went off to sign in ("Already subscribed? Sign in"), and are now
+    // back signed in but not Pro -> show the paywall again (the website does
+    // the same via /signin?redirect=paywall). Waits for the subscription
+    // lookup to finish so a Pro user never sees it flash up.
+    useEffect(() => {
+        if (!session || !sessionLoaded || !subLoaded || hasPro) return;
+        AsyncStorage.getItem(PENDING_INTENT_KEY)
+            .then((raw) => {
+                if (!raw) return;
+                const pending = JSON.parse(raw) as PendingIntent;
+                if (!pending.signedOut) return;
+                if (pending.ts && Date.now() - pending.ts > PENDING_INTENT_MAX_AGE_MS) {
+                    AsyncStorage.removeItem(PENDING_INTENT_KEY).catch(() => {});
+                    return;
+                }
+                // Keep the intent (Draw Mode still resumes if they buy), but
+                // don't reopen the paywall on every launch.
+                AsyncStorage.setItem(PENDING_INTENT_KEY, JSON.stringify({ ...pending, signedOut: false })).catch(() => {});
+                setPaywallOpen(true);
+            })
+            .catch(() => {});
+    }, [session, sessionLoaded, subLoaded, hasPro]);
 
     useEffect(() => {
         if (!sessionLoaded) return;
@@ -2566,8 +2605,21 @@ export default function ChordsScreen() {
                     // Bought without an account -> sign in with the checkout
                     // email to unlock it (claimed server-side on sign-in).
                     if (session) setProWelcomeOpen(true);
-                    else setSignInToUnlockOpen(true);
+                    else {
+                        markIntentPurchased();
+                        setSignInToUnlockOpen(true);
+                    }
                 }}
+                onSignIn={
+                    session
+                        ? undefined
+                        : () => {
+                              // Keep the pending intent: it brings them back
+                              // to the paywall (or Draw Mode) after sign-in.
+                              setPaywallOpen(false);
+                              router.push("/sign-in");
+                          }
+                }
             />
             <ProWelcomeModal visible={proWelcomeOpen} onClose={() => setProWelcomeOpen(false)} />
             <SignInToUnlockModal

@@ -30,19 +30,31 @@ function isPro(sub: unknown): boolean {
     );
 }
 
-let currentHasPro = false;
+// `loaded` is false until the first subscriptions lookup for the current
+// auth state has finished, so callers can tell "not Pro" from "don't know
+// yet" (e.g. to avoid flashing the paywall at a Pro user while it loads).
+type Status = { hasPro: boolean; loaded: boolean };
+const INITIAL_STATUS: Status = { hasPro: false, loaded: false };
+
+let status: Status = INITIAL_STATUS;
 let currentUid: string | null = null;
 let channel: ReturnType<typeof supabase.channel> | null = null;
 let authSub: { unsubscribe: () => void } | null = null;
 let listenerCount = 0;
-const listeners = new Set<(v: boolean) => void>();
+const listeners = new Set<(s: Status) => void>();
+
+function setStatus(s: Status) {
+    status = s;
+    listeners.forEach((fn) => fn(s));
+}
 
 function notify(v: boolean) {
-    currentHasPro = v;
-    listeners.forEach((fn) => fn(v));
+    setStatus({ hasPro: v, loaded: true });
 }
 
 async function wire(uid: string) {
+    // New signed-in user: their status is unknown until the select below.
+    setStatus(INITIAL_STATUS);
     if (channel) {
         supabase.removeChannel(channel);
         channel = null;
@@ -102,21 +114,26 @@ function teardown() {
     authSub?.unsubscribe();
     authSub = null;
     currentUid = null;
+    status = INITIAL_STATUS;
 }
 
-export function useSubscription(): boolean {
-    const [hasPro, setHasPro] = React.useState(currentHasPro);
+export function useSubscriptionStatus(): Status {
+    const [s, setS] = React.useState(status);
 
     React.useEffect(() => {
         listenerCount += 1;
-        listeners.add(setHasPro);
+        listeners.add(setS);
         ensureWired();
         return () => {
-            listeners.delete(setHasPro);
+            listeners.delete(setS);
             listenerCount -= 1;
             if (listenerCount === 0) teardown();
         };
     }, []);
 
-    return hasPro;
+    return s;
+}
+
+export function useSubscription(): boolean {
+    return useSubscriptionStatus().hasPro;
 }
