@@ -480,7 +480,7 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
         borderTopColor: `${colors.ink}33`,
     },
     footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    supportLink: { alignSelf: 'flex-start' },
+    supportLink: { alignSelf: 'center' },
     footerLink: { fontFamily: fonts.sans.semiBold, fontSize: 14, color: colors.sand1 },
     deleteLink: { alignSelf: 'flex-start', marginTop: spacing.md },
     deleteLinkText: { fontFamily: fonts.sans.semiBold, fontSize: 12, color: '#f87171' },
