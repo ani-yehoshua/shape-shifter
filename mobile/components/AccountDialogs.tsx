@@ -17,7 +17,21 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { deleteAccount, emailRegex, submitFeedback, type FeedbackFile } from '../lib/account';
 import { fonts, radius, spacing, type Palette } from '../lib/theme';
-import { useThemedStyles } from '../lib/theme-context';
+import Svg, { Path } from 'react-native-svg';
+import { useTheme, useThemedStyles } from '../lib/theme-context';
+
+function UploadIcon() {
+    const { colors } = useTheme();
+    return (
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.sand1} strokeWidth={2}>
+            <Path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+            />
+        </Svg>
+    );
+}
 
 type Notice = { msg: string; ok: boolean } | null;
 
@@ -235,6 +249,7 @@ export function SupportDialog({
                 <View style={styles.field}>
                     <Text style={styles.fieldLabel}>Screenshot (optional)</Text>
                     <TouchableOpacity style={styles.uploadButton} onPress={pickFiles}>
+                        <UploadIcon />
                         <Text style={styles.uploadButtonText}>Upload files</Text>
                     </TouchableOpacity>
                     {files.map((f) => (
@@ -318,6 +333,9 @@ const makeStyles = (colors: Palette) =>
         textarea: { minHeight: 110 },
         uploadButton: {
             alignSelf: 'flex-start',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.sm,
             backgroundColor: colors.ink,
             paddingHorizontal: spacing.md,
             paddingVertical: spacing.sm,
