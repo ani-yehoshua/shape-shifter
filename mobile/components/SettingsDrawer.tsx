@@ -3,10 +3,8 @@
 // with Preferences (handedness, default tuning), the account email, Manage
 // Subscription for Pro users, and Sign out.
 //
-// Not here yet, each blocked on the deployed website's URL (they call
-// /api/* Next.js routes) or on dark mode existing: the theme toggle, change
-// email, delete account, and the feedback form. The email is shown
-// read-only until change-email can be wired.
+// Also has the theme toggle, change email, delete account and the Support
+// form; those last three call the website's /api/* routes (lib/account.ts).
 import { useEffect, useRef, useState } from 'react';
 import {
     Animated,
@@ -18,17 +16,20 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     useWindowDimensions,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import { emailRegex, updateEmail } from '../lib/account';
 import { usePreferences } from '../lib/preferences-context';
 import { supabase } from '../lib/supabase';
 import { fonts, radius, spacing, type Palette } from '../lib/theme';
 import { useTheme, useThemedStyles, type ThemeSetting } from '../lib/theme-context';
 import { TUNINGS } from '../lib/tunings';
+import { DeleteAccountDialog, SupportDialog } from './AccountDialogs';
 
 // Same billing portal link as the website's Header.tsx "Manage Subscription".
 const BILLING_PORTAL_URL = 'https://billing.stripe.com/p/login/fZu3cu1XQeGWcxs1lhgUM00';
@@ -81,6 +82,46 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
     const drag = useRef(new Animated.Value(0)).current;
     const [modalVisible, setModalVisible] = useState(false);
     const [signingOut, setSigningOut] = useState(false);
+    const [emailInput, setEmailInput] = useState(email);
+    const [emailLoading, setEmailLoading] = useState(false);
+    const [emailNotice, setEmailNotice] = useState<{ msg: string; ok: boolean } | null>(null);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [supportOpen, setSupportOpen] = useState(false);
+
+    useEffect(() => {
+        setEmailInput(email);
+    }, [email]);
+
+    const handleUpdateEmail = async () => {
+        const trimmed = emailInput.trim();
+        setEmailLoading(true);
+        try {
+            if (!trimmed || !emailRegex.test(trimmed)) throw new Error('Invalid email format');
+            if (trimmed === email) throw new Error('New email must be different from current email');
+            await updateEmail(trimmed);
+            setEmailNotice({ msg: 'Email updated!', ok: true });
+            await new Promise((r) => setTimeout(r, 3000));
+            setEmailNotice(null);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : '';
+            setEmailNotice({
+                msg: msg.includes('Invalid email')
+                    ? 'Enter a valid email'
+                    : msg.includes('different')
+                      ? 'Must be a new email address'
+                      : 'Could not update email.',
+                ok: false,
+            });
+        } finally {
+            setEmailLoading(false);
+        }
+    };
+
+    const handleDeleted = async () => {
+        setDeleteOpen(false);
+        onClose();
+        await supabase.auth.signOut();
+    };
 
     useEffect(() => {
         if (visible) {
@@ -229,9 +270,41 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
 
                         <View style={styles.group}>
                             <Text style={styles.groupTitle}>Email</Text>
-                            <Text style={styles.email} numberOfLines={1}>
-                                {email}
-                            </Text>
+                            <View style={styles.field}>
+                                <Text style={styles.fieldLabel}>Change email</Text>
+                                <View style={styles.emailRow}>
+                                    <TextInput
+                                        value={emailInput}
+                                        onChangeText={(v) => {
+                                            setEmailInput(v);
+                                            setEmailNotice(null);
+                                        }}
+                                        onBlur={() => {
+                                            const trimmed = emailInput.trim();
+                                            if (!trimmed || !emailRegex.test(trimmed)) setEmailInput(email);
+                                        }}
+                                        keyboardType="email-address"
+                                        autoComplete="email"
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                        style={styles.emailInput}
+                                    />
+                                    {emailInput !== email && (
+                                        <TouchableOpacity
+                                            style={[styles.saveEmailButton, emailLoading && styles.disabled]}
+                                            disabled={emailLoading}
+                                            onPress={handleUpdateEmail}>
+                                            <Text style={styles.saveEmailText}>{emailLoading ? '…' : 'Save'}</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                                {emailNotice && (
+                                    <Text
+                                        style={[styles.notice, emailNotice.ok ? styles.noticeOk : styles.noticeErr]}>
+                                        {emailNotice.msg}
+                                    </Text>
+                                )}
+                            </View>
                         </View>
 
                         {hasPro && (
@@ -244,12 +317,27 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
                     </ScrollView>
 
                     <View style={[styles.footer, { paddingBottom: spacing.md + insets.bottom }]}>
-                        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} disabled={signingOut}>
-                            <SignOutIcon />
-                            <Text style={styles.signOutText}>{signingOut ? 'Signing out…' : 'Sign out'}</Text>
+                        <View style={styles.footerRow}>
+                            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} disabled={signingOut}>
+                                <SignOutIcon />
+                                <Text style={styles.signOutText}>{signingOut ? 'Signing out…' : 'Sign out'}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setSupportOpen(true)}>
+                                <Text style={styles.footerLink}>Support 🛠️</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity onPress={() => setDeleteOpen(true)} style={styles.deleteLink}>
+                            <Text style={styles.deleteLinkText}>Delete account</Text>
                         </TouchableOpacity>
                     </View>
                 </Animated.View>
+
+                <SupportDialog visible={supportOpen} onClose={() => setSupportOpen(false)} initialEmail={email} />
+                <DeleteAccountDialog
+                    visible={deleteOpen}
+                    onClose={() => setDeleteOpen(false)}
+                    onDeleted={handleDeleted}
+                />
             </View>
         </Modal>
     );
@@ -327,7 +415,38 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
         color: `${colors.sand1}66`,
         fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
     },
-    email: { fontFamily: fonts.sans.regular, fontSize: 14, color: colors.sand1 },
+    emailRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    emailInput: {
+        flex: 1,
+        fontFamily: fonts.sans.regular,
+        fontSize: 14,
+        color: colors.sand1,
+        backgroundColor: `${colors.sand1}1A`,
+        borderWidth: 1,
+        borderColor: `${colors.sand1}4D`,
+        borderRadius: radius.lg,
+        paddingHorizontal: spacing.sm + 4,
+        paddingVertical: spacing.sm,
+    },
+    saveEmailButton: {
+        paddingHorizontal: spacing.sm + 4,
+        paddingVertical: spacing.xs + 2,
+        borderRadius: radius.pill,
+        backgroundColor: colors.sand1,
+    },
+    saveEmailText: { fontFamily: fonts.sans.semiBold, fontSize: 12, color: colors.sand4 },
+    disabled: { opacity: 0.5 },
+    notice: {
+        fontFamily: fonts.sans.semiBold,
+        fontSize: 12,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        paddingHorizontal: spacing.sm + 4,
+        paddingVertical: spacing.sm,
+        overflow: 'hidden',
+    },
+    noticeOk: { color: '#bbf7d0', backgroundColor: '#14532d99', borderColor: '#16653499' },
+    noticeErr: { color: '#fecaca', backgroundColor: '#7f1d1d99', borderColor: '#991b1b99' },
     manageButton: {
         alignSelf: 'flex-start',
         paddingHorizontal: spacing.md,
@@ -342,6 +461,10 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: `${colors.ink}33`,
     },
+    footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    footerLink: { fontFamily: fonts.sans.semiBold, fontSize: 14, color: colors.sand1 },
+    deleteLink: { alignSelf: 'flex-start', marginTop: spacing.md },
+    deleteLinkText: { fontFamily: fonts.sans.semiBold, fontSize: 12, color: '#f87171' },
     signOutButton: {
         alignSelf: 'flex-start',
         flexDirection: 'row',
