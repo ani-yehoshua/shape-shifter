@@ -583,6 +583,19 @@ export default function Header() {
                                       : "Start monthly plan"}
                             </button>
 
+                            {!user && (
+                                <button
+                                    onClick={() => {
+                                        // Not dismissPaywall: keep the pending
+                                        // intent so it resumes after sign-in.
+                                        setPaywallOpen(false);
+                                        router.push("/signin?redirect=paywall");
+                                    }}
+                                    className='w-full text-center text-xs font-semibold text-sand-1/60 hover:text-sand-1 underline underline-offset-2 transition-colors py-1'>
+                                    Already subscribed? Sign in
+                                </button>
+                            )}
+
                             <button
                                 onClick={dismissPaywall}
                                 className='w-full text-center text-xs text-sand-1/40 hover:text-sand-1/70 transition-colors py-1'>
