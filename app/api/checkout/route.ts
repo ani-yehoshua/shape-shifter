@@ -19,7 +19,7 @@ const PRICE_MAP: Record<string, string | undefined> = {
 export async function POST(req: Request) {
     const stripe = getStripe();
     try {
-        const { email, plan } = await req.json();
+        const { email, plan, source } = await req.json();
         const priceId = PRICE_MAP[plan];
 
         if (!priceId) {
@@ -30,10 +30,15 @@ export async function POST(req: Request) {
         }
 
         const supabase = await createServClient();
+        // The mobile app authenticates with a Bearer access token (no
+        // cookies); the website uses the cookie session.
+        const authHeader = req.headers.get('authorization');
         const {
             data: { user },
             error,
-        } = await supabase.auth.getUser();
+        } = authHeader?.startsWith('Bearer ')
+            ? await supabase.auth.getUser(authHeader.slice(7))
+            : await supabase.auth.getUser();
         if (error || !user) {
             return NextResponse.json(
                 { error: 'Not signed in' },
@@ -78,8 +83,16 @@ export async function POST(req: Request) {
                 metadata: { supabase_user_id: user.id },
             },
             client_reference_id: user.id,
-            success_url: `${siteUrl}/?subscribed=true`,
-            cancel_url: `${siteUrl}/`,
+            // The app's in-app browser session closes when it sees the
+            // shapeshifter:// redirect that /api/app-return issues.
+            success_url:
+                source === 'app'
+                    ? `${siteUrl}/api/app-return?status=success`
+                    : `${siteUrl}/?subscribed=true`,
+            cancel_url:
+                source === 'app'
+                    ? `${siteUrl}/api/app-return?status=cancel`
+                    : `${siteUrl}/`,
         });
 
         return NextResponse.json({ url: session.url });
