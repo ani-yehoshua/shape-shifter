@@ -20,5 +20,7 @@ create table if not exists public.pending_subscriptions (
 create index if not exists pending_subscriptions_email_idx
     on public.pending_subscriptions (email);
 
--- Service role only (webhook + claim route): RLS on, no policies.
+-- Service role only (webhook + claim route): RLS on, no policies, and no
+-- API-role privileges either.
 alter table public.pending_subscriptions enable row level security;
+revoke all on public.pending_subscriptions from anon, authenticated;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createServClient } from '@/lib/supabaseServerClient';
+import { getSupabaseAdmin } from '@/lib/claimSubscription';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,25 +40,22 @@ export async function POST(req: Request) {
         } = authHeader?.startsWith('Bearer ')
             ? await supabase.auth.getUser(authHeader.slice(7))
             : await supabase.auth.getUser();
-        // The mobile app lets people buy Pro before they have an account
-        // (source === 'app'): Checkout collects their email, the webhook
-        // stores the subscription as pending against it, and it's claimed
-        // when they sign in with that email. The website still requires a
-        // signed-in user.
-        const anonymous = (error || !user) && source === 'app';
-        if ((error || !user) && !anonymous) {
-            return NextResponse.json(
-                { error: 'Not signed in' },
-                { status: 401 },
-            );
-        }
+        // People can buy Pro before they have an account (website and app):
+        // Checkout collects their email, the webhook stores the
+        // subscription as pending against it, and it's claimed when they
+        // sign in with that email (lib/claimSubscription.ts).
+        const signedInUser = error ? null : user;
+
+        // `subscriptions` is written with the service role only (clients
+        // have no write access to it), so this isn't the user-scoped client.
+        const admin = getSupabaseAdmin();
 
         let stripeCustomerId: string | null = null;
-        if (user) {
-            const { data: existing } = await supabase
+        if (signedInUser) {
+            const { data: existing } = await admin
                 .from('subscriptions')
                 .select('stripe_cust_id')
-                .eq('user_id', user.id)
+                .eq('user_id', signedInUser.id)
                 .not('stripe_cust_id', 'is', null)
                 .order('created_at', { ascending: false })
                 .limit(1)
@@ -67,14 +65,17 @@ export async function POST(req: Request) {
 
             if (!stripeCustomerId) {
                 const customer = await stripe.customers.create({
-                    email: email || user.email || undefined,
-                    metadata: { supabase_user_id: user.id },
+                    email: email || signedInUser.email || undefined,
+                    metadata: { supabase_user_id: signedInUser.id },
                 });
                 stripeCustomerId = customer.id;
-                await supabase
+                await admin
                     .from('subscriptions')
                     .upsert(
-                        { user_id: user.id, stripe_cust_id: stripeCustomerId },
+                        {
+                            user_id: signedInUser.id,
+                            stripe_cust_id: stripeCustomerId,
+                        },
                         { onConflict: 'user_id' },
                     );
             }
@@ -86,21 +87,25 @@ export async function POST(req: Request) {
         const session = await stripe.checkout.sessions.create({
             mode: 'subscription',
             line_items: [{ price: priceId, quantity: 1 }],
-            ...(user
+            ...(signedInUser
                 ? {
                       customer: stripeCustomerId ?? undefined,
                       subscription_data: {
-                          metadata: { supabase_user_id: user.id },
+                          metadata: { supabase_user_id: signedInUser.id },
                       },
-                      client_reference_id: user.id,
+                      client_reference_id: signedInUser.id,
                   }
                 : {}),
             // The app's in-app browser session closes when it sees the
-            // shapeshifter:// redirect that /api/app-return issues.
+            // shapeshifter:// redirect that /api/app-return issues. A
+            // signed-out website buyer lands on sign-in (with a notice) to
+            // claim what they bought.
             success_url:
                 source === 'app'
                     ? `${siteUrl}/api/app-return?status=success`
-                    : `${siteUrl}/?subscribed=true`,
+                    : signedInUser
+                      ? `${siteUrl}/?subscribed=true`
+                      : `${siteUrl}/signin?purchased=1`,
             cancel_url:
                 source === 'app'
                     ? `${siteUrl}/api/app-return?status=cancel`
