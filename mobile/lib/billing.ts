@@ -59,9 +59,12 @@ export async function startCheckout(plan: Plan, email?: string | null): Promise<
         },
         body: JSON.stringify({ email, plan, source: 'app' }),
     });
-    if (!res.ok) throw new Error('Failed to create checkout session.');
+    if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Checkout request failed (${res.status}): ${body.slice(0, 200)}`);
+    }
     const { url } = await res.json();
-    if (!url) throw new Error('Failed to create checkout session.');
+    if (!url) throw new Error('Checkout response had no url.');
 
     const result = await WebBrowser.openAuthSessionAsync(url, CHECKOUT_RETURN_URL);
     return result.type === 'success' && result.url.includes('status=success') ? 'success' : 'cancel';

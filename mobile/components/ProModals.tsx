@@ -99,7 +99,9 @@ export function PaywallModal({
         try {
             const outcome = await startCheckout(plan, session?.user.email);
             if (outcome === 'success') onSubscribed();
-        } catch {
+        } catch (e) {
+            // Surface the real cause in the dev log (it was being swallowed).
+            console.warn('[checkout] failed to start:', e);
             setAlert('Unable to start checkout. Please try again.');
         } finally {
             setLoading(false);
