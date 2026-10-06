@@ -919,6 +919,7 @@ export default function ChordsScreen() {
             })
             .catch(() => {});
         // Deliberately keyed on Pro landing, not on every selection change.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hasPro, sessionLoaded]);
 
     // The other half of sign-in-then-paywall: they opened the paywall signed
