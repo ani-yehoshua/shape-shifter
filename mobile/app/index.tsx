@@ -35,7 +35,8 @@
 //   a saved_chords/progressions Supabase round-trip), and the paywall UI
 //   itself.
 // - Scales mode, Scale Chords mode -- each its own future screen.
-// - Real audio: playChord/playNote are stubbed (see ../../lib/guitarAudio).
+// - Audio: playChord/playNote synthesize and play via expo-audio (see
+//   ../lib/guitarAudio).
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     Animated,
@@ -51,6 +52,7 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useAuth } from "../lib/auth-context";
 import { usePreferences } from "../lib/preferences-context";
@@ -114,6 +116,28 @@ type ChordLevel = {
 };
 
 const SEMIS = [...Array(12).keys()];
+
+// Same shape as the website's SessionState, minus the scaleChords fields
+// (that mode isn't ported yet).
+const SESSION_STORAGE_KEY = "shapeshifter_session_v1";
+type SessionState = {
+    selectedMode?: "chords" | "scales";
+    currentRootNote?: string;
+    capo?: number;
+    showIntervals?: boolean;
+    selectedCategory?: string;
+    selectedVoicingType?: string;
+    selectedStringSet?: string;
+    selectedChordQuality?: string;
+    selectedPosition?: string;
+    selectedAltShape?: number;
+    selectedNoteGroup?: string;
+    selectedScale?: string;
+    selectedScalePosition?: number;
+    selectedScalePattern?: string;
+    selectedScaleVariant?: number;
+    showAllScalePositions?: boolean;
+};
 
 // Lets the Menu sheet's backdrop animate its own opacity while remaining
 // tappable-to-dismiss (Animated.View isn't pressable on its own).
@@ -771,6 +795,89 @@ export default function ChordsScreen() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedCategory]);
+
+    // ─── Session persistence ────────────────────────────────────────────
+    // Port of the website's persistedSession/save effect: restores the last
+    // mode, root, capo and selections on launch instead of resetting to
+    // defaults. Handedness/tuning live in the preferences context (their own
+    // keys), same split as the website. AsyncStorage is async, so the
+    // restore runs once on mount and saving is gated on it finishing --
+    // otherwise the first render's defaults would overwrite the stored
+    // session before it was read.
+    const [sessionLoaded, setSessionLoaded] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        AsyncStorage.getItem(SESSION_STORAGE_KEY)
+            .then(raw => {
+                if (cancelled || !raw) return;
+                const p = JSON.parse(raw) as SessionState;
+                if (p.selectedMode === "chords" || p.selectedMode === "scales") setSelectedMode(p.selectedMode);
+                if (p.currentRootNote !== undefined) setCurrentRootNote(p.currentRootNote);
+                if (p.capo !== undefined) setCapo(p.capo);
+                if (p.showIntervals !== undefined) setShowIntervals(p.showIntervals);
+                if (p.selectedCategory !== undefined) setSelectedCategory(p.selectedCategory);
+                if (p.selectedVoicingType !== undefined) setSelectedVoicingType(p.selectedVoicingType);
+                if (p.selectedStringSet !== undefined) setSelectedStringSet(p.selectedStringSet);
+                if (p.selectedChordQuality !== undefined) setSelectedChordQuality(p.selectedChordQuality);
+                if (p.selectedPosition !== undefined) setSelectedPosition(p.selectedPosition);
+                if (p.selectedAltShape !== undefined) setSelectedAltShape(p.selectedAltShape);
+                if (p.selectedNoteGroup !== undefined) setSelectedNoteGroup(p.selectedNoteGroup);
+                if (p.selectedScale !== undefined) setSelectedScale(p.selectedScale);
+                if (p.selectedScalePosition !== undefined) setSelectedScalePosition(p.selectedScalePosition);
+                if (p.selectedScalePattern !== undefined) setSelectedScalePattern(p.selectedScalePattern);
+                if (p.selectedScaleVariant !== undefined) setSelectedScaleVariant(p.selectedScaleVariant);
+                if (p.showAllScalePositions !== undefined) setShowAllScalePositions(p.showAllScalePositions);
+            })
+            .catch(() => {})
+            .finally(() => {
+                if (!cancelled) setSessionLoaded(true);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!sessionLoaded) return;
+        const snapshot: SessionState = {
+            selectedMode,
+            currentRootNote,
+            capo,
+            showIntervals,
+            selectedCategory,
+            selectedVoicingType,
+            selectedStringSet,
+            selectedChordQuality,
+            selectedPosition,
+            selectedAltShape,
+            selectedNoteGroup,
+            selectedScale,
+            selectedScalePosition,
+            selectedScalePattern,
+            selectedScaleVariant,
+            showAllScalePositions,
+        };
+        AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(snapshot)).catch(() => {});
+    }, [
+        sessionLoaded,
+        selectedMode,
+        currentRootNote,
+        capo,
+        showIntervals,
+        selectedCategory,
+        selectedVoicingType,
+        selectedStringSet,
+        selectedChordQuality,
+        selectedPosition,
+        selectedAltShape,
+        selectedNoteGroup,
+        selectedScale,
+        selectedScalePosition,
+        selectedScalePattern,
+        selectedScaleVariant,
+        showAllScalePositions,
+    ]);
 
     const octaveFromDisplay = () => {
         const frets = displayShape
