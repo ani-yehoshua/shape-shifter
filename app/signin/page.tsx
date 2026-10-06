@@ -105,6 +105,22 @@ function SignInForm() {
             return;
         }
         localStorage.setItem("ss_last_email", email.trim());
+        // Pick up a subscription bought before this account existed (see
+        // lib/claimSubscription.ts). Awaited so Pro is already in place
+        // when the redirect lands; a failure here must not block sign-in.
+        try {
+            const { data } = await supabase.auth.getSession();
+            if (data.session) {
+                await fetch("/api/claim-subscription", {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${data.session.access_token}`,
+                    },
+                });
+            }
+        } catch {
+            // ignore
+        }
         setStatus("success");
         setMessage("Signed in. Redirecting…");
         window.location.href = destination;
@@ -173,6 +189,12 @@ function SignInForm() {
         <div className='flex-1 grid place-items-center px-4 py-8'>
             <div className='w-full max-w-sm flex flex-col gap-4'>
                 <div className='bg-sand-4 rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col gap-5'>
+                    {searchParams.get("purchased") === "1" && (
+                        <p className='rounded-lg px-3 py-2 text-sm font-semibold text-center bg-green/20 text-green border border-green/40'>
+                            Payment received. Sign in with the email you used
+                            at checkout to unlock Pro.
+                        </p>
+                    )}
                     <div className='text-center'>
                         <h1 className='text-2xl font-bold text-sand-1'>
                             {step === "email" ? "Sign in" : "Check your email"}

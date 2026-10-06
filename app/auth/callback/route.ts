@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServClient } from '@/lib/supabaseServerClient';
+import { claimPendingSubscription } from '@/lib/claimSubscription';
 
 export const runtime = 'nodejs';
 
@@ -11,11 +12,21 @@ export async function GET(req: Request) {
 
     if (code) {
         const supabase = await createServClient();
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
         // Cross-device PKCE mismatch is expected — continue regardless
         if (error) {
             console.error('Code exchange failed:', error.message);
-        } else if (next) {
+        } else {
+            // Signing in by email link: pick up a subscription bought
+            // before this account existed (see lib/claimSubscription.ts).
+            const u = data.user;
+            if (u?.email) {
+                await claimPendingSubscription(u.id, u.email).catch(e =>
+                    console.error('Claim subscription failed:', e),
+                );
+            }
+        }
+        if (!error && next) {
             // Same-device confirmation actually has a session now, so send
             // them straight to whatever they were doing instead of the
             // generic "you're confirmed" page.

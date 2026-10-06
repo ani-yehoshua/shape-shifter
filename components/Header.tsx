@@ -574,24 +574,13 @@ export default function Header() {
 
                             <button
                                 disabled={paywallLoading}
-                                onClick={
-                                    user
-                                        ? handleSubscribe
-                                        : () => {
-                                              setPaywallOpen(false);
-                                              router.push(
-                                                  "/signin?redirect=paywall",
-                                              );
-                                          }
-                                }
+                                onClick={handleSubscribe}
                                 className='w-full py-3.5 rounded-full bg-sand-1 text-sand-4 text-sm font-bold tracking-wide hover:opacity-90 disabled:opacity-40 transition-all active:scale-95'>
-                                {!user
-                                    ? "Sign in to continue"
-                                    : paywallLoading
-                                      ? "Loading…"
-                                      : plan === "yearly"
-                                        ? "Start yearly plan"
-                                        : "Start monthly plan"}
+                                {paywallLoading
+                                    ? "Loading…"
+                                    : plan === "yearly"
+                                      ? "Start yearly plan"
+                                      : "Start monthly plan"}
                             </button>
 
                             <button
