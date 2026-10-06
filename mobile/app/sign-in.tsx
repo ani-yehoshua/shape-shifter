@@ -10,6 +10,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
 import { fonts, radius, spacing, type Palette } from '../lib/theme';
 import { useTheme, useThemedStyles } from '../lib/theme-context';
@@ -21,9 +22,23 @@ function isValidEmail(email: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
+function PersonIcon() {
+    const { colors } = useTheme();
+    return (
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={`${colors.onSurface}B3`} strokeWidth={2}>
+            <Path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+            />
+        </Svg>
+    );
+}
+
 export default function SignIn() {
     const { colors } = useTheme();
     const styles = useThemedStyles(makeStyles);
+    const [emailFocused, setEmailFocused] = useState(false);
     const [step, setStep] = useState<Step>('email');
     const [email, setEmail] = useState('');
     const [digits, setDigits] = useState<string[]>(Array(6).fill(''));
@@ -149,22 +164,32 @@ export default function SignIn() {
 
                         {step === 'email' ? (
                             <>
-                                <TextInput
-                                    style={styles.emailInput}
-                                    placeholder="you@example.com"
-                                    placeholderTextColor={`${colors.onSurface}66`}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                    keyboardType="email-address"
-                                    autoComplete="email"
-                                    value={email}
-                                    onChangeText={(v) => {
-                                        setEmail(v);
-                                        setMessage('');
-                                        setStatus('idle');
-                                    }}
-                                    editable={status !== 'sending'}
-                                />
+                                <View style={styles.fieldWrap}>
+                                    <Text style={styles.fieldLabel}>
+                                        Email<Text style={styles.required}>*</Text>
+                                    </Text>
+                                    <View style={[styles.fieldRow, emailFocused && styles.fieldRowFocused]}>
+                                        <View style={styles.fieldIcon}>
+                                            <PersonIcon />
+                                        </View>
+                                        <TextInput
+                                            style={styles.emailInput}
+                                            autoCapitalize="none"
+                                            autoCorrect={false}
+                                            keyboardType="email-address"
+                                            autoComplete="email"
+                                            value={email}
+                                            onFocus={() => setEmailFocused(true)}
+                                            onBlur={() => setEmailFocused(false)}
+                                            onChangeText={(v) => {
+                                                setEmail(v);
+                                                setMessage('');
+                                                setStatus('idle');
+                                            }}
+                                            editable={status !== 'sending'}
+                                        />
+                                    </View>
+                                </View>
                                 <TouchableOpacity
                                     style={[
                                         styles.button,
@@ -296,15 +321,40 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
         textAlign: 'center',
         lineHeight: 18,
     },
-    emailInput: {
+    // Matches the website's FormFields: small semibold label with a red
+    // asterisk, underline-only input (border-b-2), leading icon.
+    fieldWrap: {
         width: '100%',
-        borderWidth: 1,
-        borderColor: `${colors.onSurface}4D`,
-        borderRadius: radius.pill,
-        paddingVertical: spacing.sm + 4,
-        paddingHorizontal: spacing.md,
+        gap: 4,
+    },
+    fieldLabel: {
+        fontFamily: fonts.sans.semiBold,
+        fontSize: 12,
+        color: `${colors.onSurface}CC`,
+    },
+    required: {
+        color: '#f87171',
+        marginLeft: 2,
+    },
+    fieldRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderBottomWidth: 2,
+        borderBottomColor: `${colors.onSurface}66`,
+    },
+    fieldRowFocused: {
+        borderBottomColor: colors.onSurface,
+    },
+    fieldIcon: {
+        paddingRight: spacing.sm,
+    },
+    emailInput: {
+        flex: 1,
+        minWidth: 0,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: 4,
         fontFamily: fonts.sans.regular,
-        fontSize: 15,
+        fontSize: 14,
         color: colors.onSurface,
     },
     button: {
