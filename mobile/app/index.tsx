@@ -90,7 +90,8 @@ import {
 } from "../lib/MusicTheory";
 import { CHORD_SHAPES } from "../lib/Shapes/Chords";
 import { SCALE_SHAPES } from "../lib/Shapes/Scales";
-import { colors, fonts, radius, spacing } from "../lib/theme";
+import { fonts, radius, spacing, type Palette } from "../lib/theme";
+import { useTheme, useThemedStyles } from "../lib/theme-context";
 import { fetchSavedChords, saveChord, type SavedChord, type SavedChordContext } from "../lib/savedChords";
 import SavedChordsPanel from "../components/SavedChordsPanel";
 import ProgressionPanel from "../components/ProgressionPanel";
@@ -161,6 +162,7 @@ function wrapAtParen(text: string): string {
 }
 
 function ChevronIcon({ direction }: { direction: "left" | "right" }) {
+    const { colors } = useTheme();
     return (
         <Svg
             width={20}
@@ -179,6 +181,7 @@ function ChevronIcon({ direction }: { direction: "left" | "right" }) {
 }
 
 function MenuIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={14} height={14} fill='none' stroke={colors.ink} strokeWidth={2} viewBox='0 0 24 24'>
             <Path strokeLinecap='round' strokeLinejoin='round' d='M4 6h16M4 12h16M4 18h16' />
@@ -187,6 +190,7 @@ function MenuIcon() {
 }
 
 function StarIcon() {
+    const { colors } = useTheme();
     return (
         <Svg
             width={10}
@@ -199,6 +203,7 @@ function StarIcon() {
 }
 
 function StrumIcon() {
+    const { colors } = useTheme();
     return (
         <Svg
             width={20}
@@ -210,13 +215,14 @@ function StrumIcon() {
     );
 }
 
-function RandomizeIcon({ color = colors.ink }: { color?: string }) {
+function RandomizeIcon({ color }: { color?: string }) {
+    const { colors } = useTheme();
     return (
         <Svg
             width={16}
             height={16}
             fill='none'
-            stroke={color}
+            stroke={color ?? colors.ink}
             strokeWidth={2}
             viewBox='0 0 24 24'
             strokeLinecap='round'
@@ -231,6 +237,7 @@ function RandomizeIcon({ color = colors.ink }: { color?: string }) {
 }
 
 function StopIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={20} height={20} viewBox='0 0 24 24' fill={colors.sand1}>
             <Rect x={5} y={5} width={14} height={14} rx={2} />
@@ -239,6 +246,7 @@ function StopIcon() {
 }
 
 function HandIcon({ flipped }: { flipped: boolean }) {
+    const { colors } = useTheme();
     return (
         <Svg
             width={20}
@@ -252,6 +260,7 @@ function HandIcon({ flipped }: { flipped: boolean }) {
 }
 
 function PencilIcon() {
+    const { colors } = useTheme();
     return (
         <Svg
             width={20}
@@ -272,14 +281,16 @@ const SAVED_YELLOW = "#facc15";
 // currentColor equivalent, so that swap is an explicit `color` prop here
 // instead -- the "My Chords" panel-open buttons don't pass one and stay
 // ink, same as the website (they're never wrapped in that yellow class).
-function BookmarkIcon({ filled = false, color = colors.ink }: { filled?: boolean; color?: string }) {
+function BookmarkIcon({ filled = false, color }: { filled?: boolean; color?: string }) {
+    const { colors } = useTheme();
+    const c = color ?? colors.ink;
     return (
         <Svg
             width={18}
             height={18}
             viewBox="0 0 24 24"
-            fill={filled ? color : "none"}
-            stroke={color}
+            fill={filled ? c : "none"}
+            stroke={c}
             strokeWidth={2}>
             <Path strokeLinecap="round" strokeLinejoin="round" d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
         </Svg>
@@ -287,6 +298,7 @@ function BookmarkIcon({ filled = false, color = colors.ink }: { filled?: boolean
 }
 
 function ListIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.ink} strokeWidth={2} strokeLinecap="round">
             <Path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
@@ -605,6 +617,8 @@ function firstEnharmonic(cell: string): string {
 }
 
 export default function ChordsScreen() {
+    const { colors } = useTheme();
+    const styles = useThemedStyles(makeStyles);
     const hasPro = useSubscription();
     const { session } = useAuth();
     const router = useRouter();
@@ -3785,7 +3799,7 @@ export default function ChordsScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
     safeArea: {
         flex: 1,
         backgroundColor: colors.bg,

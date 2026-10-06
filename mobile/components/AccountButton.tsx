@@ -14,9 +14,11 @@ import { useRouter } from 'expo-router';
 import SettingsDrawer from './SettingsDrawer';
 import { useAuth } from '../lib/auth-context';
 import { useSubscription } from '../lib/hooks/useSubscription';
-import { colors, fonts, spacing } from '../lib/theme';
+import { fonts, spacing, type Palette } from '../lib/theme';
+import { useTheme, useThemedStyles } from '../lib/theme-context';
 
 function PersonIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={20} height={20} viewBox="0 0 24 24" fill={colors.ink}>
             <Path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm-7 9a7 7 0 1 1 14 0H5z" />
@@ -29,6 +31,7 @@ export default function AccountButton() {
     const hasPro = useSubscription();
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const styles = useThemedStyles(makeStyles);
     const [menuOpen, setMenuOpen] = useState(false);
 
     if (loading) return null;
@@ -60,7 +63,7 @@ export default function AccountButton() {
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
     wrap: {
         position: 'absolute',
         right: spacing.md,

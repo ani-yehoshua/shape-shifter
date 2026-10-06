@@ -18,7 +18,8 @@ import {
 } from 'react-native';
 import { allChordShapes } from '../lib/API';
 import { SCALE_SHAPES } from '../lib/Shapes/Scales';
-import { colors, fonts, radius, spacing } from '../lib/theme';
+import { fonts, radius, spacing, type Palette } from '../lib/theme';
+import { useTheme, useThemedStyles } from '../lib/theme-context';
 
 export type ChordRandomizeConfig = {
     categories: string[];
@@ -83,6 +84,7 @@ function PillGroup({
     selected: string[];
     onToggle: (v: string) => void;
 }) {
+    const styles = useThemedStyles(makeStyles);
     return (
         <View>
             <Text style={styles.sectionLabel}>
@@ -106,6 +108,8 @@ function PillGroup({
 }
 
 function RootToggle({ value, onChange }: { value: boolean; onChange: () => void }) {
+    const { colors } = useTheme();
+    const styles = useThemedStyles(makeStyles);
     return (
         <View style={styles.rootRow}>
             <Text style={styles.rootLabel}>Randomize root note</Text>
@@ -136,6 +140,7 @@ export default function RandomizeSheet({
     onClose,
     onDone,
 }: Props) {
+    const styles = useThemedStyles(makeStyles);
     const { height: screenHeight } = useWindowDimensions();
     const anim = useRef(new Animated.Value(0)).current;
     const [modalVisible, setModalVisible] = useState(false);
@@ -318,7 +323,7 @@ export default function RandomizeSheet({
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
     container: { flex: 1 },
     backdrop: {
         position: 'absolute',

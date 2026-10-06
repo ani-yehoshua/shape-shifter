@@ -18,7 +18,8 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { deleteChord, fetchSavedChords, renameChord, type SavedChord } from '../lib/savedChords';
-import { colors, fonts, radius, spacing } from '../lib/theme';
+import { fonts, radius, spacing, type Palette } from '../lib/theme';
+import { useTheme, useThemedStyles } from '../lib/theme-context';
 
 type Props = {
     visible: boolean;
@@ -32,6 +33,7 @@ type Props = {
 };
 
 function EditIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={`${colors.ink}80`} strokeWidth={2}>
             <Path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -41,6 +43,7 @@ function EditIcon() {
 }
 
 function TrashIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={18} height={18} viewBox="0 0 20 20" fill={`${colors.ink}66`}>
             <Path
@@ -60,6 +63,8 @@ function sourceLabel(chord: SavedChord) {
 }
 
 export default function SavedChordsPanel({ visible, onClose, onLoad, refreshKey = 0, onChange }: Props) {
+    const { colors } = useTheme();
+    const styles = useThemedStyles(makeStyles);
     const [chords, setChords] = useState<SavedChord[]>([]);
     const [loading, setLoading] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -167,7 +172,7 @@ export default function SavedChordsPanel({ visible, onClose, onLoad, refreshKey 
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
     backdrop: {
         flex: 1,
         justifyContent: 'flex-end',

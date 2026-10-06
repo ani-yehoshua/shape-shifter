@@ -4,11 +4,11 @@
 // plain-object equivalent -- update both places together if the site's
 // tokens change.
 //
-// The site also ships a full dark-mode inversion of this ramp (see
-// `:root.dark` in globals.css) via next-themes. That isn't carried over
-// here yet -- this app doesn't have a theme toggle of its own -- but the
-// values are there on the web side whenever this needs a dark variant.
-export const colors = {
+// Dark mode is the site's full inversion of this ramp (`:root.dark` in
+// globals.css): same hexes with roles swapped, accents unchanged. Both
+// palettes live here; components read the active one through useTheme()
+// (see ./theme-context) rather than importing a static object.
+export const lightColors = {
     // Slate + Amber palette, named exactly as in globals.css so this file
     // can be diffed directly against the site's tokens.
     sand1: '#f7f7f5',
@@ -26,6 +26,25 @@ export const colors = {
     surface: '#1f2d3d', // sand-4
     onSurface: '#f7f7f5', // sand-1
     border: '#1f2d3d', // ink
+};
+
+export type Palette = typeof lightColors;
+
+// `:root.dark` -- sand-1/2/3 and sand-4/ink swap; accents are unchanged.
+export const darkColors: Palette = {
+    sand1: '#1f2d3d',
+    sand2: '#28384a',
+    sand3: '#3c5066',
+    sand4: '#f7f7f5',
+    ink: '#f7f7f5',
+    rootRed: '#dc2626',
+    olive: '#d97706',
+    green: '#b45309',
+
+    bg: '#1f2d3d', // sand-1
+    surface: '#f7f7f5', // sand-4
+    onSurface: '#1f2d3d', // sand-1
+    border: '#f7f7f5', // ink
 };
 
 // Tailwind v4's default radius scale -- this app doesn't override --radius-*

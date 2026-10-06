@@ -11,7 +11,8 @@ import Svg, { Circle, G, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { spellInterval, spellNote } from '../lib/MusicTheory';
 import type { NotePosition } from '../lib/fretboardMap';
 import { playNote } from '../lib/guitarAudio';
-import { colors, fonts } from '../lib/theme';
+import { fonts } from '../lib/theme';
+import { useTheme } from '../lib/theme-context';
 
 type Props = {
     chordShape: NotePosition[];
@@ -46,6 +47,7 @@ const FretboardVertical = ({
     capo = 0,
     tuningFreqs,
 }: Props) => {
+    const { colors } = useTheme();
     const padX = 30;
     const padY = 40;
     const fretHeight = 70;

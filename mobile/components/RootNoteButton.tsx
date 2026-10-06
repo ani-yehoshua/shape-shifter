@@ -11,7 +11,8 @@
 import { useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { NOTES } from '../lib/fretboardMap';
-import { colors, fonts, radius, spacing } from '../lib/theme';
+import { fonts, radius, spacing, type Palette } from '../lib/theme';
+import { useThemedStyles } from '../lib/theme-context';
 
 // C -> B chromatic order (indices into NOTES, which starts at A=0)
 const C_TO_B: number[] = [3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1, 2];
@@ -31,6 +32,7 @@ type Props = {
 type Anchor = { x: number; y: number; width: number; height: number };
 
 export default function RootNoteButton({ root, onSelect, onRandom, style, textStyle }: Props) {
+    const styles = useThemedStyles(makeStyles);
     const [open, setOpen] = useState(false);
     const [anchor, setAnchor] = useState<Anchor | null>(null);
     const [useFlats, setUseFlats] = useState(() => !root.includes('#'));
@@ -111,7 +113,7 @@ export default function RootNoteButton({ root, onSelect, onRandom, style, textSt
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
     backdrop: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.3)',

@@ -26,7 +26,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { usePreferences } from '../lib/preferences-context';
 import { supabase } from '../lib/supabase';
-import { colors, fonts, radius, spacing } from '../lib/theme';
+import { fonts, radius, spacing, type Palette } from '../lib/theme';
+import { useTheme, useThemedStyles, type ThemeSetting } from '../lib/theme-context';
 import { TUNINGS } from '../lib/tunings';
 
 // Same billing portal link as the website's Header.tsx "Manage Subscription".
@@ -40,7 +41,14 @@ type Props = {
     hasPro: boolean;
 };
 
+const THEME_OPTIONS: { value: ThemeSetting; label: string }[] = [
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'system', label: 'System' },
+];
+
 function CloseIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={`${colors.sand1}B3`} strokeWidth={2}>
             <Path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -49,6 +57,7 @@ function CloseIcon() {
 }
 
 function SignOutIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.sand4} strokeWidth={2}>
             <Path
@@ -64,6 +73,8 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
     const { width: screenWidth } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const preferences = usePreferences();
+    const { theme, setTheme } = useTheme();
+    const styles = useThemedStyles(makeStyles);
     const drawerWidth = Math.min(screenWidth, DRAWER_MAX_WIDTH);
 
     const anim = useRef(new Animated.Value(0)).current;
@@ -137,6 +148,29 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
                     <ScrollView contentContainerStyle={styles.body}>
                         <View style={styles.group}>
                             <Text style={styles.groupTitle}>Preferences</Text>
+
+                            <View style={styles.field}>
+                                <Text style={styles.fieldLabel}>Theme</Text>
+                                <View style={styles.segmented}>
+                                    {THEME_OPTIONS.map(({ value, label }, i) => {
+                                        const active = theme === value;
+                                        return (
+                                            <TouchableOpacity
+                                                key={value}
+                                                onPress={() => setTheme(value)}
+                                                style={[
+                                                    styles.segment,
+                                                    i > 0 && styles.segmentDivider,
+                                                    active && styles.segmentActive,
+                                                ]}>
+                                                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                                                    {label}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
 
                             <View style={styles.field}>
                                 <Text style={styles.fieldLabel}>Handedness</Text>
@@ -221,7 +255,7 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
     container: { flex: 1 },
     backdrop: {
         position: 'absolute',

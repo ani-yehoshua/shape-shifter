@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { colors, fonts, radius, spacing } from '../lib/theme';
+import { fonts, radius, spacing, type Palette } from '../lib/theme';
+import { useTheme, useThemedStyles } from '../lib/theme-context';
 
 type Step = 'email' | 'code';
 type Status = 'idle' | 'sending' | 'error';
@@ -21,6 +22,8 @@ function isValidEmail(email: string) {
 }
 
 export default function SignIn() {
+    const { colors } = useTheme();
+    const styles = useThemedStyles(makeStyles);
     const [step, setStep] = useState<Step>('email');
     const [email, setEmail] = useState('');
     const [digits, setDigits] = useState<string[]>(Array(6).fill(''));
@@ -255,7 +258,7 @@ export default function SignIn() {
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
     safeArea: {
         flex: 1,
         backgroundColor: colors.bg,

@@ -14,9 +14,16 @@ import {
 import { AuthProvider, useAuth } from '../lib/auth-context';
 import { PreferencesProvider } from '../lib/preferences-context';
 import AccountButton from '../components/AccountButton';
-import { colors } from '../lib/theme';
+import { ThemeProvider, useTheme } from '../lib/theme-context';
 
 SplashScreen.preventAutoHideAsync();
+
+// Status bar icons need to flip with the theme (dark icons on the light
+// palette, light icons on the dark one).
+function ThemedStatusBar() {
+    const { isDark } = useTheme();
+    return <StatusBar style={isDark ? 'light' : 'dark'} />;
+}
 
 export default function RootLayout() {
     const [fontsLoaded] = useFonts({
@@ -42,12 +49,14 @@ export default function RootLayout() {
 
     return (
         <SafeAreaProvider>
-            <AuthProvider>
-                <PreferencesProvider>
-                    <StatusBar style="dark" />
-                    <AuthGate />
-                </PreferencesProvider>
-            </AuthProvider>
+            <ThemeProvider>
+                <AuthProvider>
+                    <PreferencesProvider>
+                        <ThemedStatusBar />
+                        <AuthGate />
+                    </PreferencesProvider>
+                </AuthProvider>
+            </ThemeProvider>
         </SafeAreaProvider>
     );
 }
@@ -55,6 +64,7 @@ export default function RootLayout() {
 function AuthGate() {
     const { session, loading } = useAuth();
     const pathname = usePathname();
+    const { colors } = useTheme();
 
     if (loading) {
         return (

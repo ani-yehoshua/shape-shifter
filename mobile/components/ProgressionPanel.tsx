@@ -49,7 +49,8 @@ import {
     type Progression,
     type ProgressionChord,
 } from '../lib/progressions';
-import { colors, fonts, radius, spacing } from '../lib/theme';
+import { fonts, radius, spacing, type Palette } from '../lib/theme';
+import { useTheme, useThemedStyles } from '../lib/theme-context';
 import type { NotePosition } from '../lib/fretboardMap';
 
 type CurrentChord = {
@@ -74,6 +75,7 @@ function randomId() {
 }
 
 function TrashIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={18} height={18} viewBox="0 0 20 20" fill={`${colors.ink}66`}>
             <Path
@@ -86,6 +88,7 @@ function TrashIcon() {
 }
 
 function EditIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={`${colors.ink}80`} strokeWidth={2}>
             <Path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -95,6 +98,7 @@ function EditIcon() {
 }
 
 function ChevronUpIcon({ disabled }: { disabled?: boolean }) {
+    const { colors } = useTheme();
     return (
         <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={disabled ? `${colors.ink}33` : `${colors.ink}99`} strokeWidth={2} strokeLinecap="round">
             <Path d="M18 15l-6-6-6 6" />
@@ -103,6 +107,7 @@ function ChevronUpIcon({ disabled }: { disabled?: boolean }) {
 }
 
 function ChevronDownIcon({ disabled }: { disabled?: boolean }) {
+    const { colors } = useTheme();
     return (
         <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={disabled ? `${colors.ink}33` : `${colors.ink}99`} strokeWidth={2} strokeLinecap="round">
             <Path d="M6 9l6 6 6-6" />
@@ -111,6 +116,7 @@ function ChevronDownIcon({ disabled }: { disabled?: boolean }) {
 }
 
 function PlayIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={16} height={16} viewBox="0 0 24 24" fill={colors.sand1}>
             <Polygon points="5 3 19 12 5 21 5 3" />
@@ -119,6 +125,7 @@ function PlayIcon() {
 }
 
 function StopIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={16} height={16} viewBox="0 0 24 24" fill={colors.sand1}>
             <Rect x={5} y={5} width={14} height={14} rx={2} />
@@ -127,6 +134,7 @@ function StopIcon() {
 }
 
 function StarIcon() {
+    const { colors } = useTheme();
     return (
         <Svg width={10} height={10} viewBox="0 0 24 24" fill={colors.sand1}>
             <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
@@ -136,6 +144,8 @@ function StarIcon() {
 
 export default function ProgressionPanel({ visible, onClose, currentChord, onAuthRequired, pendingChord, onPendingConsumed }: Props) {
     const { session } = useAuth();
+    const { colors } = useTheme();
+    const styles = useThemedStyles(makeStyles);
     const hasPro = useSubscription();
 
     const [progressions, setProgressions] = useState<Progression[]>([]);
@@ -469,7 +479,7 @@ export default function ProgressionPanel({ visible, onClose, currentChord, onAut
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
     backdrop: {
         flex: 1,
         justifyContent: 'flex-end',

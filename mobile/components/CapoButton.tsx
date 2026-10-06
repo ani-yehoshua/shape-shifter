@@ -21,7 +21,8 @@ import {
     useWindowDimensions,
     View,
 } from "react-native";
-import { colors, fonts, radius, spacing } from "../lib/theme";
+import { fonts, radius, spacing, type Palette } from "../lib/theme";
+import { useTheme, useThemedStyles } from "../lib/theme-context";
 
 const FRETS = Array.from({ length: 12 }, (_, i) => i + 1);
 
@@ -38,6 +39,8 @@ type Props = {
 type Anchor = { x: number; y: number; width: number; height: number };
 
 export default function CapoButton({ capo, setCapo }: Props) {
+    const { colors } = useTheme();
+    const styles = useThemedStyles(makeStyles);
     const [open, setOpen] = useState(false);
     const [anchor, setAnchor] = useState<Anchor | null>(null);
     const buttonRef = useRef<React.ElementRef<typeof TouchableOpacity>>(null);
@@ -136,7 +139,7 @@ export default function CapoButton({ capo, setCapo }: Props) {
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
     button: {
         width: 36,
         height: 36,
