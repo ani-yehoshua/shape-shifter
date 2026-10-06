@@ -73,7 +73,26 @@ export async function POST(req: Request) {
                     null;
                 const row = toRow(sub, userId);
                 if (!row.user_id) {
-                    console.warn('No user_id → skipping');
+                    // Bought without an account (mobile paywall): hold it
+                    // against the checkout email until they sign in with
+                    // that email -- see /api/claim-subscription.
+                    const email = (
+                        s.customer_details?.email ??
+                        s.customer_email ??
+                        ''
+                    ).toLowerCase();
+                    if (!email || !row.stripe_sub_id) {
+                        console.warn('No user_id or email → skipping');
+                        break;
+                    }
+                    const { user_id: _omit, ...pending } = row;
+                    const { error } = await supabaseAdmin
+                        .from('pending_subscriptions')
+                        .upsert(
+                            { ...pending, email },
+                            { onConflict: 'stripe_sub_id' },
+                        );
+                    if (error) console.error('DB error (pending):', error);
                     break;
                 }
                 const { error } = await supabaseAdmin
@@ -114,7 +133,16 @@ export async function POST(req: Request) {
 
                 const row = toRow(sub, userId);
                 if (!row.user_id) {
-                    console.warn('No user_id → skipping');
+                    // Possibly an unclaimed anonymous purchase: keep its
+                    // pending row current. (No-op if checkout.session.
+                    // completed hasn't stored one yet -- that handler
+                    // fetches the fresh subscription itself.)
+                    const { user_id: _omit, ...pending } = row;
+                    const { error } = await supabaseAdmin
+                        .from('pending_subscriptions')
+                        .update(pending)
+                        .eq('stripe_sub_id', sub.id);
+                    if (error) console.error('DB error (pending update):', error);
                     break;
                 }
                 const { error } = await supabaseAdmin
@@ -134,6 +162,15 @@ export async function POST(req: Request) {
                     })
                     .eq('stripe_sub_id', sub.id);
                 if (error) console.error('DB error (deleted):', error);
+                const { error: pendingErr } = await supabaseAdmin
+                    .from('pending_subscriptions')
+                    .update({
+                        status: sub.status,
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq('stripe_sub_id', sub.id);
+                if (pendingErr)
+                    console.error('DB error (pending deleted):', pendingErr);
                 break;
             }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createServClient } from '@/lib/supabaseServerClient';
+import { getSupabaseAdmin } from '@/lib/claimSubscription';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,7 +20,7 @@ const PRICE_MAP: Record<string, string | undefined> = {
 export async function POST(req: Request) {
     const stripe = getStripe();
     try {
-        const { email, plan } = await req.json();
+        const { email, plan, source } = await req.json();
         const priceId = PRICE_MAP[plan];
 
         if (!priceId) {
@@ -30,41 +31,54 @@ export async function POST(req: Request) {
         }
 
         const supabase = await createServClient();
+        // The mobile app authenticates with a Bearer access token (no
+        // cookies); the website uses the cookie session.
+        const authHeader = req.headers.get('authorization');
         const {
             data: { user },
             error,
-        } = await supabase.auth.getUser();
-        if (error || !user) {
-            return NextResponse.json(
-                { error: 'Not signed in' },
-                { status: 401 },
-            );
-        }
+        } = authHeader?.startsWith('Bearer ')
+            ? await supabase.auth.getUser(authHeader.slice(7))
+            : await supabase.auth.getUser();
+        // People can buy Pro before they have an account (website and app):
+        // Checkout collects their email, the webhook stores the
+        // subscription as pending against it, and it's claimed when they
+        // sign in with that email (lib/claimSubscription.ts).
+        const signedInUser = error ? null : user;
+
+        // `subscriptions` is written with the service role only (clients
+        // have no write access to it), so this isn't the user-scoped client.
+        const admin = getSupabaseAdmin();
 
         let stripeCustomerId: string | null = null;
-        const { data: existing } = await supabase
-            .from('subscriptions')
-            .select('stripe_cust_id')
-            .eq('user_id', user.id)
-            .not('stripe_cust_id', 'is', null)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        stripeCustomerId = existing?.stripe_cust_id ?? null;
-
-        if (!stripeCustomerId) {
-            const customer = await stripe.customers.create({
-                email: email || user.email || undefined,
-                metadata: { supabase_user_id: user.id },
-            });
-            stripeCustomerId = customer.id;
-            await supabase
+        if (signedInUser) {
+            const { data: existing } = await admin
                 .from('subscriptions')
-                .upsert(
-                    { user_id: user.id, stripe_cust_id: stripeCustomerId },
-                    { onConflict: 'user_id' },
-                );
+                .select('stripe_cust_id')
+                .eq('user_id', signedInUser.id)
+                .not('stripe_cust_id', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            stripeCustomerId = existing?.stripe_cust_id ?? null;
+
+            if (!stripeCustomerId) {
+                const customer = await stripe.customers.create({
+                    email: email || signedInUser.email || undefined,
+                    metadata: { supabase_user_id: signedInUser.id },
+                });
+                stripeCustomerId = customer.id;
+                await admin
+                    .from('subscriptions')
+                    .upsert(
+                        {
+                            user_id: signedInUser.id,
+                            stripe_cust_id: stripeCustomerId,
+                        },
+                        { onConflict: 'user_id' },
+                    );
+            }
         }
 
         const siteUrl =
@@ -73,13 +87,29 @@ export async function POST(req: Request) {
         const session = await stripe.checkout.sessions.create({
             mode: 'subscription',
             line_items: [{ price: priceId, quantity: 1 }],
-            customer: stripeCustomerId,
-            subscription_data: {
-                metadata: { supabase_user_id: user.id },
-            },
-            client_reference_id: user.id,
-            success_url: `${siteUrl}/?subscribed=true`,
-            cancel_url: `${siteUrl}/`,
+            ...(signedInUser
+                ? {
+                      customer: stripeCustomerId ?? undefined,
+                      subscription_data: {
+                          metadata: { supabase_user_id: signedInUser.id },
+                      },
+                      client_reference_id: signedInUser.id,
+                  }
+                : {}),
+            // The app's in-app browser session closes when it sees the
+            // shapeshifter:// redirect that /api/app-return issues. A
+            // signed-out website buyer lands on sign-in (with a notice) to
+            // claim what they bought.
+            success_url:
+                source === 'app'
+                    ? `${siteUrl}/api/app-return?status=success`
+                    : signedInUser
+                      ? `${siteUrl}/?subscribed=true`
+                      : `${siteUrl}/signin?purchased=1`,
+            cancel_url:
+                source === 'app'
+                    ? `${siteUrl}/api/app-return?status=cancel`
+                    : `${siteUrl}/`,
         });
 
         return NextResponse.json({ url: session.url });

@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import Providers from "@/components/Providers";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
+import { Analytics } from "@vercel/analytics/next";
 
 const montserrat = Montserrat({
     subsets: ["latin"],
@@ -111,6 +112,7 @@ export default function RootLayout({
                         <Footer />
                     </div>
                 </Providers>
+                <Analytics />
             </body>
         </html>
     );
