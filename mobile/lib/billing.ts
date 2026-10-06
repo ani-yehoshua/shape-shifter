@@ -21,21 +21,40 @@ function apiUrl(path: string) {
     return `${base.replace(/\/+$/, '')}${path}`;
 }
 
+/**
+ * Attaches a subscription bought at checkout without an account to the
+ * signed-in user (matched by email, server-side). Idempotent; Pro then
+ * arrives through the usual subscriptions Realtime row.
+ */
+export async function claimSubscription(): Promise<void> {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session || !process.env.EXPO_PUBLIC_SITE_URL) return;
+    await fetch(apiUrl('/api/claim-subscription'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+    });
+}
+
 export async function fetchPrices(): Promise<Prices> {
     const res = await fetch(apiUrl('/api/prices'));
     const d = await res.json();
     return { monthly: d.monthly ?? null, yearly: d.yearly ?? null };
 }
 
-/** Opens Stripe Checkout; resolves once the browser returns to the app. */
+/**
+ * Opens Stripe Checkout; resolves once the browser returns to the app.
+ * Works signed out too: with no session the server starts an anonymous
+ * checkout, the purchase is tied to the email entered at Stripe, and it's
+ * claimed by claimSubscription() when they later sign in with that email
+ * (the same pattern as The Hair Insider's pending entitlements).
+ */
 export async function startCheckout(plan: Plan, email?: string | null): Promise<CheckoutOutcome> {
     const { data } = await supabase.auth.getSession();
-    if (!data.session) throw new Error('Not signed in');
 
     const res = await fetch(apiUrl('/api/checkout'), {
         method: 'POST',
         headers: {
-            Authorization: `Bearer ${data.session.access_token}`,
+            ...(data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {}),
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, plan, source: 'app' }),

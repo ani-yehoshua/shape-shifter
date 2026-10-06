@@ -56,7 +56,7 @@ import { useAuth } from "../lib/auth-context";
 import { usePreferences } from "../lib/preferences-context";
 import Svg, { Path, Rect } from "react-native-svg";
 import FretboardVertical from "../components/FretboardVertical";
-import { PaywallModal, ProWelcomeModal } from "../components/ProModals";
+import { PaywallModal, ProWelcomeModal, SignInToUnlockModal } from "../components/ProModals";
 import NotesIntervalsToggle from "../components/NotesIntervalsToggle";
 import RootNoteButton from "../components/RootNoteButton";
 import CapoButton from "../components/CapoButton";
@@ -640,6 +640,7 @@ export default function ChordsScreen() {
     // resumes once Pro lands, like the website's openPaywall(intent).
     const [paywallOpen, setPaywallOpen] = useState(false);
     const [proWelcomeOpen, setProWelcomeOpen] = useState(false);
+    const [signInToUnlockOpen, setSignInToUnlockOpen] = useState(false);
     const openPaywall = (intent?: string) => {
         if (intent) {
             AsyncStorage.setItem(PENDING_INTENT_KEY, JSON.stringify({ intent, ts: Date.now() })).catch(() => {});
@@ -953,10 +954,9 @@ export default function ChordsScreen() {
 
     const handleAltChange = (i: number) => {
         if (i > 0 && !hasPro) {
-            // No session at all -> prompt sign-in, since Pro isn't reachable
-            // without an account. Signed in but not Pro -> the paywall.
-            if (!session) setAuthGateReason("pro");
-            else openPaywall();
+            // The paywall opens signed in or not (signed-out buyers are tied
+            // to their checkout email and sign in afterwards).
+            openPaywall();
             return;
         }
         setSelectedAltShape(i);
@@ -1243,8 +1243,7 @@ export default function ChordsScreen() {
 
     const handleScalePatternChange = (pattern: string) => {
         if (!hasPro && pattern !== scaleEntry?.defaultPattern) {
-            if (!session) setAuthGateReason("pro");
-            else openPaywall();
+            openPaywall();
             return;
         }
         setSelectedScalePattern(pattern);
@@ -1254,8 +1253,7 @@ export default function ChordsScreen() {
 
     const handleScaleVariantChange = (variant: number) => {
         if (!hasPro && variant > 0) {
-            if (!session) setAuthGateReason("pro");
-            else openPaywall();
+            openPaywall();
             return;
         }
         setSelectedScaleVariant(variant);
@@ -1541,16 +1539,9 @@ export default function ChordsScreen() {
     const handleToggleDrawMode = () => {
         if (!isDrawMode) {
             if (!hasPro) {
-                if (!session) {
-                    // Remember what they were after so it resumes post sign-in.
-                    AsyncStorage.setItem(
-                        PENDING_INTENT_KEY,
-                        JSON.stringify({ intent: "drawmode", ts: Date.now() }),
-                    ).catch(() => {});
-                    setAuthGateReason("pro");
-                } else {
-                    openPaywall("drawmode");
-                }
+                // Remembered so it resumes once Pro lands (right after
+                // checkout, or after signing in post-purchase).
+                openPaywall("drawmode");
                 return;
             }
             setIsDrawMode(true);
@@ -2569,12 +2560,24 @@ export default function ChordsScreen() {
             <PaywallModal
                 visible={paywallOpen}
                 onClose={dismissPaywall}
+                onAlreadyPro={() => setPaywallOpen(false)}
                 onSubscribed={() => {
                     setPaywallOpen(false);
-                    setProWelcomeOpen(true);
+                    // Bought without an account -> sign in with the checkout
+                    // email to unlock it (claimed server-side on sign-in).
+                    if (session) setProWelcomeOpen(true);
+                    else setSignInToUnlockOpen(true);
                 }}
             />
             <ProWelcomeModal visible={proWelcomeOpen} onClose={() => setProWelcomeOpen(false)} />
+            <SignInToUnlockModal
+                visible={signInToUnlockOpen}
+                onClose={() => setSignInToUnlockOpen(false)}
+                onSignIn={() => {
+                    setSignInToUnlockOpen(false);
+                    router.push("/sign-in");
+                }}
+            />
         </>
     );
 

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { claimSubscription } from './billing';
 import { supabase } from './supabase';
 
 type AuthContextValue = {
@@ -19,8 +20,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setSession(data.session);
             setLoading(false);
         });
-        const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+        const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
             setSession(newSession);
+            // Pick up a subscription bought before this account existed
+            // (see lib/billing.ts). Fire-and-forget; no-op when nothing's
+            // pending. Deferred a tick because supabase-js can deadlock if
+            // an auth method is called from inside this callback.
+            if (newSession && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+                setTimeout(() => claimSubscription().catch(() => {}), 0);
+            }
         });
         return () => sub.subscription.unsubscribe();
     }, []);

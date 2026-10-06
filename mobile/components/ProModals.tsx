@@ -59,11 +59,16 @@ function FeatureList({ items }: { items: string[] }) {
 export function PaywallModal({
     visible,
     onClose,
+    onAlreadyPro,
     onSubscribed,
 }: {
     visible: boolean;
+    /** dismissed ("Maybe later" / backdrop) */
     onClose: () => void;
-    /** checkout finished with a successful payment (Pro lands via Realtime) */
+    /** Pro status resolved while the paywall was up -- just hide it */
+    onAlreadyPro: () => void;
+    /** checkout finished with a successful payment (Pro lands via Realtime,
+     *  or after sign-in if they bought without an account) */
     onSubscribed: () => void;
 }) {
     const styles = useThemedStyles(makeStyles);
@@ -85,8 +90,8 @@ export function PaywallModal({
 
     // A Pro user should never be looking at the paywall.
     useEffect(() => {
-        if (hasPro && visible) onClose();
-    }, [hasPro, visible, onClose]);
+        if (hasPro && visible) onAlreadyPro();
+    }, [hasPro, visible, onAlreadyPro]);
 
     const handleSubscribe = async () => {
         setLoading(true);
@@ -158,6 +163,46 @@ export function PaywallModal({
 
                         <TouchableOpacity onPress={onClose} style={styles.later}>
                             <Text style={styles.laterText}>Maybe later</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Pressable>
+        </Modal>
+    );
+}
+
+/**
+ * Shown after a successful checkout made without an account: the purchase is
+ * tied to the email entered at Stripe and unlocks once they sign in with it.
+ */
+export function SignInToUnlockModal({
+    visible,
+    onClose,
+    onSignIn,
+}: {
+    visible: boolean;
+    onClose: () => void;
+    onSignIn: () => void;
+}) {
+    const styles = useThemedStyles(makeStyles);
+    return (
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+            <Pressable style={styles.backdrop} onPress={onClose}>
+                <Pressable style={styles.card} onPress={() => {}}>
+                    <View style={styles.header}>
+                        <ProBadge />
+                        <Text style={styles.title}>{'Payment received.\nSign in to unlock Pro.'}</Text>
+                        <Text style={styles.subtitle}>
+                            Sign in with the email you used at checkout and your Pro features will turn on.
+                        </Text>
+                    </View>
+                    <FeatureList items={WELCOME_FEATURES} />
+                    <View style={styles.paywallBody}>
+                        <TouchableOpacity style={styles.cta} onPress={onSignIn}>
+                            <Text style={styles.ctaText}>Sign in to continue</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={onClose} style={styles.later}>
+                            <Text style={styles.laterText}>I’ll do it later</Text>
                         </TouchableOpacity>
                     </View>
                 </Pressable>
