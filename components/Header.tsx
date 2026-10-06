@@ -8,6 +8,7 @@ import { usePreferences } from "@/lib/contexts/PreferencesContext";
 import { TUNINGS } from "@/lib/tunings";
 import FormFields from "@/components/FormFields";
 import SubmitFeedback from "@/components/SubmitFeedback";
+import { replayTour } from "@/components/AppTour";
 import ThemeToggle from "@/components/ThemeToggle";
 import { deleteAccount, updateEmail, emailRegex } from "@/lib/API";
 
@@ -424,6 +425,15 @@ export default function Header() {
                                     </p>
                                 )}
                             </div>
+
+                            <button
+                                onClick={() => {
+                                    setDrawerOpen(false);
+                                    replayTour();
+                                }}
+                                className='w-fit px-3 py-1.5 rounded-lg border border-sand-1/20 text-xs font-medium text-sand-1/70 hover:text-sand-1 hover:bg-sand-1/10 transition-colors'>
+                                Replay app tour
+                            </button>
 
                             {hasPro && (
                                 <a
