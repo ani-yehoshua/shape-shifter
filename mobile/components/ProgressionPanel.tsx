@@ -66,6 +66,8 @@ type Props = {
     onClose: () => void;
     currentChord: CurrentChord | null;
     onAuthRequired: () => void;
+    /** signed in but not Pro -> opens the paywall */
+    onProRequired: () => void;
     pendingChord?: CurrentChord | null;
     onPendingConsumed?: () => void;
 };
@@ -142,7 +144,7 @@ function StarIcon() {
     );
 }
 
-export default function ProgressionPanel({ visible, onClose, currentChord, onAuthRequired, pendingChord, onPendingConsumed }: Props) {
+export default function ProgressionPanel({ visible, onClose, currentChord, onAuthRequired, onProRequired, pendingChord, onPendingConsumed }: Props) {
     const { session } = useAuth();
     const { colors } = useTheme();
     const styles = useThemedStyles(makeStyles);
@@ -239,7 +241,10 @@ export default function ProgressionPanel({ visible, onClose, currentChord, onAut
             onAuthRequired();
             return;
         }
-        if (!hasPro) return; // no paywall screen yet -- see the file-level note
+        if (!hasPro) {
+            onProRequired();
+            return;
+        }
         setSaving(true);
         try {
             if (activeId) {

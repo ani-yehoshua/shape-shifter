@@ -25,10 +25,8 @@
 // (DrawMode.tsx manages those independently of page.tsx).
 //
 // On the website, entering Draw Mode is gated behind Pro (openPaywall
-// ("drawmode") if !hasPro). There's no paywall/upgrade screen here yet (see
-// the deferred-scope note below), so the gate is reproduced as a silent
-// no-op -- same "shows a lock badge and doesn't advance" treatment already
-// used for Pro-gated alt shapes here.
+// ("drawmode") if !hasPro). Here: signed out -> the sign-in gate, signed in
+// but not Pro -> the paywall (components/ProModals.tsx).
 //
 // Deferred to follow-up screens/commits, not silently dropped:
 // - Randomize, Save/bookmark, Add-to-Progression (need lib/savedChords.ts +
@@ -37,7 +35,7 @@
 // - Scales mode, Scale Chords mode -- each its own future screen.
 // - Audio: playChord/playNote synthesize and play via expo-audio (see
 //   ../lib/guitarAudio).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Animated,
     Modal,
@@ -58,6 +56,7 @@ import { useAuth } from "../lib/auth-context";
 import { usePreferences } from "../lib/preferences-context";
 import Svg, { Path, Rect } from "react-native-svg";
 import FretboardVertical from "../components/FretboardVertical";
+import { PaywallModal, ProWelcomeModal } from "../components/ProModals";
 import NotesIntervalsToggle from "../components/NotesIntervalsToggle";
 import RootNoteButton from "../components/RootNoteButton";
 import CapoButton from "../components/CapoButton";
@@ -636,6 +635,22 @@ export default function ChordsScreen() {
     // session at all.
     const [authGateReason, setAuthGateReason] = useState<"save" | "pro" | null>(null);
 
+    // Signed in but not Pro -> the paywall (Stripe Checkout, see
+    // components/ProModals.tsx). Remembers a Draw Mode request so it
+    // resumes once Pro lands, like the website's openPaywall(intent).
+    const [paywallOpen, setPaywallOpen] = useState(false);
+    const [proWelcomeOpen, setProWelcomeOpen] = useState(false);
+    const openPaywall = (intent?: string) => {
+        if (intent) {
+            AsyncStorage.setItem(PENDING_INTENT_KEY, JSON.stringify({ intent, ts: Date.now() })).catch(() => {});
+        }
+        setPaywallOpen(true);
+    };
+    const dismissPaywall = useCallback(() => {
+        setPaywallOpen(false);
+        AsyncStorage.removeItem(PENDING_INTENT_KEY).catch(() => {});
+    }, []);
+
     // ─── Shared state (Chords + Draw Mode both use these) ─────────────────
     // Handedness and default tuning are persisted preferences on the
     // website (lib/contexts/PreferencesContext.tsx, backed by
@@ -939,10 +954,9 @@ export default function ChordsScreen() {
     const handleAltChange = (i: number) => {
         if (i > 0 && !hasPro) {
             // No session at all -> prompt sign-in, since Pro isn't reachable
-            // without an account. Signed in but not Pro -> deferred (no
-            // paywall/upgrade screen exists yet), same lock-badge-only
-            // treatment as before.
+            // without an account. Signed in but not Pro -> the paywall.
             if (!session) setAuthGateReason("pro");
+            else openPaywall();
             return;
         }
         setSelectedAltShape(i);
@@ -1230,6 +1244,7 @@ export default function ChordsScreen() {
     const handleScalePatternChange = (pattern: string) => {
         if (!hasPro && pattern !== scaleEntry?.defaultPattern) {
             if (!session) setAuthGateReason("pro");
+            else openPaywall();
             return;
         }
         setSelectedScalePattern(pattern);
@@ -1240,6 +1255,7 @@ export default function ChordsScreen() {
     const handleScaleVariantChange = (variant: number) => {
         if (!hasPro && variant > 0) {
             if (!session) setAuthGateReason("pro");
+            else openPaywall();
             return;
         }
         setSelectedScaleVariant(variant);
@@ -1532,6 +1548,8 @@ export default function ChordsScreen() {
                         JSON.stringify({ intent: "drawmode", ts: Date.now() }),
                     ).catch(() => {});
                     setAuthGateReason("pro");
+                } else {
+                    openPaywall("drawmode");
                 }
                 return;
             }
@@ -2546,6 +2564,20 @@ export default function ChordsScreen() {
                   body: "Create a free account, then upgrade to Pro for alt shapes, Draw Mode, and more.",
               };
 
+    const proModals = (
+        <>
+            <PaywallModal
+                visible={paywallOpen}
+                onClose={dismissPaywall}
+                onSubscribed={() => {
+                    setPaywallOpen(false);
+                    setProWelcomeOpen(true);
+                }}
+            />
+            <ProWelcomeModal visible={proWelcomeOpen} onClose={() => setProWelcomeOpen(false)} />
+        </>
+    );
+
     const authGateModal = (
         <Modal
             visible={authGateReason !== null}
@@ -2622,6 +2654,7 @@ export default function ChordsScreen() {
             onClose={() => setProgressionPanelOpen(false)}
             currentChord={currentChordForProgression}
             onAuthRequired={() => setAuthGateReason("save")}
+            onProRequired={() => openPaywall()}
             pendingChord={progressionPendingChord}
             onPendingConsumed={() => setProgressionPendingChord(null)}
         />
@@ -3066,6 +3099,7 @@ export default function ChordsScreen() {
                 </Modal>
 
                 {authGateModal}
+                {proModals}
                 {saveDialogModal}
                 {savedChordsPanel}
                 {progressionPanel}
@@ -3818,6 +3852,7 @@ export default function ChordsScreen() {
                 }}
             />
             {authGateModal}
+            {proModals}
             {saveDialogModal}
             {savedChordsPanel}
             {progressionPanel}
