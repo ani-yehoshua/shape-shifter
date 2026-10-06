@@ -745,15 +745,19 @@ export default function Home() {
     const [menuOpen, setMenuOpen] = React.useState(false);
 
     const openPaywall = React.useCallback(
-        (intent?: string) => {
+        (intent?: string, value?: string | number) => {
             setMenuOpen(false);
-            // Remember what the user was trying to do so we can resume it
-            // after they sign in / their Pro status resolves.
+            // Remember what the user was trying to do -- the Pro-gated
+            // action ("drawmode", "alt" + index, "scalePattern" + key,
+            // "scaleVariant" + index, "scaleChordAlt" + index,
+            // "progressions") -- so it's applied after they sign in / pay /
+            // their Pro status resolves. The selection context (mode, root,
+            // chord/scale choices) comes back via the persisted session.
             if (intent && typeof window !== "undefined") {
                 try {
                     sessionStorage.setItem(
                         "ss_pending_intent",
-                        JSON.stringify({ intent, ts: Date.now() }),
+                        JSON.stringify({ intent, value, ts: Date.now() }),
                     );
                 } catch {
                     // ignore storage failures
@@ -764,11 +768,18 @@ export default function Home() {
         [router],
     );
 
-    // Resume a pending Pro-gated action (e.g. Draw Mode) once the user is
-    // signed in and their Pro status has resolved.
+    // Resume a pending Pro-gated action (Draw Mode, the alt shape / scale
+    // pattern / scale variant / scale-chord alt they tapped, or the
+    // progression panel) once the user is signed in and their Pro status has
+    // resolved. Replayed through the same handlers the taps use, which this
+    // render's closure sees with hasPro now true.
     React.useEffect(() => {
         if (!hasPro || typeof window === "undefined") return;
-        let pending: { intent?: string; ts?: number } | null = null;
+        let pending: {
+            intent?: string;
+            value?: string | number;
+            ts?: number;
+        } | null = null;
         try {
             pending = JSON.parse(
                 sessionStorage.getItem("ss_pending_intent") ?? "null",
@@ -783,11 +794,27 @@ export default function Home() {
             return;
         }
         sessionStorage.removeItem("ss_pending_intent");
-        if (pending.intent === "drawmode") setIsDrawMode(true);
+        const { intent, value } = pending;
+        if (intent === "drawmode") setIsDrawMode(true);
+        else if (
+            intent === "alt" &&
+            typeof value === "number" &&
+            value < availableAlts.length
+        )
+            handleAltChange(value);
+        else if (intent === "scalePattern" && typeof value === "string")
+            handleScalePatternChange(value);
+        else if (intent === "scaleVariant" && typeof value === "number")
+            handleScaleVariantChange(value);
+        else if (intent === "scaleChordAlt" && typeof value === "number")
+            handleScaleChordAltChange(value);
+        else if (intent === "progressions") setProgressionPanelOpen(true);
         // Strip ?paywall=1 so the modal doesn't linger.
         if (window.location.search.includes("paywall=1")) {
             router.replace(window.location.pathname, { scroll: false });
         }
+        // Deliberately keyed on Pro landing, not on every selection change.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hasPro, router]);
 
     const [showWelcome, setShowWelcome] = React.useState(false);
@@ -1901,7 +1928,7 @@ export default function Home() {
 
     const handleAltChange = (i: number) => {
         if (i > 0 && !hasPro) {
-            openPaywall();
+            openPaywall("alt", i);
             return;
         }
         setSelectedAltShape(i);
@@ -1920,7 +1947,7 @@ export default function Home() {
             pattern !==
                 SCALE_SHAPES[selectedNoteGroup]?.[selectedScale]?.defaultPattern
         ) {
-            openPaywall();
+            openPaywall("scalePattern", pattern);
             return;
         }
         setSelectedScalePattern(pattern);
@@ -1930,7 +1957,7 @@ export default function Home() {
 
     const handleScaleVariantChange = (variant: number) => {
         if (!hasPro && variant > 0) {
-            openPaywall();
+            openPaywall("scaleVariant", variant);
             return;
         }
         setSelectedScaleVariant(variant);
@@ -2057,7 +2084,7 @@ export default function Home() {
     const scaleChordAltsLocked = scaleChordHasAlt && !hasPro;
     const handleScaleChordAltChange = (i: number) => {
         if (i > 0 && !hasPro) {
-            openPaywall();
+            openPaywall("scaleChordAlt", i);
             return;
         }
         setSelectedScaleChordAltShapeIdx(i - 1);
@@ -2756,7 +2783,9 @@ export default function Home() {
                                                     ? setProgressionPanelOpen(
                                                           true,
                                                       )
-                                                    : openPaywall()
+                                                    : openPaywall(
+                                                          "progressions",
+                                                      )
                                             }
                                             title='Progressions'
                                             className='shrink-0 relative w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
@@ -4405,7 +4434,7 @@ export default function Home() {
                                         onClick={() =>
                                             hasPro
                                                 ? setProgressionPanelOpen(true)
-                                                : openPaywall()
+                                                : openPaywall("progressions")
                                         }
                                         title='Progressions'
                                         className='whitespace-nowrap relative flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
@@ -4449,7 +4478,7 @@ export default function Home() {
                 }}
                 onProRequired={() => {
                     setProgressionPanelOpen(false);
-                    openPaywall();
+                    openPaywall("progressions");
                 }}
                 onRequestOpen={() => setProgressionPanelOpen(true)}
                 pendingChord={progressionPendingChord}

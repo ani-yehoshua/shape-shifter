@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import Providers from "@/components/Providers";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
+import AppTour from "@/components/AppTour";
 import { Analytics } from "@vercel/analytics/next";
 
 const montserrat = Montserrat({
@@ -105,6 +106,7 @@ export default function RootLayout({
                     <Suspense>
                         <Header />
                     </Suspense>
+                    <AppTour />
                     <main className='flex flex-col flex-1 min-h-0'>
                         {children}
                     </main>
