@@ -123,6 +123,9 @@ const SESSION_STORAGE_KEY = "shapeshifter_session_v1";
 const PENDING_INTENT_KEY = "ss_pending_intent";
 type PendingIntent = { intent?: string; value?: string | number; ts?: number; signedOut?: boolean };
 const PENDING_INTENT_MAX_AGE_MS = 15 * 60 * 1000;
+// Long enough for a closing sheet/panel Modal (200-300ms slide) to finish
+// before another Modal is presented; see openPaywall.
+const MODAL_DISMISS_MS = 450;
 type SessionState = {
     selectedMode?: "chords" | "scales";
     currentRootNote?: string;
@@ -656,7 +659,19 @@ export default function ChordsScreen() {
             signedOut: !session,
         };
         AsyncStorage.setItem(PENDING_INTENT_KEY, JSON.stringify(pending)).catch(() => {});
-        setPaywallOpen(true);
+
+        // The paywall is its own Modal, and iOS won't present one while
+        // another is up (or still sliding away) -- it just silently doesn't
+        // show. The Menu sheet (scale pattern/variant pills), the Randomize
+        // sheet and the Progression panel are all Modals, so close whichever
+        // the tap came from first (the website's openPaywall closes its menu
+        // the same way), then present once it has finished leaving.
+        const fromModal = menuOpen || menuModalVisible || randomizeSheetOpen || progressionPanelOpen;
+        if (menuOpen) setMenuOpen(false);
+        if (randomizeSheetOpen) setRandomizeSheetOpen(false);
+        if (progressionPanelOpen) setProgressionPanelOpen(false);
+        if (fromModal) setTimeout(() => setPaywallOpen(true), MODAL_DISMISS_MS);
+        else setPaywallOpen(true);
     };
     // They paid without an account: signing in next is to claim that
     // purchase, not to be sent back to the paywall.
