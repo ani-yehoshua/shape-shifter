@@ -43,17 +43,29 @@ intervals taken from the scale instead of from a named quality -- which is why
 Hungarian Minor and Dominant #9, whose chords the registry doesn't name, work
 with no new library data.
 
-### Defects the engine surfaced (not fixed in this branch)
+### Defects the engine surfaced
 
-- `Chords.ts`: *Drop 3 / Low String Set / 2nd Inv. / Min7, alt 2* has
-  `rootString: 1` but its root note is on string 2 (shape draws at wrong
-  frets).
-- `Chords.ts`: *Drop 2 of 2 / Low String Set / 2nd Inv. / Maj7#5, alt 1*
-  labels the 5th `semitones: 7` (should be 8; affects note naming).
+Fixed (by hand, in `Chords.ts`; the validation passes with an empty
+known-defects list):
+
+- *Drop 3 / Low String Set / 2nd Inv. / Min7, alt 2* had `rootString: 1`
+  but its root note is on string 2.
+- *Drop 2 of 2 / Low String Set / 2nd Inv. / Maj7#5, alt 1* labelled the 5th
+  `semitones: 7` (should be 8).
+
+Still open:
+
 - `ScaleChords.ts`: all 32 "Low" string-set templates for the eight non-base
-  structures are byte-for-byte copies of the "Mid" ones (strings 1-4, not
-  2-5), so choosing Low + any non-base structure on the website shows Mid
-  shapes.
+  structures are copies of the "Mid" ones, alternates included (strings 1-4,
+  not 2-5), so choosing Low + a non-base structure shows Mid-string shapes.
+  **Decision: keep the Mid copies as a fallback**; try the engine's real Low
+  shapes alongside and compare (see below).
+- `ScaleChords.ts` `1 3 4 7` alternates: *High / 3rd Inv. / alt 1* has wrong
+  `degree` labels, and *Mid and Low / 2nd Inv. / alt 1* has its root note on
+  string 3 but `rootString: 4`. These sit in the block marked
+  `// WAS VERIFYING ALT SHAPES` (Mid `1 3 4 7`) -- **resume that
+  verification here**; carry the marker over when `ScaleChords.ts` is
+  replaced.
 - `Chords.ts` nesting is inconsistent: "Raise 3/1 of 2" skips the string-set
   level.
 
@@ -83,9 +95,10 @@ layer** = a single slot/degree of that chord against the scale's positions
 
 ## Plan
 
-1. **Done:** engine slice + validation (this branch).
-2. Fix the data defects above (small, separate PR; web and mobile both carry
-   copies of `Shapes/`).
+1. **Done:** engine slice + validation; Chords.ts defects fixed; generated
+   mobile copy (`npm run sync:mobile`).
+2. Verify the remaining `ScaleChords.ts` alternates by hand (`1 3 4 7`
+   block first).
 3. `resolveScaleChord(...)`: one function for "scale + structure + voicing +
    string set + inversion + alt -> per-degree shapes", curated alts first,
    layout fallback. Also unlocks Drop 3 / Drop 2 of 2 / Raise 3/1 of 2 /
@@ -96,12 +109,43 @@ layer** = a single slot/degree of that chord against the scale's positions
 6. UX: Scale Chords as default, chord <-> scale cross-links (the reverse of
    `diatonicChords`: which scale degrees yield this chord), onion drill-down.
 
-## Open decisions
+## Decisions so far
 
-- **Alternates:** keep the curated per-quality alts (safe, ragged), or derive
-  alts from layouts (fills ~99 playable gaps; changes what users see).
-- **Non-7-note scales** (pentatonic, blues, symmetric, 8/9-note): what is "the
-  chord on a degree" there?
-- **Web/mobile sharing:** `mobile/lib` is a copy of `lib`. Share the engine or
-  keep a synced copy?
+- **Alternates are hand-checked, always.** Nearly every alt needs a human to
+  confirm the fret hand can actually reach it, and some that look "missing"
+  are unplayable. So the engine never ships a derived alt on its own: derived
+  layouts are *candidates* to review (e.g. the ~98 absent-but-span<=5
+  combinations the validation reports -- span is only a heuristic, not
+  proof of playability). Hand-authored alts stay authoritative.
+- **`ScaleChords.ts` is replaced, not dropped.** Its authored shapes (162,
+  alternates included) convert mechanically to layouts into a smaller
+  "authored layouts" table keyed by voicing type / string set / degree
+  structure / inversion, where new alts keep getting added. Library layouts
+  (all voicing types, triads, shells) are the fallback for anything not
+  authored. Nothing is deleted until the conversion round-trips exactly.
+- **One source, generated mobile copy.** The website's `lib/` is the only
+  place shared logic is edited; `npm run sync:mobile` regenerates the
+  mobile copy (`scripts/sync-mobile-lib.mjs`, with `npm run
+  check:mobile-sync` to catch drift). Chosen over importing across folders so
+  `mobile/` stays self-contained for store builds.
+
+## Notes for later: scales that aren't 7-note
+
+From the author (to be designed, not built):
+
+- **Pentatonic:** quartal chords, minor chords, major chords, CAGED shapes,
+  maybe more.
+- **Blues:** like pentatonic plus the added note; each scale root gets a
+  second chord (minor and m7b5 on the 1).
+- **Symmetric:** whole tone -> only two chords; diminished dominant -> two (to
+  confirm); the "symmetrical" scale has a large handful.
+- **8- and 9-note:** like Major, but each chord gains extra function from the
+  altered interval.
+
+This points at a "which chords fit inside this scale" search (every chord
+whose tones are all in the scale) rather than one chord per degree; check
+what falls out against the above before committing to it.
+
+## Still open
+
 - **Order of the UX work** (default view vs cross-links vs onion).

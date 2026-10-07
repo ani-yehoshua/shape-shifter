@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:mobile": "node scripts/sync-mobile-lib.mjs",
+    "check:mobile-sync": "node scripts/sync-mobile-lib.mjs --check"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",

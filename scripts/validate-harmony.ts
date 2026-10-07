@@ -92,15 +92,17 @@ for (const [ss, sn] of Object.entries<any>(cs.Shells.options))
     addGroup(`Shells / ${ss}`, sn.options, true);
 
 // ── H1: layout round trip ─────────────────────────────────────────────────────
-// Hand-authoring errors this check found in lib/Shapes/Chords.ts. They are
-// listed (not fixed here) so the check passes on today's data but still
-// catches NEW inconsistencies. Remove an entry once its data is fixed.
-const KNOWN_LIBRARY_DEFECTS: Record<string, string> = {
-    'Drop 3 / Low String Set / 2nd Inv. Min7 alt2':
-        'rootString is 1 but the root note (degree 1) is on string 2',
-    'Drop 2 of 2 / Low String Set / 2nd Inv. Maj7#5 alt1':
-        'string 5 (degree 5) has semitones 7; Maj7#5 has 8',
-};
+// Hand-authoring errors this check has found in lib/Shapes/Chords.ts that
+// haven't been fixed yet, keyed "<group> <quality> alt<N>" (alt0 = primary).
+// Listing one lets the check pass on today's data while still catching NEW
+// inconsistencies; remove the entry once the data is fixed (the check tells
+// you when a listed defect starts passing).
+//
+// History: the first run found two -- "Drop 3 / Low String Set / 2nd Inv.
+// Min7 alt2" (rootString was 1, root note is on string 2) and "Drop 2 of 2 /
+// Low String Set / 2nd Inv. Maj7#5 alt1" (5th labelled 7 semitones, not 8).
+// Both are fixed, so the list is empty.
+const KNOWN_LIBRARY_DEFECTS: Record<string, string> = {};
 
 console.log('H1  library shapes are (layout x quality)');
 let shapeCount = 0;
@@ -197,7 +199,8 @@ for (const st of structures) {
 console.log(`  High + Mid string sets: ${hm.same}/${hm.total}`);
 if (hm.same !== hm.total) fail('High/Mid non-base structures differ from ScaleChords.ts');
 
-// Known data bug: report, don't fail.
+// Report, don't fail: the "Low" non-base templates in ScaleChords.ts are
+// copies of "Mid" (kept as a fallback until real Low shapes are hand-checked).
 {
     const D = (SCALE_CHORD_SHAPES as any)['Drop 2'];
     let dup = 0;
@@ -208,8 +211,9 @@ if (hm.same !== hm.total) fail('High/Mid non-base structures differ from ScaleCh
             if (JSON.stringify(D.Mid[st][inv].pattern) === JSON.stringify(D.Low[st][inv].pattern)) dup++;
         }
     console.log(
-        `  Low string set: ${low.same}/${low.total} match -- KNOWN BUG in ScaleChords.ts: ` +
-            `${dup}/${n} "Low" non-base templates are exact copies of "Mid" (strings 1-4, not 2-5).`,
+        `  Low string set: ${low.same}/${low.total} match the engine -- NOTE: ` +
+            `${dup}/${n} "Low" non-base templates in ScaleChords.ts are exact copies of "Mid" ` +
+            `(strings 1-4, not 2-5), so they differ from true Low-string shapes.`,
     );
 }
 
