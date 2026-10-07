@@ -8448,7 +8448,7 @@ export const CHORD_SHAPES = {
                                                 ],
                                             },
                                             {
-                                                rootString: 1,
+                                                rootString: 2,
                                                 pattern: [
                                                     // 1st-string not played
                                                     // 3rd-string not played
@@ -10650,7 +10650,7 @@ export const CHORD_SHAPES = {
                                                     { string: 2, fretOffset: 0, semitones: 0, degree: 1 },
                                                     { string: 3, fretOffset: -3, semitones: 4, degree: 3 },
                                                     { string: 4, fretOffset: -3, semitones: 11, degree: 7 },
-                                                    { string: 5, fretOffset: -1, semitones: 7, degree: 5 },
+                                                    { string: 5, fretOffset: -1, semitones: 8, degree: 5 },
                                                 ],
                                             },
                                         ],
