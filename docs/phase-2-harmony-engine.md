@@ -104,8 +104,11 @@ layer** = a single slot/degree of that chord against the scale's positions
    layout fallback. Also unlocks Drop 3 / Drop 2 of 2 / Raise 3/1 of 2 /
    Triads / Shells in Scale Chords (today: Drop 2 only).
 4. Switch `app/page.tsx` (and mobile) to it; delete `ScaleChords.ts`.
-5. Optional cleanup: store `Chords.ts` as layouts x qualities (~400 layouts)
-   instead of 1,674 hand-typed shapes.
+5. **Format approved, file added alongside:** `lib/Shapes/Chords.layouts.ts`
+   stores the chord library as layouts x qualities (399 fingerings instead of
+   1,674 hand-typed shapes). `Chords.ts` is untouched and is still what the
+   apps read; see "Layouts table" below. Next: the same table for Scale
+   Chords, then switching the apps over.
 6. UX: Scale Chords as default, chord <-> scale cross-links (the reverse of
    `diatonicChords`: which scale degrees yield this chord), onion drill-down.
 
@@ -128,6 +131,29 @@ layer** = a single slot/degree of that chord against the scale's positions
   mobile copy (`scripts/sync-mobile-lib.mjs`, with `npm run
   check:mobile-sync` to catch drift). Chosen over importing across folders so
   `mobile/` stays self-contained for store builds.
+
+## Layouts table (`lib/Shapes/Chords.layouts.ts`)
+
+The idea (the author's): store each fingering once, and say per chord quality
+whether it's possible there, instead of repeating the whole shape with the
+intervals adjusted. Each row is `[rootString, 'string:chordTone@octave ...',
+[one cell per quality]]`; a cell is `n` (the fingering is that quality's n-th
+shape; 1 = main shape), `0` (not in the library) or `'?'` (not in the library
+but within 5 frets: a candidate to hand-check, never used until it's turned
+into a number). Fret numbers are derived from the chord's intervals.
+
+- **Status:** `Chords.ts`, `Scales.ts` and `ScaleChords.ts` are all kept until
+  the author decides each can go. The apps still read `Chords.ts`.
+- **Kept in step by** `scripts/check-chords-layouts.ts`: every shape in
+  `Chords.ts` must be in the layouts file (else it fails); shapes the author
+  approves by turning a `'?'` into a number are reported as "ahead" of
+  `Chords.ts`, not as errors. While nothing is ahead the two are identical,
+  including the order of alternates.
+- **`'?'` cells stay in the file** so it's obvious what's left to check
+  (98 at bootstrap). Search the file for `'?'`.
+- `scripts/gen-chords-layouts.ts` was a one-time bootstrap and refuses to
+  overwrite the hand-maintained file (`--force` discards edits).
+- The mobile copy doesn't carry this file yet; the apps don't use it.
 
 ## Notes for later: scales that aren't 7-note
 
