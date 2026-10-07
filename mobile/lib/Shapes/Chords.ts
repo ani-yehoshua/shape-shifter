@@ -1,3 +1,5 @@
+// GENERATED FILE -- do not edit. Source: lib/Shapes/Chords.ts (the website's lib is the single source).
+// Edit that file, then run `npm run sync:mobile` from the repo root.
 // 0: 1st string
 // 1: 2nd string
 // 2: 3rd string
@@ -8448,7 +8450,7 @@ export const CHORD_SHAPES = {
                                                 ],
                                             },
                                             {
-                                                rootString: 1,
+                                                rootString: 2,
                                                 pattern: [
                                                     // 1st-string not played
                                                     // 3rd-string not played
@@ -10650,7 +10652,7 @@ export const CHORD_SHAPES = {
                                                     { string: 2, fretOffset: 0, semitones: 0, degree: 1 },
                                                     { string: 3, fretOffset: -3, semitones: 4, degree: 3 },
                                                     { string: 4, fretOffset: -3, semitones: 11, degree: 7 },
-                                                    { string: 5, fretOffset: -1, semitones: 7, degree: 5 },
+                                                    { string: 5, fretOffset: -1, semitones: 8, degree: 5 },
                                                 ],
                                             },
                                         ],

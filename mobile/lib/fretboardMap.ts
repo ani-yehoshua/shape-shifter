@@ -1,3 +1,5 @@
+// GENERATED FILE -- do not edit. Source: lib/fretboardMap.ts (the website's lib is the single source).
+// Edit that file, then run `npm run sync:mobile` from the repo root.
 export type NotePosition = {
     string: number;
     fret: number;

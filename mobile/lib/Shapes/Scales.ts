@@ -1,3 +1,5 @@
+// GENERATED FILE -- do not edit. Source: lib/Shapes/Scales.ts (the website's lib is the single source).
+// Edit that file, then run `npm run sync:mobile` from the repo root.
 import { generateNpsPositions } from '../scaleAlgorithms';
 import type { ScaleNote, ScalePosition } from '../scaleAlgorithms';
 

@@ -1,3 +1,5 @@
+// GENERATED FILE -- do not edit. Source: lib/chordQualities.ts (the website's lib is the single source).
+// Edit that file, then run `npm run sync:mobile` from the repo root.
 export type ChordQuality = {
     intervals: number[]; // semitones from root for each chord tone
     degrees: number[];   // scale degree labels (1, 3, 5, 7, etc.)
