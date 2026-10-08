@@ -141,19 +141,27 @@ The idea (the author's): store each fingering once, and say per chord quality
 whether it's possible there, instead of repeating the whole shape with the
 intervals adjusted. Each row is `[rootString, 'string:chordTone@octave ...',
 [one cell per quality]]`; a cell is `n` (the fingering is that quality's n-th
-shape; 1 = main shape), `0` (not in the library) or `'?'` (not in the library
+shape; 1 = main shape), `0` (not in the library), `'?'` (not in the library
 but within 5 frets: a candidate to hand-check, never used until it's turned
-into a number). Fret numbers are derived from the chord's intervals.
+into a number) or `'x'` (was in `Chords.ts` and was deliberately removed on
+review). Fret numbers are derived from the chord's intervals.
 
-- **Status:** `Chords.ts`, `Scales.ts` and `ScaleChords.ts` are all kept until
-  the author decides each can go. The apps still read `Chords.ts`.
+- **Status:** the author intends to retire `Chords.ts` and `ScaleChords.ts`
+  once the two layout files are shown to work the same way in the apps. Until
+  then all three originals (`Chords.ts`, `Scales.ts`, `ScaleChords.ts`) are
+  kept, and the apps still read `Chords.ts`. (`Scales.ts` is not replaced by
+  these tables.)
 - **Kept in step by** `scripts/check-chords-layouts.ts`: every shape in
-  `Chords.ts` must be in the layouts file (else it fails); shapes the author
-  approves by turning a `'?'` into a number are reported as "ahead" of
-  `Chords.ts`, not as errors. While nothing is ahead the two are identical,
-  including the order of alternates.
+  `Chords.ts` must be in the layouts file, except shapes marked `'x'` (a
+  missing shape that is *not* marked `'x'` fails; an `'x'` on a shape
+  `Chords.ts` never had also fails). Shapes the author approves by turning a
+  `'?'` into a number are reported as "ahead" of `Chords.ts`, not as errors.
+  While nothing is ahead the two are identical, including the order of
+  alternates.
 - **`'?'` cells stay in the file** so it's obvious what's left to check
-  (98 at bootstrap). Search the file for `'?'`.
+  (98 at bootstrap; 5 left after the first review round, which also approved
+  32 shapes and removed one, Raise 3/1 of 2 / Min7b5 / 1st Inv.). Search the
+  file for `'?'`.
 - `scripts/gen-chords-layouts.ts` was a one-time bootstrap and refuses to
   overwrite the hand-maintained file (`--force` discards edits).
 - The mobile copy doesn't carry this file yet; the apps don't use it.
@@ -166,10 +174,14 @@ set / inversion.
 
 - **Rows** are every fingering in `ScaleChords.ts` (the numbers) plus every
   approved fingering of the same voicing / string set / inversion from
-  `Chords.layouts.ts`, as `'?'` candidates. That is how Drop 3, Drop 2 of 2
-  and Drop 3 of 2 start: everything `'?'`, nothing shown until approved.
-  "Raise 3/1 of 2" is left out (no string-set level in the chord library) and
-  Triads / Shells need 3-note structures, which don't exist yet.
+  `Chords.layouts.ts`, as `'?'` candidates. That is how Drop 3, Drop 2 of 2,
+  Drop 3 of 2 and Raise 3/1 of 2 start: everything `'?'`, nothing shown until
+  approved. Raise 3/1 of 2 has no string-set level, exactly as in
+  `Chords.layouts.ts`, so its fingerings sit directly under the voicing (and
+  its built tree is one level shallower than the other voicings). Triads /
+  Shells need 3-note structures, which don't exist yet.
+- **Cells** are the same as in the chord table: `n`, `0`, `'?'`, and `'x'`
+  (was in `ScaleChords.ts`, deliberately removed on review).
 - **Notes text** names chord tones for the base 1-3-5-7 chord, so the 3rd
   voice reads `5` even in `1 3 4 7` (really the 4th degree).
 - **Reach caveat:** `'?'` means "within 5 frets on the Major root chord". The
@@ -184,9 +196,14 @@ set / inversion.
   Inv. alt 1). They stay in `ScaleChords.ts`; fix them there or add them to
   the table as fingerings.
 - **Kept in step by** `scripts/check-scale-chords-layouts.ts` (same rules as
-  the chord table's check: nothing from `ScaleChords.ts` may be missing,
-  approved extras are reported as "ahead"). `scripts/gen-scale-chords-layouts.ts`
-  was a one-time bootstrap and refuses to overwrite the file.
+  the chord table's check: nothing from `ScaleChords.ts` may be missing
+  unless it is in `NOT_CONVERTED` or marked `'x'`; approved extras are
+  reported as "ahead"). `scripts/gen-scale-chords-layouts.ts` was a one-time
+  bootstrap and refuses to overwrite the file.
+- **Wiring note:** `app/page.tsx` reads Scale Chords as voicing -> string set
+  -> structure -> inversion (four levels). Raise 3/1 of 2 has three, so the
+  page needs to handle a voicing with no string-set level before that voicing
+  is approved and used (the chord side already copes via `levelName`s).
 
 ## Notes for later: scales that aren't 7-note
 

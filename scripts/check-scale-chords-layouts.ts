@@ -10,7 +10,8 @@
  *   - EVERY shape in ScaleChords.ts is also in the layouts file (same
  *     rootString, notes, semitones and degree labels; the order notes are
  *     listed inside one shape is ignored), except the ones listed in
- *     NOT_CONVERTED
+ *     NOT_CONVERTED and the ones you marked 'x' (deliberately removed on
+ *     review; an 'x' on a shape ScaleChords.ts never had is a problem too)
  * Reported, not a failure:
  *   - shapes the layouts file has that ScaleChords.ts doesn't ("ahead") --
  *     fingerprints you approved by turning a '?' into a number
@@ -20,7 +21,11 @@
  * Exit code 1 if anything from ScaleChords.ts is missing or the tree differs.
  */
 import { SCALE_CHORD_SHAPES } from '../lib/Shapes/ScaleChords.js';
-import { NOT_CONVERTED, buildScaleChordShapes } from '../lib/Shapes/ScaleChords.layouts.js';
+import {
+    NOT_CONVERTED,
+    buildScaleChordShapes,
+    removedScaleChordShapes,
+} from '../lib/Shapes/ScaleChords.layouts.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const problems: string[] = [];
@@ -41,14 +46,24 @@ let skipped = 0;
 let ahead = 0;
 const aheadAt: string[] = [];
 
+const removed = removedScaleChordShapes(); // shapes marked 'x', by place in the tree
+const removedAt: string[] = [];
+
 function compareShape(a: any, b: any, path: string) {
-    // alternates ScaleChords.ts has but the table can't express yet
     const aAll = [a, ...(a.altShapes ?? [])];
+    const allText = aAll.map(shapeText);
+    // shapes of ScaleChords.ts that were deliberately removed ('x') don't count as missing
+    const removedHere = (removed[path] ?? []).map(shapeText);
+    for (const t of removedHere)
+        if (!allText.includes(t)) bad(path, "a shape marked 'x' is not in ScaleChords.ts at all");
+    // ...nor do alternates the table can't express yet (NOT_CONVERTED)
     const aList = aAll.filter((_, i) => {
         const listed = NOT_CONVERTED.includes(`${path}#${i}`);
         if (listed) skipped++;
-        return !listed;
+        return !listed && !removedHere.includes(allText[i]);
     });
+    const removedCount = aAll.length - aList.length - NOT_CONVERTED.filter(n => n.startsWith(`${path}#`)).length;
+    if (removedCount > 0) removedAt.push(`${path} (-${removedCount})`);
     const bList = [b, ...(b.altShapes ?? [])];
     shapes += aList.length;
     const aText = aList.map(shapeText);
@@ -106,6 +121,8 @@ console.log(
 );
 if (skipped)
     console.log(`  ${skipped} shape(s) not converted (listed in NOT_CONVERTED): ${NOT_CONVERTED.join('; ')}`);
+if (removedAt.length)
+    console.log(`  ${removedAt.length} place(s) with shapes deliberately removed ('x'):\n    ${removedAt.join('\n    ')}`);
 if (ahead) {
     console.log(`  ${ahead} approved shape(s) are AHEAD of ScaleChords.ts (not in the apps yet):\n    ${aheadAt.join('\n    ')}`);
 } else {

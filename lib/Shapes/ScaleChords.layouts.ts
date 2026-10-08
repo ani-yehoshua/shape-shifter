@@ -31,29 +31,39 @@
 //                   NOTE: reach is measured on the root chord only; the same
 //                   fingering lands on a different chord at every other scale
 //                   degree, so check those too.
+//            'x' -> WAS in ScaleChords.ts for that structure, and was
+//                   deliberately removed on review. Never used.
+//                   scripts/check-scale-chords-layouts.ts accepts a missing
+//                   shape only where it is marked 'x'.
 //
 // Rows that come from the chord library (Chords.layouts.ts) rather than from
 // ScaleChords.ts are all '?'. That is how voicing types ScaleChords.ts never
-// had (Drop 3, Drop 2 of 2, Drop 3 of 2) start out: nothing is shown until
-// you approve it. Raise 3/1 of 2 is left out (no string-set level).
+// had (Drop 3, Drop 2 of 2, Drop 3 of 2, Raise 3/1 of 2) start out: nothing
+// is shown until you approve it. Raise 3/1 of 2 has no string-set level, the
+// same as in Chords.layouts.ts, so its fingerings sit directly under the
+// voicing.
 //
 // In "Low", the numbers for the eight non-base structures are the copies of
 // "Mid" that ScaleChords.ts has (strings 1-4), kept as a fallback; the
 // fingerings on the real low strings (2-5) are the '?' rows to try instead.
 //
-// At bootstrap: 156 fingerings, 159 numbered cells, 640 '?' candidates.
+// At bootstrap: 173 fingerings, 159 numbered cells, 724 '?' candidates.
 import { chordAtDegree, shapeFromLayout } from '@/lib/harmony';
 import type { ShapeFormula } from '@/lib/fretboardMap';
-import type { ScaleChordLibrary } from '@/lib/Shapes/ScaleChords';
 
-type Cell = number | '?';
+type Cell = number | '?' | 'x';
 type Row = [rootString: number, notes: string, cells: Cell[]];
 type SetNode = { positions: Record<string, Row[]> };
 
 /** Column order (matches the cells in every row). */
 export const STRUCTURES = ['(Base) 1 3 5 7', '1 3 4 7', '1 4 5 6', '1 2 4 5', '1 3 4 5', '1 4 6 7', '1 5 6 7', '1 2 5 7', '1 3 6 7'];
 
-export const SCALE_CHORD_LAYOUTS: Record<string, Record<string, SetNode>> = {
+/**
+ * voicing type -> string set -> fingerings, except a voicing with no string-set
+ * level (Raise 3/1 of 2, as in Chords.layouts.ts), which holds its fingerings
+ * directly.
+ */
+export const SCALE_CHORD_LAYOUTS: Record<string, Record<string, SetNode> | SetNode> = {
     'Drop 2': {
         'High': {
             // 1 4 5 6          Maj9 from 4th
@@ -378,6 +388,39 @@ export const SCALE_CHORD_LAYOUTS: Record<string, Record<string, SetNode>> = {
             },
         },
     },
+    'Raise 3/1 of 2': {
+        positions: {
+            'Root': [
+                // root  notes                  Base  1347  1456  1245  1345  1467  1567  1257  1367
+                [5, '0:3@2  1:5@1  3:7  5:1',  [ '?',    0,    0,  '?',    0,  '?',    0,  '?',  '?']],
+                [5, '0:3@2  2:5@1  3:7  5:1',  [ '?',  '?',    0,  '?',    0,    0,    0,  '?',    0]],
+            ],
+            '1st Inv.': [
+                // root  notes                   Base  1347  1456  1245  1345  1467  1567  1257  1367
+                [3, '0:5@1  1:7  3:1  5:3@-1',  [ '?',  '?',  '?',  '?',  '?',    0,    0,  '?',    0]],
+                [4, '0:5@1  1:7  4:1  5:3@-1',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                [4, '0:5@1  2:7  4:1  5:3@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',    0,  '?']],
+                [3, '0:5@1  2:7  3:1  5:3@-1',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+            ],
+            '2nd Inv.': [
+                // root  notes                    Base  1347  1456  1245  1345  1467  1567  1257  1367
+                [2, '0:7  2:1  3:3@-1  5:5@-2',  [ '?',    0,  '?',  '?',  '?',  '?',  '?',    0,  '?']],
+                [2, '0:7  2:1  4:3@-1  5:5@-2',  [ '?',    0,  '?',  '?',    0,  '?',  '?',  '?',  '?']],
+                [1, '0:7  1:1  3:3@-1  5:5@-2',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+                [1, '0:7  1:1  4:3@-1  5:5@-2',  [   0,    0,    0,  '?',    0,    0,    0,    0,    0]],
+                [3, '0:7  3:1  4:3@-1  5:5@-2',  [   0,    0,    0,    0,    0,  '?',  '?',    0,  '?']],
+            ],
+            '3rd Inv.': [
+                // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                [0, '0:1  1:3@-1  3:5@-2  5:7@-3',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                [0, '0:1  1:3@-1  4:5@-2  5:7@-3',  [ '?',  '?',  '?',  '?',  '?',    0,  '?',    0,    0]],
+                [0, '0:1  2:3@-1  3:5@-2  5:7@-3',  [ '?',    0,  '?',  '?',    0,  '?',  '?',  '?',  '?']],
+                [0, '0:1  2:3@-1  4:5@-2  5:7@-3',  [ '?',  '?',  '?',  '?',    0,  '?',  '?',  '?',  '?']],
+                [1, '1:1  2:3@-1  4:5@-2  5:7@-3',  [   0,    0,    0,    0,    0,    0,    0,    0,    0]],
+                [1, '1:1  3:3@-1  4:5@-2  5:7@-3',  [   0,    0,    0,    0,    0,    0,    0,    0,    0]],
+            ],
+        },
+    },
 };
 
 /**
@@ -407,35 +450,81 @@ function parseNotes(text: string) {
     });
 }
 
-export function buildScaleChordShapes(): ScaleChordLibrary {
-    const library: ScaleChordLibrary = {};
-    for (const [voicing, sets] of Object.entries(SCALE_CHORD_LAYOUTS)) {
-        for (const [set, node] of Object.entries(sets)) {
-            STRUCTURES.forEach((structure, si) => {
-                const degrees = structure.startsWith('(Base)')
-                    ? [1, 3, 5, 7]
-                    : structure.split(' ').map(Number);
-                const chord = chordAtDegree(MAJOR, 0, degrees);
-                for (const [inversion, rows] of Object.entries(node.positions)) {
-                    const shapes = rows
-                        .filter(r => typeof r[2][si] === 'number' && r[2][si] > 0)
-                        .sort((a, b) => (a[2][si] as number) - (b[2][si] as number))
-                        .map(([rootString, notes]) =>
-                            shapeFromLayout({ rootString, notes: parseNotes(notes) }, chord),
-                        );
-                    if (!shapes.length) continue;
-                    const [primary, ...alts] = shapes;
-                    const template: ShapeFormula = {
-                        name: inversion,
-                        rootString: primary.rootString,
-                        pattern: primary.pattern,
-                        ...(alts.length ? { altShapes: alts } : {}),
-                    };
-                    ((library[voicing] ??= {})[set] ??= {})[structure] ??= {};
-                    library[voicing][set][structure][inversion] = template;
-                }
-            });
+/** The chord a structure makes on the Major root chord (what templates are placed on). */
+const chordOf = (structure: string) =>
+    chordAtDegree(MAJOR, 0, structure.startsWith('(Base)') ? [1, 3, 5, 7] : structure.split(' ').map(Number));
+
+type Level3 = Record<string, Record<string, ShapeFormula>>; // structure -> inversion -> template
+type Level4 = Record<string, Level3>; // string set -> ...
+/**
+ * Same shape as SCALE_CHORD_SHAPES in ScaleChords.ts (voicing -> string set ->
+ * structure -> inversion -> template), except a voicing with no string-set
+ * level holds its structures directly.
+ */
+export type BuiltScaleChords = Record<string, Level4 | Level3>;
+
+const isSetNode = (n: SetNode | Record<string, SetNode>): n is SetNode => 'positions' in n;
+
+function buildStructures(node: SetNode): Level3 {
+    const out: Level3 = {};
+    STRUCTURES.forEach((structure, si) => {
+        const chord = chordOf(structure);
+        for (const [inversion, rows] of Object.entries(node.positions)) {
+            const shapes = rows
+                .filter(r => typeof r[2][si] === 'number' && r[2][si] > 0)
+                .sort((a, b) => (a[2][si] as number) - (b[2][si] as number))
+                .map(([rootString, notes]) => shapeFromLayout({ rootString, notes: parseNotes(notes) }, chord));
+            if (!shapes.length) continue;
+            const [primary, ...alts] = shapes;
+            (out[structure] ??= {})[inversion] = {
+                name: inversion,
+                rootString: primary.rootString,
+                pattern: primary.pattern,
+                ...(alts.length ? { altShapes: alts } : {}),
+            };
+        }
+    });
+    return out;
+}
+
+export function buildScaleChordShapes(): BuiltScaleChords {
+    const library: BuiltScaleChords = {};
+    for (const [voicing, node] of Object.entries(SCALE_CHORD_LAYOUTS)) {
+        if (isSetNode(node)) {
+            const structures = buildStructures(node);
+            if (Object.keys(structures).length) library[voicing] = structures;
+        } else {
+            for (const [set, setNode] of Object.entries(node)) {
+                const structures = buildStructures(setNode);
+                if (Object.keys(structures).length) ((library[voicing] ??= {}) as Level4)[set] = structures;
+            }
         }
     }
     return library;
+}
+
+/**
+ * The shapes marked 'x' (in ScaleChords.ts, deliberately removed on review),
+ * keyed by their place in the tree: "Drop 2 > Mid > 1 3 4 7 > Root". Used by
+ * scripts/check-scale-chords-layouts.ts to tell a deliberate removal from a
+ * shape that went missing by accident.
+ */
+export function removedScaleChordShapes(): Record<string, ShapeFormula[]> {
+    const out: Record<string, ShapeFormula[]> = {};
+    const walk = (node: SetNode, path: string[]) => {
+        STRUCTURES.forEach((structure, si) => {
+            const chord = chordOf(structure);
+            for (const [inversion, rows] of Object.entries(node.positions)) {
+                const removed = rows
+                    .filter(r => r[2][si] === 'x')
+                    .map(([rootString, notes]) => shapeFromLayout({ rootString, notes: parseNotes(notes) }, chord));
+                if (removed.length) out[[...path, structure, inversion].join(' > ')] = removed;
+            }
+        });
+    };
+    for (const [voicing, node] of Object.entries(SCALE_CHORD_LAYOUTS)) {
+        if (isSetNode(node)) walk(node, [voicing]);
+        else for (const [set, setNode] of Object.entries(node)) walk(setNode, [voicing, set]);
+    }
+    return out;
 }

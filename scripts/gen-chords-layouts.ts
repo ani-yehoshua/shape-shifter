@@ -226,6 +226,11 @@ const out = `// The chord library stored as FINGERINGS x CHORD QUALITIES, instea
 //                 hand-check. Never used until you change it to a number
 //                 (the next free position for that quality), or to 0 if it
 //                 isn't playable. Search for '?' to find what's left.
+//          'x' -> WAS in Chords.ts for that quality, and was deliberately
+//                 removed on review (not playable / replaced). Never used.
+//                 scripts/check-chords-layouts.ts accepts a missing shape
+//                 only where it is marked 'x', so mark a removal with 'x',
+//                 not 0, and the check will tell you if you forget.
 //
 // At bootstrap ${rowCount} fingerings stood in for ${confirmed} hand-typed shapes
 // (+ the 5 CAGED shapes, kept as-is), with ${candidates} '?' candidates to review.
@@ -237,7 +242,7 @@ import type { ChordQuality } from '@/lib/chordQualities';
 import type { ShapeFormula } from '@/lib/fretboardMap';
 import { shapeFromLayout } from '@/lib/harmony';
 
-type Cell = number | '?';
+type Cell = number | '?' | 'x';
 type Row = [rootString: number, notes: string, cells: Cell[]];
 
 type QualityNode = {
@@ -286,6 +291,7 @@ function buildQualityNode(node: QualityNode): BuiltNode {
                 .map(([rootString, notes]) =>
                     shapeFromLayout({ rootString, notes: parseNotes(notes, quality) }, quality),
                 );
+            if (!shapes.length) continue; // nothing approved for this quality / position
             const [primary, ...alts] = shapes;
             positions[inversion] = {
                 name: inversion,
@@ -313,6 +319,39 @@ export function buildChordShapes(): Record<string, BuiltNode> {
     return Object.fromEntries(
         Object.entries(CHORD_LAYOUTS).map(([family, node]) => [family, buildNode(node)]),
     );
+}
+
+/**
+ * The shapes marked 'x' (in Chords.ts, deliberately removed on review), keyed
+ * by their place in the tree: "Sevenths > Drop 2 > Mid String Set > Min7b5 > Root".
+ * Used by scripts/check-chords-layouts.ts to tell a deliberate removal from a
+ * shape that went missing by accident.
+ */
+export function removedChordShapes(): Record<string, ShapeFormula[]> {
+    const out: Record<string, ShapeFormula[]> = {};
+    const walk = (node: LayoutNode, path: string[]) => {
+        if ('qualities' in node) {
+            node.qualities.forEach((qualityKey, qi) => {
+                const quality = node.shell
+                    ? toShellQuality(CHORD_QUALITIES[qualityKey])
+                    : CHORD_QUALITIES[qualityKey];
+                for (const [inversion, rows] of Object.entries(node.positions)) {
+                    const removed = rows
+                        .filter(r => r[2][qi] === 'x')
+                        .map(([rootString, notes]) =>
+                            shapeFromLayout({ rootString, notes: parseNotes(notes, quality) }, quality),
+                        );
+                    if (removed.length) out[[...path, qualityKey, inversion].join(' > ')] = removed;
+                }
+            });
+        } else {
+            for (const [key, child] of Object.entries(node.options)) {
+                if (!('pattern' in child)) walk(child as LayoutNode, [...path, key]);
+            }
+        }
+    };
+    for (const [family, node] of Object.entries(CHORD_LAYOUTS)) walk(node, [family]);
+    return out;
 }
 `;
 

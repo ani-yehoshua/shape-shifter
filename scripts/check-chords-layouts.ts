@@ -5,7 +5,9 @@
  * Always required:
  *   - the same keys, in the same order, and the same levelNames at every level
  *   - EVERY shape in Chords.ts is also in the layouts file (same rootString
- *     and notes; the order notes are listed inside one shape is ignored)
+ *     and notes; the order notes are listed inside one shape is ignored),
+ *     except shapes you marked 'x' (deliberately removed on review). An 'x'
+ *     on a shape Chords.ts never had is a problem too.
  * Reported, not a failure:
  *   - shapes the layouts file has that Chords.ts doesn't ("ahead") -- these are
  *     the '?' candidates you reviewed and approved by giving them a number
@@ -16,7 +18,7 @@
  * Exit code 1 if anything from Chords.ts is missing or the tree differs.
  */
 import { CHORD_SHAPES } from '../lib/Shapes/Chords.js';
-import { buildChordShapes } from '../lib/Shapes/Chords.layouts.js';
+import { buildChordShapes, removedChordShapes } from '../lib/Shapes/Chords.layouts.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const problems: string[] = [];
@@ -35,9 +37,18 @@ const shapeText = (s: any) =>
 let shapes = 0;
 let ahead = 0;
 const aheadAt: string[] = [];
+const removed = removedChordShapes(); // shapes marked 'x', by place in the tree
+const removedAt: string[] = [];
 
 function compareShape(a: any, b: any, path: string) {
-    const aList = [a, ...(a.altShapes ?? [])];
+    const aAll = [a, ...(a.altShapes ?? [])];
+    // shapes of Chords.ts that were deliberately removed ('x') don't count as missing
+    const removedHere = (removed[path.replace(/^library > /, '')] ?? []).map(shapeText);
+    const allText = aAll.map(shapeText);
+    for (const t of removedHere)
+        if (!allText.includes(t)) bad(path, "a shape marked 'x' is not in Chords.ts at all");
+    const aList = aAll.filter((_, i) => !removedHere.includes(allText[i]));
+    if (aList.length !== aAll.length) removedAt.push(`${path} (-${aAll.length - aList.length})`);
     const bList = [b, ...(b.altShapes ?? [])];
     shapes += aList.length;
     const aText = aList.map(shapeText);
@@ -78,8 +89,11 @@ if (problems.length) {
     process.exit(1);
 }
 console.log(
-    `check-chords-layouts: OK -- every one of the ${shapes} shapes in Chords.ts is in Chords.layouts.ts`,
+    `check-chords-layouts: OK -- every one of the ${shapes} shapes in Chords.ts is in Chords.layouts.ts` +
+        (removedAt.length ? ' (apart from the ones marked x)' : ''),
 );
+if (removedAt.length)
+    console.log(`  ${removedAt.length} place(s) with shapes deliberately removed ('x'):\n    ${removedAt.join('\n    ')}`);
 if (ahead) {
     console.log(
         `  ${ahead} approved shape(s) are AHEAD of Chords.ts (not in the apps yet):\n    ${aheadAt.join('\n    ')}`,
