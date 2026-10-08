@@ -47,7 +47,14 @@ export async function POST(req: Request) {
     if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         await supabase.auth.setSession(session);
     } else if (event === 'SIGNED_OUT') {
-        await supabase.auth.signOut();
+        // This only mirrors a sign-out the browser already did -- including
+        // automatic ones, like a failed token refresh -- into the server's
+        // cookies. signOut() defaults to scope "global", which also revokes
+        // the user's sessions on every other device and tab, so one blip here
+        // used to sign the phone app and other browsers out too. The
+        // Settings drawer's explicit "Sign out" still signs out globally
+        // itself (lib/contexts/AuthContext.tsx).
+        await supabase.auth.signOut({ scope: 'local' });
     }
 
     return NextResponse.json({ ok: true });
