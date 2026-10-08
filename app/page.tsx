@@ -1032,6 +1032,18 @@ export default function Home() {
         selectedPosition,
     });
 
+    // The alternate index only means something for the chord that's selected.
+    // Changing the voicing type, string set or chord quality can land on a
+    // chord with fewer alternates than the index being carried over, which
+    // used to leave an empty fretboard and a label like "3/2". Everything
+    // reads the index through `altIdx` (so there's never a render with an
+    // out-of-range value) and the state falls back to the first shape.
+    const altIdx = selectedAltShape < availableAlts.length ? selectedAltShape : 0;
+    React.useEffect(() => {
+        if (availableAlts.length > 0 && selectedAltShape >= availableAlts.length)
+            setSelectedAltShape(0);
+    }, [availableAlts, selectedAltShape]);
+
     // ── hierarchy helpers ──────────────────────────────────────────────────────
     const getSetterForLevel = (levelName: string): ((v: string) => void) => {
         switch (levelName) {
@@ -1546,7 +1558,7 @@ export default function Home() {
             selectedStringSet,
             selectedChordQuality,
             selectedPosition,
-            selectedAltShape,
+            selectedAltShape: altIdx, // never persist an out-of-range index
             selectedNoteGroup,
             selectedScale,
             selectedScalePosition,
@@ -1580,7 +1592,7 @@ export default function Home() {
         selectedStringSet,
         selectedChordQuality,
         selectedPosition,
-        selectedAltShape,
+        altIdx,
         selectedNoteGroup,
         selectedScale,
         selectedScalePosition,
@@ -1600,7 +1612,7 @@ export default function Home() {
     const voicingInfo = React.useMemo(() => {
         if (isDrawMode || selectedPosition === "All" || !currentRootNote)
             return null;
-        const formula = availableAlts[selectedAltShape];
+        const formula = availableAlts[altIdx];
         if (!formula) return null;
         const all = generateAllVoicingsForShape(
             currentRootNote,
@@ -1642,7 +1654,7 @@ export default function Home() {
         isDrawMode,
         selectedPosition,
         currentRootNote,
-        selectedAltShape,
+        altIdx,
         availableAlts,
         fretboardMap,
         selectedTuning.semitones,
@@ -1937,7 +1949,7 @@ export default function Home() {
 
     const { prev: goPrevAlt, next: goNextAlt } = useCycleList(
         availableAlts,
-        selectedAltShape,
+        altIdx,
         handleAltChange,
     );
 
@@ -2695,7 +2707,7 @@ export default function Home() {
                                                     altsLocked
                                                         ? "opacity-50"
                                                         : ""
-                                                }>{`${selectedAltShape + 1}/${availableAlts.length}`}</span>
+                                                }>{`${altIdx + 1}/${availableAlts.length}`}</span>
                                         </span>
                                         <button
                                             onClick={goNextAlt}
@@ -2854,7 +2866,7 @@ export default function Home() {
                                                                   position:
                                                                       selectedPosition,
                                                                   altShape:
-                                                                      selectedAltShape,
+                                                                      altIdx,
                                                               },
                                                     )
                                                 }
@@ -4234,7 +4246,7 @@ export default function Home() {
                                                                     altsLocked
                                                                         ? "opacity-50"
                                                                         : ""
-                                                                }>{`${selectedAltShape + 1}/${availableAlts.length}`}</span>
+                                                                }>{`${altIdx + 1}/${availableAlts.length}`}</span>
                                                         </span>
                                                         <button
                                                             onClick={goNextAlt}
@@ -4305,7 +4317,7 @@ export default function Home() {
                                                                   position:
                                                                       selectedPosition,
                                                                   altShape:
-                                                                      selectedAltShape,
+                                                                      altIdx,
                                                               },
                                                     )
                                                 }
