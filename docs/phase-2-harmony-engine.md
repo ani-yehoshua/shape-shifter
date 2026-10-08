@@ -97,13 +97,16 @@ layer** = a single slot/degree of that chord against the scale's positions
 
 1. **Done:** engine slice + validation; Chords.ts defects fixed; generated
    mobile copy (`npm run sync:mobile`).
-2. Verify the remaining `ScaleChords.ts` alternates by hand (`1 3 4 7`
-   block first).
-3. `resolveScaleChord(...)`: one function for "scale + structure + voicing +
-   string set + inversion + alt -> per-degree shapes", curated alts first,
-   layout fallback. Also unlocks Drop 3 / Drop 2 of 2 / Raise 3/1 of 2 /
-   Triads / Shells in Scale Chords (today: Drop 2 only).
-4. Switch `app/page.tsx` (and mobile) to it; delete `ScaleChords.ts`.
+2. **Done:** `lib/Shapes/ScaleChords.layouts.ts` -- Scale Chords in the same
+   table format (columns = the nine degree structures); see "Scale Chords
+   table" below. Next: hand-check its `'?'` candidates (`1 3 4 7` block
+   first) and the three shapes in `NOT_CONVERTED`.
+3. Wire both tables into the apps: a function for "scale + structure +
+   voicing + string set + inversion + alt -> per-degree shapes" that reads
+   the approved cells (nothing unapproved is ever shown). Unlocks Drop 3 /
+   Drop 2 of 2 / Drop 3 of 2 in Scale Chords (today: Drop 2 only).
+4. Switch `app/page.tsx` (and mobile) over; `ScaleChords.ts` and `Chords.ts`
+   go only when the author says so.
 5. **Format approved, file added alongside:** `lib/Shapes/Chords.layouts.ts`
    stores the chord library as layouts x qualities (399 fingerings instead of
    1,674 hand-typed shapes). `Chords.ts` is untouched and is still what the
@@ -154,6 +157,36 @@ into a number). Fret numbers are derived from the chord's intervals.
 - `scripts/gen-chords-layouts.ts` was a one-time bootstrap and refuses to
   overwrite the hand-maintained file (`--force` discards edits).
 - The mobile copy doesn't carry this file yet; the apps don't use it.
+
+## Scale Chords table (`lib/Shapes/ScaleChords.layouts.ts`)
+
+The same fingerings-by-columns table, with the nine degree structures
+(`(Base) 1 3 5 7`, `1 3 4 7`, ...) as the columns, per voicing type / string
+set / inversion.
+
+- **Rows** are every fingering in `ScaleChords.ts` (the numbers) plus every
+  approved fingering of the same voicing / string set / inversion from
+  `Chords.layouts.ts`, as `'?'` candidates. That is how Drop 3, Drop 2 of 2
+  and Drop 3 of 2 start: everything `'?'`, nothing shown until approved.
+  "Raise 3/1 of 2" is left out (no string-set level in the chord library) and
+  Triads / Shells need 3-note structures, which don't exist yet.
+- **Notes text** names chord tones for the base 1-3-5-7 chord, so the 3rd
+  voice reads `5` even in `1 3 4 7` (really the 4th degree).
+- **Reach caveat:** `'?'` means "within 5 frets on the Major root chord". The
+  same fingering lands on a different chord at every other scale degree, so
+  a candidate also has to be checked on the other degrees.
+- **Comments carried over** from `ScaleChords.ts` (e.g. "Maj9 from 4th"),
+  including the `// WAS VERIFYING ALT SHAPES` marker on Mid `1 3 4 7`.
+- **Low string set:** the Mid copies stay as the numbers (fallback); the
+  fingerings on the real low strings (2-5) are `'?'` rows to try.
+- **`NOT_CONVERTED`**: three `1 3 4 7` alternates whose labels / `rootString`
+  are inconsistent with their chord (High 3rd Inv. alt 1; Mid and Low 2nd
+  Inv. alt 1). They stay in `ScaleChords.ts`; fix them there or add them to
+  the table as fingerings.
+- **Kept in step by** `scripts/check-scale-chords-layouts.ts` (same rules as
+  the chord table's check: nothing from `ScaleChords.ts` may be missing,
+  approved extras are reported as "ahead"). `scripts/gen-scale-chords-layouts.ts`
+  was a one-time bootstrap and refuses to overwrite the file.
 
 ## Notes for later: scales that aren't 7-note
 
