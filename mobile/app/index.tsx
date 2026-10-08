@@ -795,6 +795,18 @@ export default function ChordsScreen() {
         selectedPosition,
     });
 
+    // The alternate index only means something for the chord that's selected.
+    // Changing the voicing type, string set or chord quality can land on a
+    // chord with fewer alternates than the index being carried over, which
+    // used to leave an empty fretboard and a label like "3/2". Everything
+    // reads the index through `altIdx` (so there's never a render with an
+    // out-of-range value) and the state falls back to the first shape. Same
+    // fix as the website's app/page.tsx.
+    const altIdx = selectedAltShape < availableAlts.length ? selectedAltShape : 0;
+    useEffect(() => {
+        if (availableAlts.length > 0 && selectedAltShape >= availableAlts.length) setSelectedAltShape(0);
+    }, [availableAlts, selectedAltShape]);
+
     const drillDownAndSetDefaults = (
         startLevel: ChordLevel | null | undefined,
     ) => {
@@ -973,7 +985,7 @@ export default function ChordsScreen() {
             selectedStringSet,
             selectedChordQuality,
             selectedPosition,
-            selectedAltShape,
+            selectedAltShape: altIdx, // never persist an out-of-range index
             selectedNoteGroup,
             selectedScale,
             selectedScalePosition,
@@ -993,7 +1005,7 @@ export default function ChordsScreen() {
         selectedStringSet,
         selectedChordQuality,
         selectedPosition,
-        selectedAltShape,
+        altIdx,
         selectedNoteGroup,
         selectedScale,
         selectedScalePosition,
@@ -1040,13 +1052,13 @@ export default function ChordsScreen() {
 
     const { prev: goPrevAlt, next: goNextAlt } = useCycleList(
         availableAlts,
-        selectedAltShape,
+        altIdx,
         handleAltChange,
     );
 
     const voicingInfo = useMemo(() => {
         if (selectedPosition === "All" || !currentRootNote) return null;
-        const formula = availableAlts[selectedAltShape] as any;
+        const formula = availableAlts[altIdx] as any;
         if (!formula) return null;
         const all = generateAllVoicingsForShape(
             currentRootNote,
@@ -1086,7 +1098,7 @@ export default function ChordsScreen() {
     }, [
         selectedPosition,
         currentRootNote,
-        selectedAltShape,
+        altIdx,
         availableAlts,
         fretboardMap,
         selectedTuning.semitones,
@@ -3340,7 +3352,7 @@ export default function ChordsScreen() {
                                         styles.chordsStepperLabel,
                                         altsLocked && styles.altLabelLocked,
                                     ]}>
-                                    {`${selectedAltShape + 1}/${availableAlts.length}`}
+                                    {`${altIdx + 1}/${availableAlts.length}`}
                                 </Text>
                             </View>
                             <TouchableOpacity
@@ -3590,7 +3602,7 @@ export default function ChordsScreen() {
                                                   stringSet: selectedStringSet,
                                                   chordQuality: selectedChordQuality,
                                                   position: selectedPosition,
-                                                  altShape: selectedAltShape,
+                                                  altShape: altIdx,
                                               },
                                     )
                                 }
