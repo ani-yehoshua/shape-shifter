@@ -1,0 +1,532 @@
+// GENERATED FILE -- do not edit. Source: lib/Shapes/ScaleChords.layouts.ts (the website's lib is the single source).
+// Edit that file, then run `npm run sync:mobile` from the repo root.
+// Scale Chords stored as FINGERINGS x DEGREE STRUCTURES, in the same table
+// format as lib/Shapes/Chords.layouts.ts, instead of one hand-typed template
+// per structure (lib/Shapes/ScaleChords.ts). Bootstrapped once by
+// scripts/gen-scale-chords-layouts.ts; edit THIS file by hand from now on.
+//
+// STATUS: ScaleChords.ts is kept and is still what the apps read.
+// scripts/check-scale-chords-layouts.ts keeps the two in step: everything in
+// ScaleChords.ts must be here (except NOT_CONVERTED below), and anything extra
+// here is reported as "ahead" (fingerings you approved by turning a '?' into
+// a number).
+//
+// Every row is one fingering:
+//
+//   [rootString, 'string:chordTone@octave ...', [one cell per structure]]
+//
+//   columns   the degree structures, left to right:
+//             Base  1347  1456  1245  1345  1467  1567  1257  1367
+//             (Base = the stacked-thirds 1 3 5 7 chord)
+//   notes     which chord tone sits on which string ('@1' = an octave up,
+//             '@-1' = an octave down). Chord tones are named for the base
+//             1-3-5-7 chord: the 3rd voice is written '5' even in 1 3 4 7,
+//             where it is really the 4th degree. Fret numbers aren't stored:
+//             each one is worked out from the scale degree the chord is on.
+//   cell      n  -> this fingering IS in ScaleChords.ts for that structure, as
+//                   its n-th shape (1 = main shape, 2.. = alternates, in the
+//                   order the app steps through them today)
+//             0  -> not there
+//            '?' -> not there, but within 5 frets on the Major root chord: a
+//                   candidate to hand-check. Never used until you change it to
+//                   a number (the next free position), or to 0 if unplayable.
+//                   NOTE: reach is measured on the root chord only; the same
+//                   fingering lands on a different chord at every other scale
+//                   degree, so check those too.
+//            'x' -> WAS in ScaleChords.ts for that structure, and was
+//                   deliberately removed on review. Never used.
+//                   scripts/check-scale-chords-layouts.ts accepts a missing
+//                   shape only where it is marked 'x'.
+//
+// Rows that come from the chord library (Chords.layouts.ts) rather than from
+// ScaleChords.ts are all '?'. That is how voicing types ScaleChords.ts never
+// had (Drop 3, Drop 2 of 2, Drop 3 of 2, Raise 3/1 of 2) start out: nothing
+// is shown until you approve it. Raise 3/1 of 2 has no string-set level, the
+// same as in Chords.layouts.ts, so its fingerings sit directly under the
+// voicing.
+//
+// In "Low", the numbers for the eight non-base structures are the copies of
+// "Mid" that ScaleChords.ts has (strings 1-4), kept as a fallback; the
+// fingerings on the real low strings (2-5) are the '?' rows to try instead.
+//
+// At bootstrap: 173 fingerings, 159 numbered cells, 724 '?' candidates.
+import { chordAtDegree, shapeFromLayout } from '../harmony';
+import type { ShapeFormula } from '../fretboardMap';
+
+type Cell = number | '?' | 'x';
+type Row = [rootString: number, notes: string, cells: Cell[]];
+type SetNode = { positions: Record<string, Row[]> };
+
+/** Column order (matches the cells in every row). */
+export const STRUCTURES = ['(Base) 1 3 5 7', '1 3 4 7', '1 4 5 6', '1 2 4 5', '1 3 4 5', '1 4 6 7', '1 5 6 7', '1 2 5 7', '1 3 6 7'];
+
+/**
+ * voicing type -> string set -> fingerings, except a voicing with no string-set
+ * level (Raise 3/1 of 2, as in Chords.layouts.ts), which holds its fingerings
+ * directly.
+ */
+export const SCALE_CHORD_LAYOUTS: Record<string, Record<string, SetNode> | SetNode> = {
+    'Drop 2': {
+        'High': {
+            // 1 4 5 6          Maj9 from 4th
+            // 1 2 4 5          Maj9 from 9th
+            // 1 3 4 5          1 2 5 7 from 4th
+            // 1 4 6 7          Maj#11 from 4th
+            // 1 5 6 7          Min9 from 6th
+            // 1 2 5 7          1 3 4 5 from 5th
+            // 1 3 6 7          Min9 from 3rd
+            positions: {
+                'Root': [
+                    // root  notes                Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [3, '0:3@1  1:7  2:5  3:1',  [   1,    1,    1,    1,    1,    1,    1,    1,    1]],
+                ],
+                '1st Inv.': [
+                    // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [1, '0:5  1:1  2:7@-1  3:3@-1',     [   1,    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [0, '0:1  1:5@-1  2:7@-2  3:3@-2',  [   2,    2,    2,    0,    0,    0,    0,    0,    0]],
+                ],
+                '2nd Inv.': [
+                    // root  notes                   Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [2, '0:7  1:3  2:1  3:5@-1',    [   1,    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [2, '0:3@1  1:7  2:1  3:5@-1',  [   0,    0,    0,    0,    0,    0,    0,    0,    0]],
+                ],
+                '3rd Inv.': [
+                    // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [0, '0:1  1:5@-1  2:3@-1  3:7@-2',  [   1,    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [1, '0:5  1:1  2:3@-1  3:7@-2',     [   2,  '?',    0,    0,    0,    0,    0,    0,    0]],
+                ],
+            },
+        },
+        'Mid': {
+            // 1 3 4 7          WAS VERIFYING ALT SHAPES   <-- resume here
+            // 1 4 5 6          Maj9 from 4th
+            // 1 5 6 7          Min9 from 6th
+            // 1 2 5 7          1 3 4 5 from 5th
+            // 1 3 6 7          Xxx9 from 6th
+            positions: {
+                'Root': [
+                    // root  notes                Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [4, '1:3@1  2:7  3:5  4:1',  [   1,    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [4, '0:3@1  1:7  3:5  4:1',  [   2,    2,    0,    0,    0,    0,    0,    0,    0]],
+                    [4, '0:3@1  1:7  2:5  4:1',  [   3,  '?',  '?',    0,    0,    2,    3,  '?',    2]],
+                    [4, '0:3@1  2:7  3:5  4:1',  [ '?',  '?',    2,  '?',    2,    0,    2,    0,    0]],
+                ],
+                '1st Inv.': [
+                    // root  notes                    Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [2, '1:5  2:1  3:7@-1  4:3@-1',  [   1,    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [2, '0:5  2:1  3:7@-1  4:3@-1',  [   2,    0,    2,  '?',    0,    2,    2,    0,    2]],
+                    [1, '0:5  1:1  3:7@-1  4:3@-1',  [   0,    0,    0,    2,    0,    0,    0,    0,    0]],
+                    [1, '0:5  1:1  2:7@-1  4:3@-1',  [   0,    0,    0,  '?',    0,    0,    0,    2,    0]],
+                ],
+                '2nd Inv.': [
+                    // root  notes                 Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [3, '1:7  2:3  3:1  4:5@-1',  [   1,    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [3, '0:7  2:3  3:1  4:5@-1',  [   2,  '?',  '?',    0,    0,  '?',  '?',    2,    2]],
+                    [2, '0:7  1:3  2:1  4:5@-1',  [ '?',  '?',  '?',    2,  '?',    0,    0,    0,    0]],
+                    [3, '0:7  1:3  3:1  4:5@-1',  [ '?',  '?',  '?',    0,    0,    0,    2,    0,    0]],
+                ],
+                '3rd Inv.': [
+                    // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [1, '1:1  2:5@-1  3:3@-1  4:7@-2',  [   1,    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [0, '0:1  1:5@-1  3:3@-1  4:7@-2',  [   2,    0,    0,    0,    0,    0,    0,    0,    0]],
+                    [0, '0:1  1:5@-1  2:3@-1  4:7@-2',  [   0,    0,    2,  '?',    2,    0,    2,    0,    0]],
+                    [0, '0:1  2:5@-1  3:3@-1  4:7@-2',  [   0,    0,    0,    2,    0,    0,    0,    0,    0]],
+                ],
+            },
+        },
+        'Low': {
+            // 1 4 5 6          Maj9 from 4th
+            // 1 5 6 7          Min9 from 6th
+            // 1 2 5 7          1 3 4 5 from 5th
+            // 1 3 6 7          Min9 from 6th
+            positions: {
+                'Root': [
+                    // root  notes                Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [5, '2:3@1  3:7  4:5  5:1',  [   1,  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [4, '1:3@1  2:7  3:5  4:1',  [ '?',    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [4, '0:3@1  1:7  3:5  4:1',  [ '?',    2,    0,    0,    0,    0,    0,    0,    0]],
+                    [4, '0:3@1  2:7  3:5  4:1',  [ '?',  '?',    2,  '?',    2,    0,    2,    0,    0]],
+                    [4, '0:3@1  1:7  2:5  4:1',  [ '?',  '?',  '?',    0,    0,    2,    3,  '?',    2]],
+                    [5, '1:3@1  3:7  4:5  5:1',  [ '?',  '?',  '?',  '?',  '?',    0,  '?',    0,    0]],
+                    [5, '1:3@1  2:7  3:5  5:1',  [ '?',  '?',    0,    0,    0,  '?',  '?',  '?',  '?']],
+                    [5, '1:3@1  2:7  4:5  5:1',  [   0,  '?',    0,    0,    0,    0,    0,    0,    0]],
+                ],
+                '1st Inv.': [
+                    // root  notes                    Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [3, '2:5  3:1  4:7@-1  5:3@-1',  [   1,  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [2, '1:5  2:1  3:7@-1  4:3@-1',  [ '?',    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [2, '0:5  2:1  3:7@-1  4:3@-1',  [   0,    0,    2,  '?',    0,    2,    2,    0,    2]],
+                    [1, '0:5  1:1  3:7@-1  4:3@-1',  [   0,    0,    0,    2,    0,    0,    0,    0,    0]],
+                    [1, '0:5  1:1  2:7@-1  4:3@-1',  [   0,    0,    0,  '?',    0,    0,    0,    2,    0]],
+                    [3, '1:5  3:1  4:7@-1  5:3@-1',  [   0,    0,  '?',  '?',    0,  '?',  '?',    0,  '?']],
+                    [2, '1:5  2:1  3:7@-1  5:3@-1',  [   0,    0,    0,  '?',    0,    0,    0,  '?',    0]],
+                ],
+                '2nd Inv.': [
+                    // root  notes                 Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [4, '2:7  3:3  4:1  5:5@-1',  [   1,  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [3, '1:7  2:3  3:1  4:5@-1',  [ '?',    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [2, '0:7  1:3  2:1  4:5@-1',  [ '?',  '?',  '?',    2,  '?',    0,    0,    0,    0]],
+                    [3, '0:7  1:3  3:1  4:5@-1',  [ '?',  '?',  '?',    0,    0,    0,    2,    0,    0]],
+                    [3, '0:7  2:3  3:1  4:5@-1',  [ '?',  '?',  '?',    0,    0,  '?',  '?',    2,    2]],
+                    [4, '1:7  3:3  4:1  5:5@-1',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                    [3, '1:7  2:3  3:1  5:5@-1',  [   0,  '?',  '?',    0,  '?',    0,    0,    0,    0]],
+                ],
+                '3rd Inv.': [
+                    // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [2, '2:1  3:5@-1  4:3@-1  5:7@-2',  [   1,  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [1, '1:1  2:5@-1  3:3@-1  4:7@-2',  [ '?',    1,    1,    1,    1,    1,    1,    1,    1]],
+                    [0, '0:1  1:5@-1  2:3@-1  4:7@-2',  [   0,    0,    2,  '?',    2,    0,    2,    0,    0]],
+                    [0, '0:1  2:5@-1  3:3@-1  4:7@-2',  [   0,    0,    0,    2,    0,    0,    0,    0,    0]],
+                    [1, '1:1  3:5@-1  4:3@-1  5:7@-2',  [   0,    0,    0,  '?',    0,    0,    0,    0,    0]],
+                ],
+            },
+        },
+    },
+    'Drop 3': {
+        'High': {
+            positions: {
+                'Root': [
+                    // root  notes                  Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [4, '0:5@1  1:3@1  2:7  4:1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [4, '0:5@1  1:3@1  3:7  4:1',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [4, '0:5@1  2:3@1  3:7  4:1',  [   0,    0,    0,    0,    0,    0,    0,    0,    0]],
+                    [4, '1:5@1  2:3@1  3:7  4:1',  [   0,    0,    0,  '?',    0,    0,    0,    0,    0]],
+                ],
+                '1st Inv.': [
+                    // root  notes                 Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [2, '0:7  1:5  2:1  4:3@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [3, '0:7  1:5  3:1  4:3@-1',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                    [3, '1:7  2:5  3:1  4:3@-1',  [ '?',  '?',  '?',  '?',  '?',    0,  '?',    0,    0]],
+                    [3, '0:7  2:5  3:1  4:3@-1',  [ '?',  '?',    0,    0,    0,    0,    0,    0,    0]],
+                ],
+                '2nd Inv.': [
+                    // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [0, '0:1  1:7@-1  2:3@-1  4:5@-2',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [0, '0:1  1:7@-1  3:3@-1  4:5@-2',  [   0,    0,    0,  '?',    0,    0,    0,  '?',    0]],
+                    [1, '1:1  2:7@-1  3:3@-1  4:5@-2',  [   0,    0,  '?',  '?',    0,  '?',  '?',    0,  '?']],
+                ],
+                '3rd Inv.': [
+                    // root  notes                    Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [1, '0:3  1:1  2:5@-1  4:7@-2',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [1, '0:3  1:1  3:5@-1  4:7@-2',  [ '?',  '?',  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [2, '0:3  2:1  3:5@-1  4:7@-2',  [ '?',  '?',  '?',    0,    0,    0,  '?',    0,    0]],
+                    [2, '1:3  2:1  3:5@-1  4:7@-2',  [ '?',  '?',    0,    0,    0,  '?',    0,  '?',  '?']],
+                ],
+            },
+        },
+        'Low': {
+            positions: {
+                'Root': [
+                    // root  notes                  Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [5, '1:5@1  2:3@1  3:7  5:1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [5, '0:5@1  2:3@1  3:7  5:1',  [   0,    0,    0,    0,    0,  '?',    0,    0,  '?']],
+                    [5, '0:5@1  1:3@1  3:7  5:1',  [   0,    0,  '?',    0,    0,  '?',  '?',    0,  '?']],
+                    [5, '1:5@1  2:3@1  4:7  5:1',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [5, '1:5@1  3:3@1  4:7  5:1',  [   0,    0,    0,    0,    0,    0,    0,    0,    0]],
+                    [5, '2:5@1  3:3@1  4:7  5:1',  [   0,    0,    0,  '?',    0,    0,    0,    0,    0]],
+                ],
+                '1st Inv.': [
+                    // root  notes                 Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [3, '1:7  2:5  3:1  5:3@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [3, '0:7  2:5  3:1  5:3@-1',  [ '?',  '?',    0,    0,    0,    0,    0,  '?',    0]],
+                    [3, '0:7  1:5  3:1  5:3@-1',  [ '?',    0,    0,    0,    0,    0,    0,  '?',  '?']],
+                    [4, '1:7  2:5  4:1  5:3@-1',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                    [4, '1:7  3:5  4:1  5:3@-1',  [ '?',  '?',    0,    0,    0,    0,    0,    0,    0]],
+                    [4, '2:7  3:5  4:1  5:3@-1',  [ '?',  '?',  '?',  '?',  '?',    0,  '?',    0,    0]],
+                ],
+                '2nd Inv.': [
+                    // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [1, '1:1  2:7@-1  3:3@-1  5:5@-2',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [1, '1:1  2:7@-1  4:3@-1  5:5@-2',  [   0,    0,    0,  '?',    0,    0,    0,  '?',    0]],
+                    [2, '2:1  3:7@-1  4:3@-1  5:5@-2',  [   0,    0,  '?',  '?',    0,  '?',  '?',    0,  '?']],
+                ],
+                '3rd Inv.': [
+                    // root  notes                    Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [2, '1:3  2:1  3:5@-1  5:7@-2',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [2, '1:3  2:1  4:5@-1  5:7@-2',  [ '?',  '?',  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [3, '1:3  3:1  4:5@-1  5:7@-2',  [ '?',  '?',  '?',    0,    0,    0,  '?',    0,    0]],
+                    [3, '2:3  3:1  4:5@-1  5:7@-2',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                ],
+            },
+        },
+    },
+    'Drop 2 of 2': {
+        'High': {
+            positions: {
+                'Root': [
+                    // root  notes                Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [4, '0:5@1  2:7  3:3  4:1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [4, '0:5@1  1:7  3:3  4:1',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                    [4, '1:5@1  2:7  3:3  4:1',  [   0,  '?',    0,    0,    0,    0,    0,    0,    0]],
+                ],
+                '1st Inv.': [
+                    // root  notes                    Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [2, '0:7  2:1  3:5@-1  4:3@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [2, '1:7  2:1  3:5@-1  4:3@-1',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [1, '0:7  1:1  3:5@-1  4:3@-1',  [   0,    0,    0,  '?',    0,    0,    0,    0,    0]],
+                ],
+                '2nd Inv.': [
+                    // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [0, '0:1  2:3@-1  3:7@-2  4:5@-2',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [0, '0:1  1:3@-1  3:7@-2  4:5@-2',  [ '?',  '?',  '?',  '?',  '?',    0,  '?',    0,    0]],
+                    [1, '1:1  2:3@-1  3:7@-2  4:5@-2',  [ '?',  '?',    0,    0,    0,  '?',  '?',    0,  '?']],
+                ],
+                '3rd Inv.': [
+                    // root  notes                   Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [3, '0:3@1  2:5  3:1  4:7@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [3, '0:3@1  1:5  3:1  4:7@-1',  [   0,    0,  '?',  '?',    0,  '?',  '?',    0,  '?']],
+                    [3, '1:3@1  2:5  3:1  4:7@-1',  [   0,    0,    0,  '?',    0,    0,    0,  '?',    0]],
+                ],
+            },
+        },
+        'Low': {
+            positions: {
+                'Root': [
+                    // root  notes                Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [5, '1:5@1  3:7  4:3  5:1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [5, '1:5@1  2:7  4:3  5:1',  [ '?',  '?',    0,    0,    0,    0,    0,  '?',    0]],
+                    [5, '2:5@1  3:7  4:3  5:1',  [ '?',  '?',  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [5, '0:5@1  3:7  4:3  5:1',  [   0,    0,  '?',    0,    0,  '?',  '?',    0,  '?']],
+                    [5, '0:5@1  2:7  4:3  5:1',  [ '?',    0,    0,    0,    0,  '?',    0,  '?',  '?']],
+                ],
+                '1st Inv.': [
+                    // root  notes                    Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [3, '1:7  3:1  4:5@-1  5:3@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [3, '0:7  3:1  4:5@-1  5:3@-1',  [ '?',  '?',    0,    0,    0,    0,    0,  '?',  '?']],
+                    [3, '2:7  3:1  4:5@-1  5:3@-1',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [2, '0:7  2:1  4:5@-1  5:3@-1',  [   0,    0,    0,    0,    0,    0,    0,  '?',    0]],
+                ],
+                '2nd Inv.': [
+                    // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [1, '1:1  3:3@-1  4:7@-2  5:5@-2',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [2, '2:1  3:3@-1  4:7@-2  5:5@-2',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                    [0, '0:1  2:3@-1  4:7@-2  5:5@-2',  [   0,    0,    0,    0,  '?',    0,    0,    0,    0]],
+                ],
+                '3rd Inv.': [
+                    // root  notes                   Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [4, '1:3@1  3:5  4:1  5:7@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [4, '0:3@1  2:5  4:1  5:7@-1',  [   0,    0,  '?',  '?',  '?',    0,  '?',    0,    0]],
+                    [4, '2:3@1  3:5  4:1  5:7@-1',  [   0,    0,    0,  '?',    0,    0,    0,  '?',    0]],
+                ],
+            },
+        },
+    },
+    'Drop 3 of 2': {
+        'High': {
+            positions: {
+                'Root': [
+                    // root  notes                  Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [4, '0:7@1  1:3@1  3:5  4:1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [4, '0:7@1  1:3@1  2:5  4:1',  [   0,    0,    0,  '?',    0,  '?',    0,    0,  '?']],
+                    [4, '0:7@1  2:3@1  3:5  4:1',  [   0,    0,    0,  '?',    0,    0,    0,  '?',    0]],
+                ],
+                '1st Inv.': [
+                    // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [0, '0:1  1:5@-1  3:7@-2  4:3@-2',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [0, '0:1  1:5@-1  2:7@-2  4:3@-2',  [ '?',  '?',    0,    0,    0,    0,    0,  '?',    0]],
+                    [0, '0:1  2:5@-1  3:7@-2  4:3@-2',  [ '?',  '?',  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [1, '1:1  2:5@-1  3:7@-2  4:3@-2',  [   0,    0,    0,    0,    0,    0,  '?',    0,    0]],
+                ],
+                '2nd Inv.': [
+                    // root  notes                   Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [3, '0:3@1  1:7  3:1  4:5@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [3, '0:3@1  2:7  3:1  4:5@-1',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [2, '0:3@1  1:7  2:1  4:5@-1',  [   0,    0,    0,  '?',    0,    0,    0,    0,    0]],
+                    [3, '1:3@1  2:7  3:1  4:5@-1',  [   0,    0,    0,    0,    0,    0,    0,    0,    0]],
+                ],
+                '3rd Inv.': [
+                    // root  notes                    Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [1, '0:5  1:1  3:3@-1  4:7@-2',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [2, '0:5  2:1  3:3@-1  4:7@-2',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                    [2, '1:5  2:1  3:3@-1  4:7@-2',  [   0,  '?',    0,    0,    0,    0,    0,    0,    0]],
+                    [1, '0:5  1:1  2:3@-1  4:7@-2',  [   0,  '?',  '?',    0,  '?',    0,  '?',    0,    0]],
+                ],
+            },
+        },
+        'Low': {
+            positions: {
+                'Root': [
+                    // root  notes                  Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [5, '1:7@1  2:3@1  4:5  5:1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [5, '0:7@1  2:3@1  4:5  5:1',  [ '?',  '?',  '?',  '?',    0,  '?',  '?',  '?',  '?']],
+                    [5, '0:7@1  1:3@1  4:5  5:1',  [ '?',  '?',  '?',  '?',  '?',    0,  '?',    0,    0]],
+                    [5, '0:7@1  1:3@1  3:5  5:1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [5, '0:7@1  2:3@1  3:5  5:1',  [ '?',    0,  '?',  '?',    0,  '?',  '?',  '?',  '?']],
+                    [5, '1:7@1  2:3@1  3:5  5:1',  [   0,    0,  '?',  '?',    0,  '?',  '?',    0,  '?']],
+                    [5, '1:7@1  3:3@1  4:5  5:1',  [   0,    0,    0,  '?',    0,    0,    0,  '?',    0]],
+                ],
+                '1st Inv.': [
+                    // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [1, '1:1  2:5@-1  4:7@-2  5:3@-2',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [0, '0:1  1:5@-1  4:7@-2  5:3@-2',  [   0,    0,  '?',  '?',    0,    0,    0,    0,    0]],
+                    [0, '0:1  1:5@-1  3:7@-2  5:3@-2',  [ '?',    0,    0,  '?',    0,  '?',    0,  '?',  '?']],
+                    [0, '0:1  2:5@-1  3:7@-2  5:3@-2',  [ '?',  '?',    0,  '?',    0,    0,    0,  '?',    0]],
+                    [1, '1:1  2:5@-1  3:7@-2  5:3@-2',  [ '?',  '?',    0,    0,    0,  '?',    0,  '?',  '?']],
+                    [1, '1:1  3:5@-1  4:7@-2  5:3@-2',  [ '?',  '?',  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [2, '2:1  3:5@-1  4:7@-2  5:3@-2',  [ '?',  '?',  '?',    0,    0,    0,  '?',    0,    0]],
+                    [0, '0:1  2:5@-1  4:7@-2  5:3@-2',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+                ],
+                '2nd Inv.': [
+                    // root  notes                   Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [4, '1:3@1  2:7  4:1  5:5@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [4, '0:3@1  2:7  4:1  5:5@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',    0,  '?']],
+                    [4, '0:3@1  1:7  4:1  5:5@-1',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                    [4, '1:3@1  3:7  4:1  5:5@-1',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [4, '2:3@1  3:7  4:1  5:5@-1',  [   0,    0,    0,    0,    0,    0,    0,    0,    0]],
+                    [3, '0:3@1  1:7  3:1  5:5@-1',  [ '?',  '?',  '?',  '?',  '?',    0,    0,  '?',    0]],
+                    [3, '1:3@1  2:7  3:1  5:5@-1',  [   0,    0,    0,  '?',    0,    0,    0,    0,    0]],
+                ],
+                '3rd Inv.': [
+                    // root  notes                    Base  1347  1456  1245  1345  1467  1567  1257  1367
+                    [2, '1:5  2:1  4:3@-1  5:7@-2',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                    [2, '0:5  2:1  4:3@-1  5:7@-2',  [ '?',    0,  '?',  '?',    0,  '?',  '?',  '?',  '?']],
+                    [2, '1:5  2:1  3:3@-1  5:7@-2',  [   0,  '?',  '?',    0,  '?',    0,  '?',    0,    0]],
+                    [3, '1:5  3:1  4:3@-1  5:7@-2',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                    [3, '2:5  3:1  4:3@-1  5:7@-2',  [ '?',  '?',    0,    0,    0,    0,    0,    0,    0]],
+                    [1, '0:5  1:1  4:3@-1  5:7@-2',  [   0,    0,    0,  '?',    0,    0,    0,    0,    0]],
+                    [1, '0:5  1:1  3:3@-1  5:7@-2',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+                    [2, '0:5  2:1  3:3@-1  5:7@-2',  [ '?',    0,  '?',  '?',  '?',  '?',  '?',    0,  '?']],
+                ],
+            },
+        },
+    },
+    'Raise 3/1 of 2': {
+        positions: {
+            'Root': [
+                // root  notes                  Base  1347  1456  1245  1345  1467  1567  1257  1367
+                [5, '0:3@2  1:5@1  3:7  5:1',  [ '?',    0,    0,  '?',    0,  '?',    0,  '?',  '?']],
+                [5, '0:3@2  2:5@1  3:7  5:1',  [ '?',  '?',    0,  '?',    0,    0,    0,  '?',    0]],
+            ],
+            '1st Inv.': [
+                // root  notes                   Base  1347  1456  1245  1345  1467  1567  1257  1367
+                [3, '0:5@1  1:7  3:1  5:3@-1',  [ '?',  '?',  '?',  '?',  '?',    0,    0,  '?',    0]],
+                [4, '0:5@1  1:7  4:1  5:3@-1',  [ '?',  '?',  '?',    0,    0,  '?',  '?',  '?',  '?']],
+                [4, '0:5@1  2:7  4:1  5:3@-1',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',    0,  '?']],
+                [3, '0:5@1  2:7  3:1  5:3@-1',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+            ],
+            '2nd Inv.': [
+                // root  notes                    Base  1347  1456  1245  1345  1467  1567  1257  1367
+                [2, '0:7  2:1  3:3@-1  5:5@-2',  [ '?',    0,  '?',  '?',  '?',  '?',  '?',    0,  '?']],
+                [2, '0:7  2:1  4:3@-1  5:5@-2',  [ '?',    0,  '?',  '?',    0,  '?',  '?',  '?',  '?']],
+                [1, '0:7  1:1  3:3@-1  5:5@-2',  [   0,    0,  '?',  '?',  '?',    0,    0,    0,    0]],
+                [1, '0:7  1:1  4:3@-1  5:5@-2',  [   0,    0,    0,  '?',    0,    0,    0,    0,    0]],
+                [3, '0:7  3:1  4:3@-1  5:5@-2',  [   0,    0,    0,    0,    0,  '?',  '?',    0,  '?']],
+            ],
+            '3rd Inv.': [
+                // root  notes                       Base  1347  1456  1245  1345  1467  1567  1257  1367
+                [0, '0:1  1:3@-1  3:5@-2  5:7@-3',  [ '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?',  '?']],
+                [0, '0:1  1:3@-1  4:5@-2  5:7@-3',  [ '?',  '?',  '?',  '?',  '?',    0,  '?',    0,    0]],
+                [0, '0:1  2:3@-1  3:5@-2  5:7@-3',  [ '?',    0,  '?',  '?',    0,  '?',  '?',  '?',  '?']],
+                [0, '0:1  2:3@-1  4:5@-2  5:7@-3',  [ '?',  '?',  '?',  '?',    0,  '?',  '?',  '?',  '?']],
+                [1, '1:1  2:3@-1  4:5@-2  5:7@-3',  [   0,    0,    0,    0,    0,    0,    0,    0,    0]],
+                [1, '1:1  3:3@-1  4:5@-2  5:7@-3',  [   0,    0,    0,    0,    0,    0,    0,    0,    0]],
+            ],
+        },
+    },
+};
+
+/**
+ * Shapes in ScaleChords.ts that could NOT be converted (their labels or
+ * rootString don't match the chord they belong to), as
+ * "voicing > set > structure > inversion#N" (N = 0 for the main shape, else
+ * the alternate number). Fix them in ScaleChords.ts or add them here as
+ * fingerings; the check script tolerates exactly these.
+ */
+export const NOT_CONVERTED: string[] = ['Drop 2 > High > 1 3 4 7 > 3rd Inv.#1', 'Drop 2 > Mid > 1 3 4 7 > 2nd Inv.#1', 'Drop 2 > Low > 1 3 4 7 > 2nd Inv.#1'];
+
+// ── Rebuild the tree the app reads ─────────────────────────────────────────────
+// Same shape as SCALE_CHORD_SHAPES in ScaleChords.ts. Only fingerings with a
+// number are used; '?' and 0 are skipped, and a voicing / string set / structure
+// with nothing approved is left out entirely.
+const MAJOR = [0,2,4,5,7,9,11];
+
+function parseNotes(text: string) {
+    return text.trim().split(/\s+/).map(tok => {
+        const [string, rest] = tok.split(':');
+        const [degree, octave] = rest.split('@');
+        return {
+            string: Number(string),
+            slot: [1, 3, 5, 7].indexOf(Number(degree)),
+            octave: octave ? Number(octave) : 0,
+        };
+    });
+}
+
+/** The chord a structure makes on the Major root chord (what templates are placed on). */
+const chordOf = (structure: string) =>
+    chordAtDegree(MAJOR, 0, structure.startsWith('(Base)') ? [1, 3, 5, 7] : structure.split(' ').map(Number));
+
+type Level3 = Record<string, Record<string, ShapeFormula>>; // structure -> inversion -> template
+type Level4 = Record<string, Level3>; // string set -> ...
+/**
+ * Same shape as SCALE_CHORD_SHAPES in ScaleChords.ts (voicing -> string set ->
+ * structure -> inversion -> template), except a voicing with no string-set
+ * level holds its structures directly.
+ */
+export type BuiltScaleChords = Record<string, Level4 | Level3>;
+
+const isSetNode = (n: SetNode | Record<string, SetNode>): n is SetNode => 'positions' in n;
+
+function buildStructures(node: SetNode): Level3 {
+    const out: Level3 = {};
+    STRUCTURES.forEach((structure, si) => {
+        const chord = chordOf(structure);
+        for (const [inversion, rows] of Object.entries(node.positions)) {
+            const shapes = rows
+                .filter(r => typeof r[2][si] === 'number' && r[2][si] > 0)
+                .sort((a, b) => (a[2][si] as number) - (b[2][si] as number))
+                .map(([rootString, notes]) => shapeFromLayout({ rootString, notes: parseNotes(notes) }, chord));
+            if (!shapes.length) continue;
+            const [primary, ...alts] = shapes;
+            (out[structure] ??= {})[inversion] = {
+                name: inversion,
+                rootString: primary.rootString,
+                pattern: primary.pattern,
+                ...(alts.length ? { altShapes: alts } : {}),
+            };
+        }
+    });
+    return out;
+}
+
+export function buildScaleChordShapes(): BuiltScaleChords {
+    const library: BuiltScaleChords = {};
+    for (const [voicing, node] of Object.entries(SCALE_CHORD_LAYOUTS)) {
+        if (isSetNode(node)) {
+            const structures = buildStructures(node);
+            if (Object.keys(structures).length) library[voicing] = structures;
+        } else {
+            for (const [set, setNode] of Object.entries(node)) {
+                const structures = buildStructures(setNode);
+                if (Object.keys(structures).length) ((library[voicing] ??= {}) as Level4)[set] = structures;
+            }
+        }
+    }
+    return library;
+}
+
+/**
+ * The shapes marked 'x' (in ScaleChords.ts, deliberately removed on review),
+ * keyed by their place in the tree: "Drop 2 > Mid > 1 3 4 7 > Root". Used by
+ * scripts/check-scale-chords-layouts.ts to tell a deliberate removal from a
+ * shape that went missing by accident.
+ */
+export function removedScaleChordShapes(): Record<string, ShapeFormula[]> {
+    const out: Record<string, ShapeFormula[]> = {};
+    const walk = (node: SetNode, path: string[]) => {
+        STRUCTURES.forEach((structure, si) => {
+            const chord = chordOf(structure);
+            for (const [inversion, rows] of Object.entries(node.positions)) {
+                const removed = rows
+                    .filter(r => r[2][si] === 'x')
+                    .map(([rootString, notes]) => shapeFromLayout({ rootString, notes: parseNotes(notes) }, chord));
+                if (removed.length) out[[...path, structure, inversion].join(' > ')] = removed;
+            }
+        });
+    };
+    for (const [voicing, node] of Object.entries(SCALE_CHORD_LAYOUTS)) {
+        if (isSetNode(node)) walk(node, [voicing]);
+        else for (const [set, setNode] of Object.entries(node)) walk(setNode, [voicing, set]);
+    }
+    return out;
+}

@@ -21,6 +21,7 @@ import {
     useWindowDimensions,
     View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { emailRegex, updateEmail } from '../lib/account';
@@ -87,6 +88,7 @@ function SignOutIcon() {
 export default function SettingsDrawer({ visible, onClose, email, hasPro }: Props) {
     const { width: screenWidth } = useWindowDimensions();
     const insets = useSafeAreaInsets();
+    const router = useRouter();
     const preferences = usePreferences();
     const { theme, setTheme } = useTheme();
     const styles = useThemedStyles(makeStyles);
@@ -335,6 +337,18 @@ export default function SettingsDrawer({ visible, onClose, email, hasPro }: Prop
                             }}>
                             <Text style={styles.replayText}>Replay app tour</Text>
                         </TouchableOpacity>
+
+                        {/* Development builds only (Expo): never shown in a store build. */}
+                        {__DEV__ && (
+                            <TouchableOpacity
+                                style={styles.replayButton}
+                                onPress={() => {
+                                    onClose();
+                                    router.push('/scale-chords-preview');
+                                }}>
+                                <Text style={styles.replayText}>Scale Chords preview (dev)</Text>
+                            </TouchableOpacity>
+                        )}
 
                         {hasPro && (
                             <TouchableOpacity
