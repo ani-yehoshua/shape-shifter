@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "sync:mobile": "node scripts/sync-mobile-lib.mjs",
+    "sync:mobile:watch": "node scripts/sync-mobile-lib.mjs --watch",
     "check:mobile-sync": "node scripts/sync-mobile-lib.mjs --check"
   },
   "dependencies": {

@@ -4,6 +4,9 @@
  * website's lib/ -- the website is the ONE place these files are edited.
  *
  *   npm run sync:mobile          write mobile/lib/<file> for every shared file
+ *   npm run sync:mobile:watch    same, then keep running and re-copy a file the
+ *                                moment you save it (use this next to Expo
+ *                                while editing the layout tables)
  *   npm run check:mobile-sync    exit 1 if any generated copy is out of date
  *
  * Why a generated copy and not a direct import: it keeps mobile/ fully
@@ -19,13 +22,14 @@
  *
  * To share another file, add it to SHARED below.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
+const watchMode = process.argv.includes('--watch');
 
 // Paths relative to lib/. Only pure-logic files belong here.
 const SHARED = [
@@ -36,6 +40,14 @@ const SHARED = [
     'tunings.ts',
     'Shapes/Chords.ts',
     'Shapes/Scales.ts',
+    // the Scale Chords layout table and the engine it needs (the preview
+    // screen in the mobile app reads them)
+    'Shapes/ScaleChords.layouts.ts',
+    'harmony/index.ts',
+    'harmony/layouts.ts',
+    'harmony/diatonic.ts',
+    'harmony/scaleVoicings.ts',
+    'harmony/layoutText.ts',
 ];
 
 if (!existsSync(join(root, 'mobile', 'lib'))) {
@@ -69,12 +81,14 @@ function transform(file, source) {
 }
 
 const stale = [];
-for (const file of SHARED) {
+
+/** Copies one file (or, with `check`, only records that it's out of date). */
+function syncFile(file) {
     const src = join(root, 'lib', file);
     const dest = join(root, 'mobile', 'lib', file);
     const next = transform(file, readFileSync(src, 'utf8'));
     const current = existsSync(dest) ? readFileSync(dest, 'utf8') : null;
-    if (current === next) continue;
+    if (current === next) return;
     if (checkOnly) {
         stale.push(file);
     } else {
@@ -84,7 +98,29 @@ for (const file of SHARED) {
     }
 }
 
-if (checkOnly) {
+for (const file of SHARED) syncFile(file);
+
+if (watchMode) {
+    // Re-copy a shared file as soon as it's saved. A file with a problem (e.g.
+    // a stray import) reports it and the watcher keeps going.
+    console.log('sync-mobile-lib: watching lib/ for changes to shared files (Ctrl+C to stop)...');
+    const timers = new Map();
+    watch(join(root, 'lib'), { recursive: true }, (_event, name) => {
+        const file = name && name.replace(/\\/g, '/');
+        if (!file || !SHARED.includes(file)) return;
+        clearTimeout(timers.get(file));
+        timers.set(
+            file,
+            setTimeout(() => {
+                try {
+                    syncFile(file);
+                } catch (e) {
+                    console.error(`  ${e.message}`);
+                }
+            }, 100),
+        );
+    });
+} else if (checkOnly) {
     if (stale.length) {
         console.error(
             `sync-mobile-lib: out of date: ${stale.map(f => `mobile/lib/${f}`).join(', ')}\n` +
