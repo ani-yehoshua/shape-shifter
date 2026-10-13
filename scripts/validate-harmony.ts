@@ -27,6 +27,8 @@ import type { ShapeFormula } from '../lib/fretboardMap.js';
 import {
     chordAtDegree,
     diatonicChords,
+    generateDiatonicVoicings as engineDiatonicVoicings,
+    layoutFromRow,
     layoutKey,
     layoutOfShape,
     shapeFromLayout,
@@ -215,6 +217,31 @@ if (hm.same !== hm.total) fail('High/Mid non-base structures differ from ScaleCh
             `${dup}/${n} "Low" non-base templates in ScaleChords.ts are exact copies of "Mid" ` +
             `(strings 1-4, not 2-5), so they differ from true Low-string shapes.`,
     );
+}
+
+// ── H4: the engine's copy of the per-degree transposition == the original ─────
+console.log('H4  engine generateDiatonicVoicings == the one in ScaleChords.ts');
+{
+    let total = 0;
+    let same = 0;
+    const D: any = SCALE_CHORD_SHAPES;
+    for (const voicing of Object.keys(D))
+        for (const set of Object.keys(D[voicing]))
+            for (const st of Object.keys(D[voicing][set]))
+                for (const inv of Object.keys(D[voicing][set][st])) {
+                    const t = D[voicing][set][st][inv];
+                    for (const scale of sevenNoteScales) {
+                        total++;
+                        const a = JSON.stringify(generateDiatonicVoicings(t, scale.intervals));
+                        const b = JSON.stringify(engineDiatonicVoicings(t, scale.intervals));
+                        if (a === b) same++;
+                    }
+                }
+    console.log(`  ${same}/${total} template x scale combinations identical`);
+    if (same !== total) fail('engine generateDiatonicVoicings differs from ScaleChords.ts');
+    // the notes-text parser: a table row -> layout gives back the layout it came from
+    const sample = layoutFromRow([4, '1:3@1  2:7  3:5  4:1'] as const);
+    if (layoutKey(sample) !== '4|1.1.1,2.3.0,3.2.0,4.0.0') fail(`layoutFromRow parsed ${layoutKey(sample)}`);
 }
 
 // ── Report: how ragged are the hand-authored alternates? ──────────────────────
