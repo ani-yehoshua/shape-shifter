@@ -138,6 +138,29 @@ const shape = (formula: any, root: string) => lowestVoicing(root, formula) as an
     check(/W – H – W – W – H – W\+H – H/.test((section(h, 'The scale') as any).intro), `A harmonic minor steps: ${(section(h, 'The scale') as any).intro}`);
 }
 
+// ── Voicing pictures: "closed stack, then drop" must reproduce every real seventh-chord shape ──
+{
+    let total = 0;
+    let derived = 0;
+    for (const [vt, vn] of Object.entries<any>(cs.Sevenths.options)) {
+        for (const sn of Object.values<any>(vn.options)) {
+            for (const [q, qn] of Object.entries<any>(sn.options)) {
+                for (const [pos, f] of Object.entries<any>(qn.options ?? {})) {
+                    const all = generateAllVoicingsForShape('C', f, map, MIDI);
+                    if (!all.length) continue;
+                    const s = shape(f, 'C');
+                    const c = explainChord({ rootNote: 'C', qualityKey: q, category: 'Sevenths', voicingType: vt, position: pos, shape: s, tuningMidi: MIDI, tuningNotes: NOTES });
+                    const about: any = c.sections.find(x => x.title.startsWith('About'));
+                    total++;
+                    if (about?.figures?.[0]?.caption.startsWith('Stack')) derived++;
+                    else check(false, `no drop derivation for ${vt} / ${q} / ${pos}`);
+                }
+            }
+        }
+    }
+    console.log(`voicing pictures: derived ${derived}/${total}`);
+}
+
 if (failed) {
     console.error('\nvalidate-theory: FAILED');
     process.exit(1);

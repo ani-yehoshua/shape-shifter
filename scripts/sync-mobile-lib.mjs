@@ -54,6 +54,7 @@ const SHARED = [
     'theory/intervals.ts',
     'theory/chordInfo.ts',
     'theory/scaleInfo.ts',
+    'theory/voicingFigures.ts',
 ];
 
 if (!existsSync(join(root, 'mobile', 'lib'))) {

@@ -9,9 +9,11 @@ import { MAJOR_SCALE_OFFSETS, noteNameToSemitone, spellNote } from '@/lib/MusicT
 import { SCALE_SHAPES } from '@/lib/Shapes/Scales';
 import { CATEGORY_BLURB, INVERSION_BLURB, QUALITY_INFO, VOICING_BLURB } from './glossary';
 import { intervalName, keyName, ordinal, stringName } from './intervals';
+import { voicingFigures } from './voicingFigures';
+import type { Figure } from './voicingFigures';
 
 export type InfoSection =
-    | { kind: 'text'; title: string; paragraphs: string[] }
+    | { kind: 'text'; title: string; paragraphs: string[]; figures?: Figure[] }
     | { kind: 'list'; title: string; intro?: string; items: { label: string; value: string }[] };
 
 export type InfoContent = { title: string; subtitle?: string; sections: InfoSection[] };
@@ -178,7 +180,17 @@ export function explainChord(input: ChordInfoInput): InfoContent {
     const howBuilt: string[] = [];
     if (CATEGORY_BLURB[category]) howBuilt.push(CATEGORY_BLURB[category]);
     if (voicingType && VOICING_BLURB[voicingType]) howBuilt.push(`${voicingType}: ${VOICING_BLURB[voicingType]}`);
-    if (howBuilt.length) sections.push({ kind: 'text', title: `About ${category === 'Sevenths' && voicingType ? voicingType : category}`, paragraphs: howBuilt });
+    const figures =
+        category === 'Sevenths' && voicingType && played.length
+            ? voicingFigures({ rootNote, quality, voicingType, shape: played, tuningMidi })
+            : [];
+    if (howBuilt.length)
+        sections.push({
+            kind: 'text',
+            title: `About ${category === 'Sevenths' && voicingType ? voicingType : category}`,
+            paragraphs: howBuilt,
+            ...(figures.length ? { figures } : {}),
+        });
 
     // ── 4. Where it lives ────────────────────────────────────────────────
     const lives = whereItLives(rootNote, qualityKey, quality);

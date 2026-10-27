@@ -2861,19 +2861,6 @@ export default function Home() {
                                             <ListIcon />
                                         </button>
 
-                                        {/* Info panel */}
-                                        {displayShape.length > 0 &&
-                                            selectedMode !== "scaleChords" && (
-                                                <button
-                                                    onClick={() =>
-                                                        setInfoOpen(true)
-                                                    }
-                                                    title='Info'
-                                                    className='shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
-                                                    <InfoIcon />
-                                                </button>
-                                            )}
-
                                         {selectedMode === "scales" && (
                                             <PlaybackSpeedButton
                                                 speed={playbackSpeed}
@@ -2970,6 +2957,16 @@ export default function Home() {
                                                     <StrumIcon />
                                                 )}
                                             </button>
+                                            {selectedMode !== "scaleChords" && (
+                                                <button
+                                                    onClick={() =>
+                                                        setInfoOpen(true)
+                                                    }
+                                                    title='Info'
+                                                    className='w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                                    <InfoIcon />
+                                                </button>
+                                            )}
                                         </>
                                     )}
                                     {randomizeOn ? (
@@ -4435,6 +4432,15 @@ export default function Home() {
                                                         : "Play"
                                                     : "Strum"}
                                             </button>
+                                            {selectedMode !== "scaleChords" && (
+                                                <button
+                                                    onClick={() => setInfoOpen(true)}
+                                                    title='Info'
+                                                    className='flex items-center gap-2 px-4 py-2 rounded-full border border-ink/40 text-ink text-sm font-semibold hover:border-ink transition-colors'>
+                                                    <InfoIcon />
+                                                    Info
+                                                </button>
+                                            )}
                                         </>
                                     )}
                                     {randomizeOn ? (
@@ -4523,16 +4529,6 @@ export default function Home() {
                                         <ListIcon />
                                         Progressions
                                     </button>
-                                    {displayShape.length > 0 &&
-                                        selectedMode !== "scaleChords" && (
-                                            <button
-                                                onClick={() => setInfoOpen(true)}
-                                                title='Info'
-                                                className='whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
-                                                <InfoIcon />
-                                                Info
-                                            </button>
-                                        )}
                                 </div>
                             </div>
                             <div className='flex justify-center mt-auto pt-2'>

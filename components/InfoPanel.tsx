@@ -7,6 +7,7 @@
 // desktop. (The mobile app has the same thing: mobile/components/InfoSheet.tsx.)
 import * as React from "react";
 import type { InfoContent } from "@/lib/theory";
+import DiagramView from "./DiagramView";
 
 type Props = {
     open: boolean;
@@ -74,13 +75,25 @@ export default function InfoPanel({ open, onClose, getContent }: Props) {
                                     {section.title}
                                 </h3>
                                 {section.kind === "text" ? (
-                                    section.paragraphs.map((p, i) => (
-                                        <p
-                                            key={i}
-                                            className='text-sm leading-relaxed text-ink'>
-                                            {p}
-                                        </p>
-                                    ))
+                                    <>
+                                        {section.paragraphs.map((p, i) => (
+                                            <p
+                                                key={i}
+                                                className='text-sm leading-relaxed text-ink'>
+                                                {p}
+                                            </p>
+                                        ))}
+                                        {section.figures?.map((fig, i) => (
+                                            <figure
+                                                key={`fig${i}`}
+                                                className='flex flex-col gap-2 rounded-xl bg-ink/5 p-3'>
+                                                <figcaption className='text-[13px] leading-snug text-ink/80'>
+                                                    {i + 1}. {fig.caption}
+                                                </figcaption>
+                                                <DiagramView spec={fig.diagram} />
+                                            </figure>
+                                        ))}
+                                    </>
                                 ) : (
                                     <>
                                         {section.intro && (
@@ -88,15 +101,16 @@ export default function InfoPanel({ open, onClose, getContent }: Props) {
                                                 {section.intro}
                                             </p>
                                         )}
-                                        <ul className='divide-y divide-ink/10'>
+                                        {/* one grid per list so every value starts in the same column */}
+                                        <ul className='grid grid-cols-[auto_1fr] gap-x-4 text-sm'>
                                             {section.items.map((item, i) => (
                                                 <li
                                                     key={i}
-                                                    className='flex gap-4 py-1.5 text-sm'>
-                                                    <span className='shrink-0 min-w-16 font-semibold text-ink'>
+                                                    className='col-span-2 grid grid-cols-subgrid py-1.5 border-b border-ink/10 last:border-b-0'>
+                                                    <span className='min-w-16 font-semibold text-ink'>
                                                         {item.label}
                                                     </span>
-                                                    <span className='text-ink/80'>
+                                                    <span className='whitespace-pre-line text-ink/80'>
                                                         {item.value}
                                                     </span>
                                                 </li>

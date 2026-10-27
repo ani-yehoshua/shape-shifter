@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { InfoContent } from '../lib/theory';
+import DiagramView from './DiagramView';
 import { fonts, radius, spacing, type Palette } from '../lib/theme';
 import { useThemedStyles } from '../lib/theme-context';
 
@@ -66,11 +67,21 @@ export default function InfoSheet({ visible, onClose, getContent }: Props) {
                                 <View key={section.title} style={styles.section}>
                                     <Text style={styles.sectionTitle}>{section.title}</Text>
                                     {section.kind === 'text' ? (
-                                        section.paragraphs.map((p, i) => (
-                                            <Text key={i} style={styles.paragraph}>
-                                                {p}
-                                            </Text>
-                                        ))
+                                        <>
+                                            {section.paragraphs.map((p, i) => (
+                                                <Text key={i} style={styles.paragraph}>
+                                                    {p}
+                                                </Text>
+                                            ))}
+                                            {section.figures?.map((fig, i) => (
+                                                <View key={`fig${i}`} style={styles.figure}>
+                                                    <Text style={styles.figureCaption}>
+                                                        {i + 1}. {fig.caption}
+                                                    </Text>
+                                                    <DiagramView spec={fig.diagram} />
+                                                </View>
+                                            ))}
+                                        </>
                                     ) : (
                                         <>
                                             {section.intro ? <Text style={styles.paragraph}>{section.intro}</Text> : null}
@@ -124,6 +135,13 @@ const makeStyles = (colors: Palette) =>
             color: `${colors.ink}99`,
         },
         paragraph: { fontFamily: fonts.sans.regular, fontSize: 14, lineHeight: 21, color: colors.ink },
+        figure: {
+            gap: spacing.sm,
+            padding: spacing.sm + 4,
+            borderRadius: radius.xl,
+            backgroundColor: `${colors.ink}0D`,
+        },
+        figureCaption: { fontFamily: fonts.sans.regular, fontSize: 13, lineHeight: 19, color: `${colors.ink}CC` },
         row: {
             flexDirection: 'row',
             gap: spacing.md,
