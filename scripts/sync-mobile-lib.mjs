@@ -48,6 +48,12 @@ const SHARED = [
     'harmony/diatonic.ts',
     'harmony/scaleVoicings.ts',
     'harmony/layoutText.ts',
+    // the info sheet's explanations (chord / scale text built from the data)
+    'theory/index.ts',
+    'theory/glossary.ts',
+    'theory/intervals.ts',
+    'theory/chordInfo.ts',
+    'theory/scaleInfo.ts',
 ];
 
 if (!existsSync(join(root, 'mobile', 'lib'))) {
