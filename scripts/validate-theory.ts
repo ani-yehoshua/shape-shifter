@@ -152,7 +152,7 @@ const shape = (formula: any, root: string) => lowestVoicing(root, formula) as an
                     const c = explainChord({ rootNote: 'C', qualityKey: q, category: 'Sevenths', voicingType: vt, position: pos, shape: s, tuningMidi: MIDI, tuningNotes: NOTES });
                     const about: any = c.sections.find(x => x.title.startsWith('About'));
                     total++;
-                    if (about?.figures?.[0]?.caption.startsWith('Stack')) derived++;
+                    if (about?.figures?.[0]?.caption.startsWith('Start with')) derived++;
                     else check(false, `no drop derivation for ${vt} / ${q} / ${pos}`);
                 }
             }
