@@ -37,6 +37,13 @@ const MOVES: Record<string, number[]> = {
     'Drop 3 of 2': [2, 3],
 };
 
+/** "Drop/raise the Nth voice from the top by an octave". */
+type Move = { drop: number } | { raise: number };
+
+// Raise 3/1 of 2 = a Drop 2, then the 1st and 3rd voices from the top go up an octave.
+const RAISE_RECIPE: Move[] = [{ drop: 2 }, { raise: 1 }, { raise: 3 }];
+const RAISE_NAME = 'Raise 3/1 of 2';
+
 type Voice = { pitch: number; tone: number };
 const mod12 = (n: number) => ((n % 12) + 12) % 12;
 
@@ -132,20 +139,21 @@ function gaps(pitches: number[]) {
     return pitches.slice(1).map((p, i) => p - pitches[i]);
 }
 
-function dropVoice(voices: Voice[], fromTop: number): Voice[] {
+function moveVoice(voices: Voice[], move: Move): Voice[] {
     const sorted = [...voices].sort((a, b) => a.pitch - b.pitch);
+    const [fromTop, delta] = 'drop' in move ? [move.drop, -12] : [move.raise, 12];
     const idx = sorted.length - fromTop;
-    sorted[idx] = { ...sorted[idx], pitch: sorted[idx].pitch - 12 };
+    sorted[idx] = { ...sorted[idx], pitch: sorted[idx].pitch + delta };
     return sorted.sort((a, b) => a.pitch - b.pitch);
 }
 
-/** Closed-position stacks of the chord (root position and each inversion) with the drop moves applied. */
-function deriveSteps(rootPc: number, quality: ChordQuality, moves: number[], actualGaps: string): Voice[][] | null {
+/** Closed-position stacks of the chord (root position and each inversion) with the moves applied. */
+function deriveSteps(rootPc: number, quality: ChordQuality, moves: Move[], actualGaps: string): Voice[][] | null {
     const base: Voice[] = quality.intervals.map((semi, tone) => ({ pitch: rootPc + semi, tone }));
     let closed = base;
     for (let inversion = 0; inversion < base.length; inversion++) {
         const steps: Voice[][] = [closed];
-        for (const fromTop of moves) steps.push(dropVoice(steps[steps.length - 1], fromTop));
+        for (const move of moves) steps.push(moveVoice(steps[steps.length - 1], move));
         const end = steps[steps.length - 1];
         if (gaps(end.map(v => v.pitch)).join(',') === actualGaps) return steps;
         const [lowest, ...rest] = [...closed].sort((a, b) => a.pitch - b.pitch);
@@ -189,6 +197,191 @@ function placeOnGuitar(steps: Voice[][], moves: number[], tuningMidi: number[]):
     return null;
 }
 
+// ── Raise 3/1 of 2 ────────────────────────────────────────────────────────
+// closed stack -> Drop 2 -> whole shape down an octave -> raise the 1st and 3rd
+// voices from the top an octave -> slide any note that is outside the shape to
+// the same note on the next string.
+
+type Frame = { kind: 'closed' | 'drop' | 'shift' | 'raise'; tone?: number; placed: Placed[] };
+
+/** A placement is playable when higher notes sit on higher strings (lower index). */
+function inOrder(placed: { tone: number; string: number }[], pitchOf: Map<number, number>) {
+    const asc = [...placed].sort((a, b) => (pitchOf.get(a.tone) as number) - (pitchOf.get(b.tone) as number));
+    return asc.every((p, i) => i === 0 || p.string < asc[i - 1].string);
+}
+
+/** Every way to put these voices on strings, most compact first: smallest fret span, then fewest empty strings between them. */
+function compactStrings(voices: Voice[], tuningMidi: number[]): { tone: number; string: number }[][] {
+    const asc = [...voices].sort((a, b) => a.pitch - b.pitch);
+    const found: { cost: number; strings: number[] }[] = [];
+    const pick = (i: number, chosen: number[]) => {
+        if (i === asc.length) {
+            const fretted = chosen.map((s, k) => asc[k].pitch - tuningMidi[s]).filter(f => f > 0);
+            const span = fretted.length ? Math.max(...fretted) - Math.min(...fretted) : 0;
+            const emptyBetween = chosen[0] - chosen[chosen.length - 1] + 1 - chosen.length;
+            const open = chosen.filter((s, k) => asc[k].pitch === tuningMidi[s]).length;
+            found.push({ cost: span * 10 + emptyBetween * 3 + open * 12, strings: [...chosen] });
+            return;
+        }
+        for (let s = 0; s < tuningMidi.length; s++) {
+            const fret = asc[i].pitch - tuningMidi[s];
+            if (fret < 0 || fret > 15) continue;
+            if (i > 0 && s >= chosen[i - 1]) continue;
+            pick(i + 1, [...chosen, s]);
+        }
+    };
+    pick(0, []);
+    return found.sort((a, b) => a.cost - b.cost).map(f => asc.map((v, i) => ({ tone: v.tone, string: f.strings[i] })));
+}
+
+/** `choice` picks the nth most compact arrangement for the "down an octave" step, so a later raise that has nowhere to land can try the next. */
+function placeRaise(steps: Voice[][], tuningMidi: number[], octave: number, choice: number): Frame[] | null {
+    const closed = [...steps[0]].sort((a, b) => a.pitch - b.pitch);
+    if (closed.length > tuningMidi.length) return null;
+    const pitchOf = new Map(closed.map(v => [v.tone, v.pitch + 12 * octave]));
+    let current: { tone: number; string: number }[] = closed.map((v, i) => ({ tone: v.tone, string: closed.length - 1 - i }));
+    const snapshot = () => current.map(c => ({ ...c, fret: (pitchOf.get(c.tone) as number) - tuningMidi[c.string] }));
+    const moverOf = (i: number) => {
+        const before = [...steps[i]].sort((a, b) => a.pitch - b.pitch);
+        const m = RAISE_RECIPE[i];
+        return before[before.length - ('drop' in m ? m.drop : m.raise)].tone;
+    };
+    const frames: Frame[] = [{ kind: 'closed', placed: snapshot() }];
+
+    // the drop: the lowered note lands on the string below the lowest one in use
+    const dropTone = moverOf(0);
+    const landing = Math.max(...current.map(c => c.string)) + 1;
+    if (landing >= tuningMidi.length) return null;
+    pitchOf.set(dropTone, (pitchOf.get(dropTone) as number) - 12);
+    current = current.map(c => (c.tone === dropTone ? { ...c, string: landing } : c));
+    frames.push({ kind: 'drop', tone: dropTone, placed: snapshot() });
+
+    // the whole shape down an octave, sitting on the most compact strings
+    for (const [tone, pitch] of pitchOf) pitchOf.set(tone, pitch - 12);
+    const compact = compactStrings([...pitchOf].map(([tone, pitch]) => ({ tone, pitch })), tuningMidi)[choice];
+    if (!compact) return null;
+    current = compact;
+    frames.push({ kind: 'shift', placed: snapshot() });
+
+    // each raised note goes up an octave, usually two strings higher
+    for (let i = 1; i < RAISE_RECIPE.length; i++) {
+        const tone = moverOf(i);
+        const old = current.find(c => c.tone === tone) as { tone: number; string: number };
+        const pitch = (pitchOf.get(tone) as number) + 12;
+        pitchOf.set(tone, pitch);
+        const landingString = [-2, -1, 0, -3, -4, -5]
+            .map(d => old.string + d)
+            .find(s => {
+                if (s < 0) return false;
+                const fret = pitch - tuningMidi[s];
+                return fret >= 0 && fret <= 22 && inOrder(current.map(c => (c.tone === tone ? { ...c, string: s } : c)), pitchOf);
+            });
+        if (landingString === undefined) return null;
+        current = current.map(c => (c.tone === tone ? { ...c, string: landingString } : c));
+        frames.push({ kind: 'raise', tone, placed: snapshot() });
+    }
+    return frames.every(f => f.placed.every(p => p.fret >= 0 && p.fret <= 22)) ? frames : null;
+}
+
+type RaiseInput = {
+    quality: ChordQuality;
+    tuningMidi: number[];
+    actual: { pitch: number; tone: number; n: ShapeNote & { semitones: number } }[];
+    name: (tone: number) => string;
+    rootPc: number;
+    actualGaps: string;
+};
+
+function raiseFigures({ quality, tuningMidi, actual, name, rootPc, actualGaps }: RaiseInput): Figure[] {
+    const stringCount = tuningMidi.length;
+    const derived = quality.intervals.length === actual.length ? deriveSteps(rootPc, quality, RAISE_RECIPE, actualGaps) : null;
+
+    // Prefer the octave that puts the result exactly where the real shape is, so the last step is a true slide.
+    let frames: Frame[] | null = null;
+    if (derived) {
+        const end = [...derived[derived.length - 1]].sort((a, b) => a.pitch - b.pitch);
+        const aligned = (actual[0].pitch - end[0].pitch) / 12 + 1;
+        for (const octave of [aligned, 0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+            if (!Number.isInteger(octave)) continue;
+            for (let choice = 0; choice < 600 && !frames; choice++) frames = placeRaise(derived, tuningMidi, octave, choice);
+            if (frames) break;
+        }
+    }
+
+    const moved = new Set<number>();
+    const col = (string: number) => stringCount - 1 - string;
+    const dots = (placed: Placed[]): Dot[] => placed.map(p => ({ column: col(p.string), fret: p.fret, label: name(p.tone), moved: moved.has(p.tone) }));
+    const spot = (p: Placed): Spot => ({ column: col(p.string), fret: p.fret });
+    const realDots = (): Dot[] => actual.map(v => ({ column: col(v.n.string), fret: v.n.fret ?? 0, label: name(v.tone), moved: moved.has(v.tone) }));
+    const figures: Figure[] = [];
+
+    if (derived && frames) {
+        const [closed, dropped, shifted, raiseA, raiseB] = frames;
+        const last = frames[frames.length - 1];
+        const lowToHigh = (placed: Placed[]) => [...placed].sort((a, b) => b.string - a.string).map(p => name(p.tone)).join(' – ');
+        const stringsOf = (placed: Placed[]) => `${Math.min(...placed.map(p => p.string)) + 1}–${Math.max(...placed.map(p => p.string)) + 1}`;
+        const of = (frame: Frame, tone: number) => frame.placed.find(p => p.tone === tone) as Placed;
+        const windowA = fretWindow([...closed.placed, ...dropped.placed].map(p => p.fret));
+        const sameRealShape = last.placed.every(p => {
+            const real = actual.find(v => v.tone === p.tone);
+            return real !== undefined && real.pitch === tuningMidi[p.string] + p.fret;
+        });
+        const slid = sameRealShape ? actual.filter(v => of(last, v.tone).string !== v.n.string) : [];
+        const windowB = fretWindow([...frames.slice(2).flatMap(f => f.placed.map(p => p.fret)), ...(sameRealShape ? actual.map(v => v.n.fret ?? 0) : [])]);
+
+        const dropTone = dropped.tone as number;
+        moved.add(dropTone);
+        figures.push({
+            caption: `Start with the chord stacked as close together as possible, one note per string on the top ${closed.placed.length} strings (what a piano player would play): ${lowToHigh(closed.placed)}. This first becomes a Drop 2: the 2nd note from the top (${name(dropTone)}) drops an octave (blue).`,
+            diagram: fretboardDiagram(dots(closed.placed), stringCount, { window: windowA }),
+        });
+        figures.push({
+            caption: `Drop ${name(dropTone)} down an octave. It lands on string ${of(dropped, dropTone).string + 1}, below the others. Low to high the notes are now ${lowToHigh(dropped.placed)}.`,
+            diagram: fretboardDiagram(dots(dropped.placed), stringCount, {
+                window: windowA,
+                moves: [{ from: spot(of(closed, dropTone)), to: spot(of(dropped, dropTone)) }],
+            }),
+        });
+        figures.push({
+            caption: `Take that whole shape down an octave: the same notes, now sitting together on strings ${stringsOf(shifted.placed)}.`,
+            diagram: fretboardDiagram(dots(shifted.placed), stringCount, { window: windowB }),
+        });
+        [raiseA, raiseB].forEach((frame, i) => {
+            const before = i === 0 ? shifted : raiseA;
+            const tone = frame.tone as number;
+            moved.add(tone);
+            const fromTop = i === 0 ? '1st' : '3rd';
+            figures.push({
+                caption: `Raise the ${fromTop} note from the top (${name(tone)}) up an octave. It lands on string ${of(frame, tone).string + 1}.`,
+                diagram: fretboardDiagram(dots(frame.placed), stringCount, {
+                    window: windowB,
+                    moves: [{ from: spot(of(before, tone)), to: spot(of(frame, tone)) }],
+                }),
+            });
+        });
+        if (slid.length) {
+            figures.push({
+                caption: `Finally, a note that sits outside the shape slides to the same note on the next string (${slid.map(v => `${name(v.tone)} to string ${v.n.string + 1}`).join(', ')}) and you have the whole shape on your fretboard (low string on the left, blue = the notes that moved).`,
+                diagram: fretboardDiagram(realDots(), stringCount, {
+                    window: windowB,
+                    moves: slid.map(v => ({ from: spot(of(last, v.tone)), to: { column: col(v.n.string), fret: v.n.fret ?? 0 } })),
+                }),
+            });
+            return figures;
+        }
+        if (sameRealShape) {
+            figures[figures.length - 1].caption += ' That is the shape on your fretboard.';
+            return figures;
+        }
+    }
+
+    figures.push({
+        caption: 'This shape on the fretboard (low string on the left).',
+        diagram: fretboardDiagram(realDots(), stringCount),
+    });
+    return figures;
+}
+
 export type VoicingFigureInput = {
     rootNote: string;
     quality: ChordQuality;
@@ -215,7 +408,11 @@ export function voicingFigures(input: VoicingFigureInput): Figure[] {
     if (actual.length !== shape.length) return [];
 
     const actualGaps = gaps(actual.map(v => v.pitch)).join(',');
-    const derived = moves && quality.intervals.length === actual.length ? deriveSteps(rootPc, quality, moves, actualGaps) : null;
+    if (voicingType === RAISE_NAME) return raiseFigures({ quality, tuningMidi, actual, name, rootPc, actualGaps });
+    const derived =
+        moves && quality.intervals.length === actual.length
+            ? deriveSteps(rootPc, quality, moves.map(drop => ({ drop })), actualGaps)
+            : null;
 
     const stringCount = tuningMidi.length;
     const figures: Figure[] = [];

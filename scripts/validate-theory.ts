@@ -143,7 +143,8 @@ const shape = (formula: any, root: string) => lowestVoicing(root, formula) as an
     let total = 0;
     let derived = 0;
     for (const [vt, vn] of Object.entries<any>(cs.Sevenths.options)) {
-        for (const sn of Object.values<any>(vn.options)) {
+        // Raise 3/1 of 2 has no string-set level: its qualities sit directly under it
+        for (const sn of vt === 'Raise 3/1 of 2' ? [vn] : Object.values<any>(vn.options)) {
             for (const [q, qn] of Object.entries<any>(sn.options)) {
                 for (const [pos, f] of Object.entries<any>(qn.options ?? {})) {
                     const all = generateAllVoicingsForShape('C', f, map, MIDI);
