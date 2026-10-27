@@ -91,7 +91,7 @@ function whereItLives(rootNote: string, qualityKey: string, quality: ChordQualit
             const tonic = rootSemi - scale.intervals[d];
             hits.push(`${numeral(d, scale.intervals, qualityKey)} in ${keyName(tonic)}`);
         });
-        if (hits.length) items.push({ label: scaleName, value: hits.join(' · ') });
+        if (hits.length) items.push({ label: scaleName, value: hits.join('\n') });
     }
     return items;
 }
