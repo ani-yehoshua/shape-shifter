@@ -19,8 +19,11 @@ export default function InfoSheet({ visible, onClose, getContent }: Props) {
 
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-            <Pressable style={styles.backdrop} onPress={onClose}>
-                <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.backdrop}>
+                {/* Backdrop tap-to-close is a sibling, not a wrapper: a Pressable around the
+                    sheet steals the touches the ScrollView needs to scroll. */}
+                <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+                <View style={styles.sheet}>
                     <View style={styles.header}>
                         <View style={styles.headerText}>
                             <Text style={styles.title}>{content?.title ?? 'Info'}</Text>
@@ -31,7 +34,7 @@ export default function InfoSheet({ visible, onClose, getContent }: Props) {
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView contentContainerStyle={styles.body}>
+                    <ScrollView style={styles.scroll} contentContainerStyle={styles.body}>
                         {content ? (
                             content.sections.map(section => (
                                 <View key={section.title} style={styles.section}>
@@ -59,8 +62,8 @@ export default function InfoSheet({ visible, onClose, getContent }: Props) {
                             <Text style={styles.paragraph}>Pick a chord or scale to see what it is.</Text>
                         )}
                     </ScrollView>
-                </Pressable>
-            </Pressable>
+                </View>
+            </View>
         </Modal>
     );
 }
@@ -74,6 +77,7 @@ const makeStyles = (colors: Palette) =>
             borderTopLeftRadius: radius['2xl'],
             borderTopRightRadius: radius['2xl'],
         },
+        scroll: { flexShrink: 1 },
         header: {
             flexDirection: 'row',
             alignItems: 'flex-start',
