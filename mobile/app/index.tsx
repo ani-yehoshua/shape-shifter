@@ -3605,12 +3605,6 @@ export default function ChordsScreen() {
                         </TouchableOpacity>
                     )}
 
-                    {capoDisplayShape.length > 0 && (
-                        <TouchableOpacity onPress={() => setInfoOpen(true)} style={styles.iconButton}>
-                            <InfoIcon />
-                        </TouchableOpacity>
-                    )}
-
                     {selectedMode === "scales" && (
                         <View style={styles.playbackSpeedStepper}>
                             <TouchableOpacity
@@ -3681,6 +3675,10 @@ export default function ChordsScreen() {
                                 }}
                                 style={[styles.iconButton, isPlayingScale && styles.iconButtonActive]}>
                                 {selectedMode === "scales" && isPlayingScale ? <StopIcon /> : <StrumIcon />}
+                            </TouchableOpacity>
+
+                            <TouchableOpacity onPress={() => setInfoOpen(true)} style={styles.iconButton}>
+                                <InfoIcon />
                             </TouchableOpacity>
                         </>
                     )}
