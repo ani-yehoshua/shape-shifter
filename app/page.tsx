@@ -9,6 +9,8 @@ import NotesIntervalsToggle from "@/components/NotesIntervalsToggle";
 import DrawMode from "@/components/DrawMode";
 import SavedChordsPanel from "@/components/SavedChordsPanel";
 import ProgressionPanel from "@/components/ProgressionPanel";
+import InfoPanel from "@/components/InfoPanel";
+import { explainChord, explainScale } from "@/lib/theory";
 import CapoButton from "@/components/CapoButton";
 import RootNoteButton from "@/components/RootNoteButton";
 import SubmitFeedback from "@/components/SubmitFeedback";
@@ -183,6 +185,25 @@ function voicingFretRange(v: NotePosition[]) {
         .filter((f): f is number => f != null && f >= 0);
     if (!frets.length) return null;
     return { min: Math.min(...frets), max: Math.max(...frets) };
+}
+
+function InfoIcon() {
+    return (
+        <svg
+            className='w-4 h-4'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth={2}
+            strokeLinecap='round'>
+            <circle
+                cx='12'
+                cy='12'
+                r='9'
+            />
+            <path d='M12 11v5M12 8h.01' />
+        </svg>
+    );
 }
 
 function ListIcon() {
@@ -651,6 +672,7 @@ export default function Home() {
         new Set(),
     );
     const [savedPanelOpen, setSavedPanelOpen] = React.useState(false);
+    const [infoOpen, setInfoOpen] = React.useState(false);
     const [savedRefreshKey, setSavedRefreshKey] = React.useState(0);
     const [progressionPanelOpen, setProgressionPanelOpen] =
         React.useState(false);
@@ -2117,6 +2139,48 @@ export default function Home() {
               ? scaleChordLabel
               : chordLabel;
 
+    // The Info panel's text, built (lib/theory) from the current selection
+    // each time it opens so it always matches what's on the fretboard. Same
+    // wiring as the mobile app. Scale Chords has no info yet (it's paused).
+    const soundingRoot = (name: string) => {
+        if (capo === 0) return name;
+        const idx = NOTES.findIndex(pair => pair.includes(name));
+        const shifted = NOTES[(idx + capo) % NOTES.length];
+        return shifted[shifted.length - 1];
+    };
+    const getInfoContent = () => {
+        if (selectedMode === "scaleChords") return null;
+        if (selectedMode === "scales") {
+            if (!scaleEntry) return null;
+            return explainScale({
+                rootNote: soundingRoot(currentRootNote),
+                scaleName: selectedScale,
+                intervals: scaleEntry.intervals,
+                degrees: scaleEntry.degrees,
+                pattern: selectedScalePattern,
+                modeName: showAllScalePositions
+                    ? undefined
+                    : scalePosition?.modeName,
+                positionNumber: showAllScalePositions
+                    ? undefined
+                    : selectedScalePosition + 1,
+            });
+        }
+        return explainChord({
+            rootNote: capoRootNote,
+            qualityKey: selectedChordQuality,
+            category: selectedCategory,
+            voicingType:
+                selectedCategory === "Sevenths" ? selectedVoicingType : undefined,
+            position: selectedPosition,
+            // with several positions shown at once ("All") there is no single shape to describe
+            shape: selectedPosition === "All" ? [] : capoDisplayShape,
+            tuningMidi: selectedTuning.semitones,
+            tuningNotes: selectedTuning.notes,
+            altCount: availableAlts.length,
+        });
+    };
+
     const currentChordForProgression = React.useMemo(
         () =>
             capoDisplayShape.length > 0
@@ -2796,6 +2860,19 @@ export default function Home() {
                                             )}
                                             <ListIcon />
                                         </button>
+
+                                        {/* Info panel */}
+                                        {displayShape.length > 0 &&
+                                            selectedMode !== "scaleChords" && (
+                                                <button
+                                                    onClick={() =>
+                                                        setInfoOpen(true)
+                                                    }
+                                                    title='Info'
+                                                    className='shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                                    <InfoIcon />
+                                                </button>
+                                            )}
 
                                         {selectedMode === "scales" && (
                                             <PlaybackSpeedButton
@@ -4446,6 +4523,16 @@ export default function Home() {
                                         <ListIcon />
                                         Progressions
                                     </button>
+                                    {displayShape.length > 0 &&
+                                        selectedMode !== "scaleChords" && (
+                                            <button
+                                                onClick={() => setInfoOpen(true)}
+                                                title='Info'
+                                                className='whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-full border border-ink bg-sand-2 text-ink text-sm font-semibold hover:bg-sand-3 transition-colors'>
+                                                <InfoIcon />
+                                                Info
+                                            </button>
+                                        )}
                                 </div>
                             </div>
                             <div className='flex justify-center mt-auto pt-2'>
@@ -4463,6 +4550,13 @@ export default function Home() {
                 onLoad={handleLoadSaved}
                 refreshKey={savedRefreshKey}
                 onChange={() => setSavedRefreshKey(k => k + 1)}
+            />
+
+            {/* ── Info Panel ────────────────────────────────────── */}
+            <InfoPanel
+                open={infoOpen}
+                onClose={() => setInfoOpen(false)}
+                getContent={getInfoContent}
             />
 
             {/* ── Progression Builder Panel ─────────────────────── */}
