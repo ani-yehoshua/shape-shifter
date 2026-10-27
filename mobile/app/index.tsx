@@ -54,8 +54,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useAuth } from "../lib/auth-context";
 import { usePreferences } from "../lib/preferences-context";
-import Svg, { Path, Rect } from "react-native-svg";
+import Svg, { Circle, Path, Rect } from "react-native-svg";
 import FretboardVertical from "../components/FretboardVertical";
+import InfoSheet from "../components/InfoSheet";
+import { explainChord, explainScale } from "../lib/theory";
 import { PaywallModal, ProWelcomeModal, SignInToUnlockModal } from "../components/ProModals";
 import NotesIntervalsToggle from "../components/NotesIntervalsToggle";
 import RootNoteButton from "../components/RootNoteButton";
@@ -307,6 +309,16 @@ function ListIcon() {
     return (
         <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.ink} strokeWidth={2} strokeLinecap="round">
             <Path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+        </Svg>
+    );
+}
+
+function InfoIcon() {
+    const { colors } = useTheme();
+    return (
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.ink} strokeWidth={2} strokeLinecap="round">
+            <Circle cx={12} cy={12} r={9} />
+            <Path d="M12 11v5M12 8h.01" />
         </Svg>
     );
 }
@@ -645,6 +657,7 @@ export default function ChordsScreen() {
     const [paywallOpen, setPaywallOpen] = useState(false);
     const [proWelcomeOpen, setProWelcomeOpen] = useState(false);
     const [signInToUnlockOpen, setSignInToUnlockOpen] = useState(false);
+    const [infoOpen, setInfoOpen] = useState(false);
     // The pending intent records what they were after -- the Pro-gated
     // action ("drawmode", "alt" + index, "scalePattern" + key, "scaleVariant"
     // + index, "progressions", or a generic "paywall") -- and whether they
@@ -2741,6 +2754,47 @@ export default function ChordsScreen() {
         </Modal>
     );
 
+    // The ⓘ sheet. Its text is built (lib/theory) from the current selection
+    // each time it opens, so it always matches what's on the fretboard.
+    const soundingRoot = (name: string) => {
+        if (capo === 0) return name;
+        const idx = NOTES.findIndex(pair => pair.includes(name));
+        const shifted = NOTES[(idx + capo) % NOTES.length];
+        return shifted[shifted.length - 1];
+    };
+    const infoSheet = (
+        <InfoSheet
+            visible={infoOpen}
+            onClose={() => setInfoOpen(false)}
+            getContent={() => {
+                if (selectedMode === "scales") {
+                    if (!scaleEntry) return null;
+                    return explainScale({
+                        rootNote: soundingRoot(currentRootNote),
+                        scaleName: selectedScale,
+                        intervals: scaleEntry.intervals,
+                        degrees: scaleEntry.degrees,
+                        pattern: selectedScalePattern,
+                        modeName: showAllScalePositions ? undefined : scalePosition?.modeName,
+                        positionNumber: showAllScalePositions ? undefined : selectedScalePosition + 1,
+                    });
+                }
+                return explainChord({
+                    rootNote: capoRootNote,
+                    qualityKey: selectedChordQuality,
+                    category: selectedCategory,
+                    voicingType: selectedCategory === "Sevenths" ? selectedVoicingType : undefined,
+                    position: selectedPosition,
+                    // with several positions shown at once ("All") there is no single shape to describe
+                    shape: selectedPosition === "All" ? [] : capoDisplayShape,
+                    tuningMidi: selectedTuning.semitones,
+                    tuningNotes: selectedTuning.notes,
+                    altCount: availableAlts.length,
+                });
+            }}
+        />
+    );
+
     const savedChordsPanel = (
         <SavedChordsPanel
             visible={savedPanelOpen}
@@ -3551,6 +3605,12 @@ export default function ChordsScreen() {
                         </TouchableOpacity>
                     )}
 
+                    {capoDisplayShape.length > 0 && (
+                        <TouchableOpacity onPress={() => setInfoOpen(true)} style={styles.iconButton}>
+                            <InfoIcon />
+                        </TouchableOpacity>
+                    )}
+
                     {selectedMode === "scales" && (
                         <View style={styles.playbackSpeedStepper}>
                             <TouchableOpacity
@@ -3956,6 +4016,7 @@ export default function ChordsScreen() {
             />
             {authGateModal}
             {proModals}
+            {infoSheet}
             {saveDialogModal}
             {savedChordsPanel}
             {progressionPanel}
