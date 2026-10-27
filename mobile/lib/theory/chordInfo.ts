@@ -65,7 +65,7 @@ const FAMILIES: string[][] = [
     ['Maj', 'Min', 'Aug', 'Dim'],
     ['Maj7', 'Dom7', 'Min7', 'Min7b5', 'mMaj7', 'Maj7#5', 'Dim7'],
 ];
-const KEY_SCALES = ['Major', 'Harmonic Minor', 'Melodic Minor'];
+const KEY_SCALES = ['Major', 'Harmonic Minor', 'Melodic Minor', 'Harmonic Major'];
 
 function qualityTitle(qualityKey: string): string {
     return QUALITY_INFO[qualityKey]?.short ?? qualityKey;
