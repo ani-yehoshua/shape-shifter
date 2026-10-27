@@ -1,6 +1,7 @@
 // The "ⓘ" sheet: explains what's on the fretboard right now. The text itself
 // comes from lib/theory (explainChord / explainScale), which works it out from
 // the selection and the dots on screen; this component only lays it out.
+import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { InfoContent } from '../lib/theory';
 import { fonts, radius, spacing, type Palette } from '../lib/theme';
@@ -12,6 +13,31 @@ type Props = {
     /** called when the sheet is open, so the text always reflects the current selection */
     getContent: () => InfoContent | null;
 };
+
+/** Label/value rows whose values start in one straight column: every label is
+ *  given the width of the widest label in the list (measured, not guessed). */
+function AlignedRows({ items }: { items: { label: string; value: string }[] }) {
+    const styles = useThemedStyles(makeStyles);
+    const [labelWidth, setLabelWidth] = useState(0);
+    const widest = (w: number) => setLabelWidth(prev => (w > prev ? Math.ceil(w) : prev));
+    return (
+        <>
+            {items.map((item, i) => (
+                <View key={i} style={styles.row}>
+                    <Text
+                        style={[styles.rowLabel, labelWidth > 0 && { width: labelWidth }]}
+                        onTextLayout={e => {
+                            const w = Math.max(0, ...e.nativeEvent.lines.map(l => l.width));
+                            widest(w);
+                        }}>
+                        {item.label}
+                    </Text>
+                    <Text style={styles.rowValue}>{item.value}</Text>
+                </View>
+            ))}
+        </>
+    );
+}
 
 export default function InfoSheet({ visible, onClose, getContent }: Props) {
     const styles = useThemedStyles(makeStyles);
@@ -48,12 +74,7 @@ export default function InfoSheet({ visible, onClose, getContent }: Props) {
                                     ) : (
                                         <>
                                             {section.intro ? <Text style={styles.paragraph}>{section.intro}</Text> : null}
-                                            {section.items.map((item, i) => (
-                                                <View key={i} style={styles.row}>
-                                                    <Text style={styles.rowLabel}>{item.label}</Text>
-                                                    <Text style={styles.rowValue}>{item.value}</Text>
-                                                </View>
-                                            ))}
+                                            <AlignedRows items={section.items} />
                                         </>
                                     )}
                                 </View>
