@@ -6,7 +6,7 @@
 // CSS custom properties (var(--color-ink) etc.) become plain color values
 // from ../lib/theme, and onClick+cursor:pointer become onPress.
 import { useEffect, useRef } from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, type ScrollViewInstance } from 'react-native';
 import Svg, { Circle, G, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { spellInterval, spellNote } from '../lib/MusicTheory';
 import type { NotePosition } from '../lib/fretboardMap';
@@ -59,7 +59,7 @@ const FretboardVertical = ({
     const doubleDotFrets = [12, 24];
     const labelFrets = [1, 3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
 
-    const scrollRef = useRef<ScrollView>(null);
+    const scrollRef = useRef<ScrollViewInstance>(null);
 
     useEffect(() => {
         // When multiple positions are overlaid ("All" is on), just show the

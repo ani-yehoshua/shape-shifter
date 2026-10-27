@@ -32,7 +32,9 @@
         {
           "photosPermission": "ShapeShifter accesses your photos so you can attach a screenshot to a support request."
         }
-      ]
+      ],
+      "expo-status-bar",
+      "expo-web-browser"
     ]
   }
 }

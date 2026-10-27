@@ -6,6 +6,7 @@ import {
     StyleSheet,
     Text,
     TextInput,
+    type TextInputInstance,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -44,7 +45,7 @@ export default function SignIn() {
     const [digits, setDigits] = useState<string[]>(Array(6).fill(''));
     const [status, setStatus] = useState<Status>('idle');
     const [message, setMessage] = useState('');
-    const inputRefs = useRef<Array<TextInput | null>>([]);
+    const inputRefs = useRef<Array<TextInputInstance | null>>([]);
 
     async function sendCode() {
         if (!isValidEmail(email)) {
