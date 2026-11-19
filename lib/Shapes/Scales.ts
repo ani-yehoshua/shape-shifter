@@ -608,20 +608,20 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
     // Hand-authored positions are strongly recommended for dense scales since
     // NPS patterns cycle 1.5+ times across 6 strings.
     '9-note': {
-        'Jazz Major (add ♭3 ,♭6)': buildScale(
-            'Jazz Major (add ♭3 ,♭6)',
+        'Jazz Major (add ♭3, ♭6)': buildScale(
+            'Jazz Major (add ♭3, ♭6)',
             [0, 2, 3, 4, 5, 7, 8, 9, 11],
             ['1', '2', '♭3', '3', '4', '5', '♭6', '6', '7'],
             [
-                'Jazz Major (add ♭3 ,♭6)',
-                'Minor (add ♭2 ,♭5)',
+                'Jazz Major (add ♭3, ♭6)',
+                'Minor (add ♭2, ♭5)',
                 // no ♭3 mode
-                'Phrygian (add ♮3 ,♮7)',
-                'Lydian (add ♭3 ,♭7)',
-                'Dominant (add ♭2 ,♭6)',
+                'Phrygian (add ♮3, ♮7)',
+                'Lydian (add ♭3, ♭7)',
+                'Dominant (add ♭2, ♭6)',
                 // no ♭6 mode
-                'Nat. Minor (add ♭5 ,♮7)',
-                'Locrian (add ♮3 ,♮6)',
+                'Nat. Minor (add ♭5, ♮7)',
+                'Locrian (add ♮3, ♮6)',
             ],
             3,
             [2, 3, 4],
@@ -629,19 +629,19 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             { 3: [1, -1], 4: [1, 2] },
             [2, 6],
         ),
-        'Jazz Dominant (add ♭3 ,♮7)': buildScale(
-            'Jazz Dominant (add ♭3 ,♮7)',
+        'Jazz Dominant (add ♭3, ♮7)': buildScale(
+            'Jazz Dominant (add ♭3, ♮7)',
             [0, 2, 3, 4, 5, 7, 9, 10, 11],
             ['1', '2', '♭3', '3', '4', '5', '6', '♭7', '7'],
             [
-                'Jazz Dominant (add ♭3 ,♮7)',
-                'Nat. Minor (add ♮6)',
+                'Jazz Dominant (add ♭3, ♮7)',
+                'Nat. Minor (add ♭2, ♮6)',
                 // no ♭3 mode
-                'Locrian (add ♮5)',
-                'Major (add ♭5)',
-                'Minor (add ♮3)',
-                'Phrygian (add ♮2)',
-                'Lydian (add ♭2)',
+                'Locrian (add ♮5, ♮7)',
+                'Major (add ♭5, ♭7)',
+                'Minor (add ♮3, ♭6)',
+                'Phrygian (add ♮2, ♭5)',
+                'Lydian (add ♭2, ♮4)',
                 // no ♮7 mode
             ],
             3,

@@ -550,6 +550,24 @@ const persistedSession: SessionState = (() => {
 
 // ─── main page ────────────────────────────────────────────────────────────────
 
+// Scale Chords is paused while its data is rebuilt (docs/phase-2-harmony-
+// engine.md). Everything for the mode is still in this file; this flag only
+// closes the doors into it: the two tabs, and a saved session that was last
+// left on it. It stays open on the dev server (`next dev`) so the work can
+// continue, and a deployed preview can opt in with NEXT_PUBLIC_SCALE_CHORDS=1;
+// production leaves it closed. Flip to true to bring it back for everyone.
+const SCALE_CHORDS_ENABLED =
+    process.env.NODE_ENV === "development" ||
+    process.env.NEXT_PUBLIC_SCALE_CHORDS === "1";
+
+function SoonBadge() {
+    return (
+        <span className='ml-1.5 align-middle rounded-full bg-olive/20 border border-olive/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-olive'>
+            Soon
+        </span>
+    );
+}
+
 export default function Home() {
     const router = useRouter();
     const hasPro = useSubscription();
@@ -922,7 +940,12 @@ export default function Home() {
             setCurrentRootNote(p.currentRootNote);
         if (p.showIntervals !== undefined) setShowIntervals(p.showIntervals);
         if (p.capo !== undefined) setCapo(p.capo);
-        if (p.selectedMode !== undefined) setSelectedMode(p.selectedMode);
+        if (p.selectedMode !== undefined)
+            setSelectedMode(
+                p.selectedMode === "scaleChords" && !SCALE_CHORDS_ENABLED
+                    ? "chords"
+                    : p.selectedMode,
+            );
         if (p.selectedNoteGroup !== undefined)
             setSelectedNoteGroup(p.selectedNoteGroup);
         if (p.selectedScale !== undefined) setSelectedScale(p.selectedScale);
@@ -1058,6 +1081,18 @@ export default function Home() {
         selectedChordQuality,
         selectedPosition,
     });
+
+    // The alternate index only means something for the chord that's selected.
+    // Changing the voicing type, string set or chord quality can land on a
+    // chord with fewer alternates than the index being carried over, which
+    // used to leave an empty fretboard and a label like "3/2". Everything
+    // reads the index through `altIdx` (so there's never a render with an
+    // out-of-range value) and the state falls back to the first shape.
+    const altIdx = selectedAltShape < availableAlts.length ? selectedAltShape : 0;
+    React.useEffect(() => {
+        if (availableAlts.length > 0 && selectedAltShape >= availableAlts.length)
+            setSelectedAltShape(0);
+    }, [availableAlts, selectedAltShape]);
 
     // ── hierarchy helpers ──────────────────────────────────────────────────────
     const getSetterForLevel = (levelName: string): ((v: string) => void) => {
@@ -1575,7 +1610,7 @@ export default function Home() {
             selectedStringSet,
             selectedChordQuality,
             selectedPosition,
-            selectedAltShape,
+            selectedAltShape: altIdx, // never persist an out-of-range index
             selectedNoteGroup,
             selectedScale,
             selectedScalePosition,
@@ -1609,7 +1644,7 @@ export default function Home() {
         selectedStringSet,
         selectedChordQuality,
         selectedPosition,
-        selectedAltShape,
+        altIdx,
         selectedNoteGroup,
         selectedScale,
         selectedScalePosition,
@@ -1629,7 +1664,7 @@ export default function Home() {
     const voicingInfo = React.useMemo(() => {
         if (isDrawMode || selectedPosition === "All" || !currentRootNote)
             return null;
-        const formula = availableAlts[selectedAltShape];
+        const formula = availableAlts[altIdx];
         if (!formula) return null;
         const all = generateAllVoicingsForShape(
             currentRootNote,
@@ -1671,7 +1706,7 @@ export default function Home() {
         isDrawMode,
         selectedPosition,
         currentRootNote,
-        selectedAltShape,
+        altIdx,
         availableAlts,
         fretboardMap,
         selectedTuning.semitones,
@@ -1966,7 +2001,7 @@ export default function Home() {
 
     const { prev: goPrevAlt, next: goNextAlt } = useCycleList(
         availableAlts,
-        selectedAltShape,
+        altIdx,
         handleAltChange,
     );
 
@@ -2777,7 +2812,7 @@ export default function Home() {
                                                     altsLocked
                                                         ? "opacity-50"
                                                         : ""
-                                                }>{`${selectedAltShape + 1}/${availableAlts.length}`}</span>
+                                                }>{`${altIdx + 1}/${availableAlts.length}`}</span>
                                         </span>
                                         <button
                                             onClick={goNextAlt}
@@ -2936,7 +2971,7 @@ export default function Home() {
                                                                   position:
                                                                       selectedPosition,
                                                                   altShape:
-                                                                      selectedAltShape,
+                                                                      altIdx,
                                                               },
                                                     )
                                                 }
@@ -3051,15 +3086,27 @@ export default function Home() {
                                             Scales
                                         </button>
                                         <button
+                                            disabled={!SCALE_CHORDS_ENABLED}
+                                            title={
+                                                SCALE_CHORDS_ENABLED
+                                                    ? undefined
+                                                    : "Coming soon"
+                                            }
                                             onClick={() =>
                                                 setSelectedMode("scaleChords")
                                             }
                                             className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                                                selectedMode === "scaleChords"
-                                                    ? "bg-sand-4 text-sand-1 font-semibold"
-                                                    : "bg-sand-1 text-ink hover:bg-sand-2"
+                                                !SCALE_CHORDS_ENABLED
+                                                    ? "bg-sand-1 text-ink/40 cursor-not-allowed"
+                                                    : selectedMode ===
+                                                        "scaleChords"
+                                                      ? "bg-sand-4 text-sand-1 font-semibold"
+                                                      : "bg-sand-1 text-ink hover:bg-sand-2"
                                             }`}>
                                             Scale Chords
+                                            {!SCALE_CHORDS_ENABLED && (
+                                                <SoonBadge />
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -3638,11 +3685,18 @@ export default function Home() {
                                         Scales
                                     </button>
                                     <button
+                                        disabled={!SCALE_CHORDS_ENABLED}
+                                        title={
+                                            SCALE_CHORDS_ENABLED
+                                                ? undefined
+                                                : "Coming soon"
+                                        }
                                         onClick={() =>
                                             setSelectedMode("scaleChords")
                                         }
-                                        className={`px-6 py-1.5 text-sm font-medium transition-colors ${selectedMode === "scaleChords" ? "bg-sand-4 text-sand-1 font-semibold" : "bg-sand-1 text-ink hover:bg-sand-2"}`}>
+                                        className={`px-6 py-1.5 text-sm font-medium transition-colors ${!SCALE_CHORDS_ENABLED ? "bg-sand-1 text-ink/40 cursor-not-allowed" : selectedMode === "scaleChords" ? "bg-sand-4 text-sand-1 font-semibold" : "bg-sand-1 text-ink hover:bg-sand-2"}`}>
                                         Scale Chords
+                                        {!SCALE_CHORDS_ENABLED && <SoonBadge />}
                                     </button>
                                 </div>
 
@@ -4326,7 +4380,7 @@ export default function Home() {
                                                                     altsLocked
                                                                         ? "opacity-50"
                                                                         : ""
-                                                                }>{`${selectedAltShape + 1}/${availableAlts.length}`}</span>
+                                                                }>{`${altIdx + 1}/${availableAlts.length}`}</span>
                                                         </span>
                                                         <button
                                                             onClick={goNextAlt}
@@ -4397,7 +4451,7 @@ export default function Home() {
                                                                   position:
                                                                       selectedPosition,
                                                                   altShape:
-                                                                      selectedAltShape,
+                                                                      altIdx,
                                                               },
                                                     )
                                                 }
