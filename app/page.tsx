@@ -553,8 +553,12 @@ const persistedSession: SessionState = (() => {
 // Scale Chords is paused while its data is rebuilt (docs/phase-2-harmony-
 // engine.md). Everything for the mode is still in this file; this flag only
 // closes the doors into it: the two tabs, and a saved session that was last
-// left on it. Flip to true to bring it back.
-const SCALE_CHORDS_ENABLED = false;
+// left on it. It stays open on the dev server (`next dev`) so the work can
+// continue, and a deployed preview can opt in with NEXT_PUBLIC_SCALE_CHORDS=1;
+// production leaves it closed. Flip to true to bring it back for everyone.
+const SCALE_CHORDS_ENABLED =
+    process.env.NODE_ENV === "development" ||
+    process.env.NEXT_PUBLIC_SCALE_CHORDS === "1";
 
 function SoonBadge() {
     return (
