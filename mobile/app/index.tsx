@@ -58,7 +58,20 @@ import Svg, { Circle, Path, Rect } from "react-native-svg";
 import FretboardVertical from "../components/FretboardVertical";
 import InfoSheet from "../components/InfoSheet";
 import { explainChord, explainScale } from "../lib/theory";
-import { findDrawMatches, scaleModeName, shapeForMatch, type DrawMatch } from "../lib/drawMatches";
+import {
+    describeScaleSelection,
+    findDrawMatches,
+    scaleBoxCount,
+    scaleModeName,
+    scalePatterns,
+    scaleSelectionFor,
+    scaleVariantCount,
+    shapeForMatch,
+    WHOLE_NECK,
+    type DrawMatch,
+    type ScaleSelection,
+} from "../lib/drawMatches";
+import ShapesSheet, { type ShapeGroup } from "../components/ShapesSheet";
 import { PaywallModal, ProWelcomeModal, SignInToUnlockModal } from "../components/ProModals";
 import NotesIntervalsToggle from "../components/NotesIntervalsToggle";
 import RootNoteButton from "../components/RootNoteButton";
@@ -1582,6 +1595,9 @@ export default function ChordsScreen() {
     const [drawAnchorMatches, setDrawAnchorMatches] = useState<DrawMatch[]>([]);
     const [drawAnchorIndex, setDrawAnchorIndex] = useState(0);
     const [drawChordPickerOpen, setDrawChordPickerOpen] = useState(false);
+    // the Shapes sheet, and the shape of the scale match being viewed (pattern/variant/box)
+    const [drawShapesOpen, setDrawShapesOpen] = useState(false);
+    const [drawScaleSel, setDrawScaleSel] = useState<ScaleSelection | null>(null);
     const [drawOctaveUp, setDrawOctaveUp] = useState(false);
     const [drawPivotKey, setDrawPivotKey] = useState<string | null>(null);
     const [drawPivotInterval, setDrawPivotInterval] = useState(0);
@@ -1697,8 +1713,8 @@ export default function ChordsScreen() {
             setDrawAnchorMatches(matches);
             setDrawAnchorIndex(0);
             if (matches[0]) {
-                // drawSelectedAsMap is stale here, so hand the fresh map in
-                applyDrawAnchorMatch(matches[0], newMap);
+                // drawSelectedAsMap is stale here, so hand the fresh drawing in
+                applyDrawAnchorMatch(matches[0], { positions: newMap, keys: newSelected });
             } else {
                 setDrawPickedChord(null);
                 setDrawBrowsedVoicing(null);
@@ -1920,9 +1936,18 @@ export default function ChordsScreen() {
     const drawShowConnectors = drawActiveMatch?.tab === "Chords" || drawnIsKnownChord;
     const drawConnectorPositions = drawActiveMatch?.tab === "Scales" ? drawSelected : undefined;
 
+    // what the drawing is, for putting a match's shape on the fretboard
+    const drawShapeContext = (drawn?: { positions: Map<number, number>; keys: Iterable<string> }) => ({
+        drawnPositions: drawn?.positions ?? drawSelectedAsMap,
+        drawnKeys: drawn?.keys ?? drawSelected,
+        root: drawEffectiveRoot,
+        fretboardMap: drawFretboardMap,
+        tuning: drawTuning,
+    });
+
     const applyDrawAnchorMatch = (
         match: DrawMatch,
-        positions: Map<number, number> = drawSelectedAsMap,
+        drawn?: { positions: Map<number, number>; keys: Iterable<string> },
     ) => {
         // a scale match has no chord behind it, so there is no picked chord or alt shapes
         setDrawPickedChord(
@@ -1936,10 +1961,9 @@ export default function ChordsScreen() {
         );
         setDrawSelectedPosition(match.posKey);
         setDrawSelectedAltShape(match.altIndex);
+        setDrawScaleSel(match.scaleSelection ?? null);
         setDrawOctaveUp(false);
-        setDrawBrowsedVoicing(
-            shapeForMatch(match, positions, drawEffectiveRoot, drawFretboardMap),
-        );
+        setDrawBrowsedVoicing(shapeForMatch(match, drawShapeContext(drawn)));
     };
 
     const handleDrawAnchor = () => {
@@ -2326,6 +2350,98 @@ export default function ChordsScreen() {
         },
     );
 
+    // ── Shapes sheet: what can be changed about the match being viewed ──
+    const changeDrawScaleSel = (next: ScaleSelection) => {
+        if (drawActiveMatch?.tab !== "Scales") return;
+        setDrawScaleSel(next);
+        setDrawBrowsedVoicing(shapeForMatch(drawActiveMatch, drawShapeContext(), next));
+    };
+    const pickDrawInversion = (p: string) => {
+        setDrawSelectedPosition(p);
+        setDrawSelectedAltShape(0);
+        setDrawBrowsedVoicing(pickDrawVoicingFor(p, 0, drawOctaveUp, drawSelectedAsMap));
+    };
+    const pickDrawAlt = (idx: number) => {
+        setDrawSelectedAltShape(idx);
+        setDrawBrowsedVoicing(pickDrawVoicingFor(drawSelectedPosition, idx, drawOctaveUp, drawSelectedAsMap));
+    };
+
+    const drawShapeGroups: ShapeGroup[] = (() => {
+        if (!drawActiveMatch) return [];
+        const groups: ShapeGroup[] = [];
+        if (drawActiveMatch.tab === "Scales") {
+            const ref = drawActiveMatch.scale;
+            const sel = drawScaleSel ?? drawActiveMatch.scaleSelection;
+            if (!ref || !sel) return [];
+            groups.push({
+                title: "Pattern",
+                options: scalePatterns(ref).map(p => ({
+                    label: p,
+                    selected: sel.pattern === p,
+                    onSelect: () => changeDrawScaleSel(scaleSelectionFor(ref, drawShapeContext(), p)),
+                })),
+            });
+            const variants = scaleVariantCount(ref, sel.pattern);
+            if (variants > 1)
+                groups.push({
+                    title: "Variant",
+                    options: Array.from({ length: variants }, (_, v) => ({
+                        label: String(v + 1),
+                        selected: sel.variant === v,
+                        onSelect: () =>
+                            changeDrawScaleSel(scaleSelectionFor(ref, drawShapeContext(), sel.pattern, v)),
+                    })),
+                });
+            if (sel.pattern !== WHOLE_NECK)
+                groups.push({
+                    title: "Box",
+                    options: Array.from({ length: scaleBoxCount(ref, sel.pattern, sel.variant) }, (_, b) => ({
+                        label: String(b + 1),
+                        selected: sel.box === b,
+                        onSelect: () => changeDrawScaleSel({ ...sel, box: b }),
+                    })),
+                });
+            return groups;
+        }
+        const inversions = Object.keys(drawFinalFormulas ?? {});
+        if (inversions.length > 1)
+            groups.push({
+                title: "Inversion",
+                options: inversions.map(p => ({
+                    label: (drawFinalFormulas as any)[p]?.name || p,
+                    selected: p === drawSelectedPosition,
+                    onSelect: () => pickDrawInversion(p),
+                })),
+            });
+        if (drawAvailableAltsForUI.length > 1)
+            groups.push({
+                title: "Shape",
+                options: drawAvailableAltsForUI.map((_, i) => ({
+                    label: String(i + 1),
+                    selected: i === drawSelectedAltShape,
+                    onSelect: () => pickDrawAlt(i),
+                })),
+            });
+        return groups;
+    })();
+
+    // the live "which shape of it am I looking at" line under the match name
+    const drawMatchDetail = !drawActiveMatch
+        ? ""
+        : drawActiveMatch.tab === "Scales" && drawActiveMatch.scale
+          ? describeScaleSelection(
+                drawActiveMatch.scale,
+                drawScaleSel ?? (drawActiveMatch.scaleSelection as ScaleSelection),
+            )
+          : [
+                (drawFinalFormulas as any)?.[drawSelectedPosition]?.name || drawSelectedPosition,
+                drawAvailableAltsForUI.length > 1
+                    ? `Shape ${drawSelectedAltShape + 1}/${drawAvailableAltsForUI.length}`
+                    : "",
+            ]
+                .filter(Boolean)
+                .join(" · ");
+
     const getDrawQuality = (info: any) =>
         Array.isArray(info?.trail) && info.trail.length
             ? info.trail[info.trail.length - 1]
@@ -2707,21 +2823,6 @@ export default function ChordsScreen() {
                                 ? drawFreeformLabel
                                 : drawRoot)}
                     </Text>
-                    {!drawChordLabel && drawScaleMatches.length > 0 && (
-                        <Text
-                            style={styles.scaleCaption}
-                            numberOfLines={2}>
-                            {drawScaleMatches
-                                .map(
-                                    m =>
-                                        (m.modeName ?? m.scaleName) +
-                                        (!m.exact && drawScaleMatches.length > 1
-                                            ? " *"
-                                            : ""),
-                                )
-                                .join("  ·  ")}
-                        </Text>
-                    )}
                 </View>
 
                 {/* Fretboard */}
@@ -2826,6 +2927,9 @@ export default function ChordsScreen() {
                                             }
                                         </Text>
                                     )}
+                                    {!!drawMatchDetail && (
+                                        <Text style={styles.anchorDetail}>{drawMatchDetail}</Text>
+                                    )}
                                 </>
                             )}
                         </TouchableOpacity>
@@ -2841,24 +2945,12 @@ export default function ChordsScreen() {
                                 {drawAnchorIndex + 1}/{drawAnchorMatches.length}
                             </Text>
                         )}
-                        {drawAvailableAltsForUI.length > 1 && (
-                            <>
-                                <View style={styles.divider} />
-                                <TouchableOpacity
-                                    onPress={goPrevDrawAlt}
-                                    style={styles.chevronButton}>
-                                    <ChevronIcon direction='left' />
-                                </TouchableOpacity>
-                                <Text style={styles.altLabel}>
-                                    {drawSelectedAltShape + 1}/
-                                    {drawAvailableAltsForUI.length}
-                                </Text>
-                                <TouchableOpacity
-                                    onPress={goNextDrawAlt}
-                                    style={styles.chevronButton}>
-                                    <ChevronIcon direction='right' />
-                                </TouchableOpacity>
-                            </>
+                        {drawAnchorMatches.length > 0 && drawShapeGroups.length > 0 && (
+                            <TouchableOpacity
+                                onPress={() => setDrawShapesOpen(true)}
+                                style={styles.shapesButton}>
+                                <Text style={styles.shapesButtonText}>Shapes</Text>
+                            </TouchableOpacity>
                         )}
                     </View>
                 )}
@@ -2904,6 +2996,15 @@ export default function ChordsScreen() {
                         )}
                     </View>
                 )}
+
+                {/* Shapes sheet (anchor mode: change the matched drawing's inversion / shape / pattern / variant / box) */}
+                <ShapesSheet
+                    visible={drawShapesOpen && !!drawActiveMatch}
+                    onClose={() => setDrawShapesOpen(false)}
+                    title={`${drawEffectiveRoot} ${drawActiveMatch?.displayLabel ?? ""}`}
+                    subtitle={drawActiveMatch?.contextLabel}
+                    groups={drawShapeGroups}
+                />
 
                 {/* Chord picker modal (anchor mode: browse all matches) */}
                 <Modal
@@ -3069,7 +3170,7 @@ export default function ChordsScreen() {
                                         drawAnchored &&
                                             styles.anchorButtonTextActive,
                                     ]}>
-                                    Find chord
+                                    Find shape
                                 </Text>
                             </TouchableOpacity>
                         )}
@@ -3913,14 +4014,6 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
         color: `${colors.ink}99`,
         marginTop: 2,
     },
-    scaleCaption: {
-        fontFamily: fonts.sans.semiBold,
-        fontSize: 11,
-        color: `${colors.ink}80`,
-        textAlign: "center",
-        marginTop: 2,
-        paddingHorizontal: spacing.md,
-    },
     fretboardArea: {
         flex: 1,
         minHeight: 0,
@@ -4062,6 +4155,25 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     },
     anchorCaret: {
         color: `${colors.ink}66`,
+    },
+    anchorDetail: {
+        fontFamily: fonts.sans.semiBold,
+        fontSize: 10,
+        textAlign: "center",
+        color: `${colors.ink}CC`,
+    },
+    shapesButton: {
+        marginLeft: spacing.xs,
+        paddingHorizontal: spacing.sm + 4,
+        paddingVertical: spacing.xs + 2,
+        borderRadius: radius.pill,
+        borderWidth: 1,
+        borderColor: `${colors.ink}66`,
+    },
+    shapesButtonText: {
+        fontFamily: fonts.sans.semiBold,
+        fontSize: 12,
+        color: colors.ink,
     },
     anchorContext: {
         fontSize: 10,

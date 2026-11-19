@@ -19,11 +19,19 @@ import {
 import { generateAllVoicingsForShape } from "@/lib/fretboardMap";
 import type { NotePosition } from "@/lib/fretboardMap";
 import {
+    describeScaleSelection,
     findDrawMatches,
+    scaleBoxCount,
     scaleModeName,
+    scalePatterns,
+    scaleSelectionFor,
+    scaleVariantCount,
     shapeForMatch,
+    WHOLE_NECK,
 } from "@/lib/drawMatches";
-import type { DrawMatch } from "@/lib/drawMatches";
+import type { DrawMatch, ScaleSelection } from "@/lib/drawMatches";
+import ShapesPanel from "@/components/ShapesPanel";
+import type { ShapeGroup } from "@/components/ShapesPanel";
 import CapoButton from "@/components/CapoButton";
 import { SCALE_SHAPES } from "@/lib/Shapes/Scales";
 import { CHORD_SHAPES } from "@/lib/Shapes/Chords";
@@ -344,6 +352,9 @@ export default function DrawMode({
     const [anchorMatches, setAnchorMatches] = React.useState<DrawMatch[]>([]);
     const [anchorIndex, setAnchorIndex] = React.useState(0);
     const [chordPickerOpen, setChordPickerOpen] = React.useState(false);
+    // the Shapes panel, and the shape of the scale match being viewed (pattern/variant/box)
+    const [shapesOpen, setShapesOpen] = React.useState(false);
+    const [scaleSel, setScaleSel] = React.useState<ScaleSelection | null>(null);
     const [octaveUp, setOctaveUp] = React.useState(false);
     const [pivotKey, setPivotKey] = React.useState<string | null>(null);
     const [pivotInterval, setPivotInterval] = React.useState(0);
@@ -438,8 +449,11 @@ export default function DrawMode({
                 setAnchorMatches(matches);
                 setAnchorIndex(0);
                 if (matches[0]) {
-                    // selectedAsMap is stale here, so hand the fresh map in
-                    applyAnchorMatch(matches[0], newMap);
+                    // selectedAsMap is stale here, so hand the fresh drawing in
+                    applyAnchorMatch(matches[0], {
+                        positions: newMap,
+                        keys: newSelected,
+                    });
                 } else {
                     setPickedChord(null);
                     setBrowsedVoicing(null);
@@ -633,8 +647,23 @@ export default function DrawMode({
         );
     }, [selected, fretboardMap, effectiveRoot, browsedVoicing]);
 
+    // what the drawing is, for putting a match's shape on the fretboard
+    const shapeContext = React.useCallback(
+        (drawn?: { positions: Map<number, number>; keys: Iterable<string> }) => ({
+            drawnPositions: drawn?.positions ?? selectedAsMap,
+            drawnKeys: drawn?.keys ?? selected,
+            root: effectiveRoot,
+            fretboardMap,
+            tuning,
+        }),
+        [selectedAsMap, selected, effectiveRoot, fretboardMap, tuning],
+    );
+
     const applyAnchorMatch = React.useCallback(
-        (match: DrawMatch, positions: Map<number, number> = selectedAsMap) => {
+        (
+            match: DrawMatch,
+            drawn?: { positions: Map<number, number>; keys: Iterable<string> },
+        ) => {
             // a scale match has no chord behind it, so there is no picked chord or alt shapes
             setPickedChord(
                 match.tab === "Chords"
@@ -647,13 +676,12 @@ export default function DrawMode({
             );
             setSelectedPosition(match.posKey);
             setSelectedAltShape(match.altIndex);
+            setScaleSel(match.scaleSelection ?? null);
             setOctaveUp(false);
             // can't use pickVoicingFor here — the finalFormulas memo hasn't updated yet
-            setBrowsedVoicing(
-                shapeForMatch(match, positions, effectiveRoot, fretboardMap),
-            );
+            setBrowsedVoicing(shapeForMatch(match, shapeContext(drawn)));
         },
-        [effectiveRoot, fretboardMap, selectedAsMap],
+        [shapeContext],
     );
 
     const handleAnchor = React.useCallback(() => {
@@ -1108,6 +1136,109 @@ export default function DrawMode({
     const connectorPositions =
         activeMatch?.tab === "Scales" ? selected : undefined;
 
+    // ── Shapes panel: what can be changed about the match being viewed ──
+    const changeScaleSel = (next: ScaleSelection) => {
+        if (activeMatch?.tab !== "Scales") return;
+        setScaleSel(next);
+        setBrowsedVoicing(shapeForMatch(activeMatch, shapeContext(), next));
+    };
+    const pickInversion = (p: string) => {
+        setSelectedPosition(p);
+        setSelectedAltShape(0);
+        setBrowsedVoicing(pickVoicingFor(p, 0, octaveUp, selectedAsMap));
+    };
+    const pickAlt = (idx: number) => {
+        setSelectedAltShape(idx);
+        setBrowsedVoicing(
+            pickVoicingFor(selectedPosition, idx, octaveUp, selectedAsMap),
+        );
+    };
+
+    const shapeGroups: ShapeGroup[] = (() => {
+        if (!activeMatch) return [];
+        const groups: ShapeGroup[] = [];
+        if (activeMatch.tab === "Scales") {
+            const ref = activeMatch.scale;
+            const sel = scaleSel ?? activeMatch.scaleSelection;
+            if (!ref || !sel) return [];
+            groups.push({
+                title: "Pattern",
+                options: scalePatterns(ref).map(p => ({
+                    label: p,
+                    selected: sel.pattern === p,
+                    onSelect: () =>
+                        changeScaleSel(scaleSelectionFor(ref, shapeContext(), p)),
+                })),
+            });
+            const variants = scaleVariantCount(ref, sel.pattern);
+            if (variants > 1)
+                groups.push({
+                    title: "Variant",
+                    options: Array.from({ length: variants }, (_, v) => ({
+                        label: String(v + 1),
+                        selected: sel.variant === v,
+                        onSelect: () =>
+                            changeScaleSel(
+                                scaleSelectionFor(ref, shapeContext(), sel.pattern, v),
+                            ),
+                    })),
+                });
+            if (sel.pattern !== WHOLE_NECK)
+                groups.push({
+                    title: "Box",
+                    options: Array.from(
+                        {
+                            length: scaleBoxCount(ref, sel.pattern, sel.variant),
+                        },
+                        (_, b) => ({
+                            label: String(b + 1),
+                            selected: sel.box === b,
+                            onSelect: () => changeScaleSel({ ...sel, box: b }),
+                        }),
+                    ),
+                });
+            return groups;
+        }
+        const inversions = Object.keys(finalFormulas ?? {});
+        if (inversions.length > 1)
+            groups.push({
+                title: "Inversion",
+                options: inversions.map(p => ({
+                    label: (finalFormulas as any)[p]?.name || p,
+                    selected: p === selectedPosition,
+                    onSelect: () => pickInversion(p),
+                })),
+            });
+        if (availableAltsForUI.length > 1)
+            groups.push({
+                title: "Shape",
+                options: availableAltsForUI.map((_, i) => ({
+                    label: String(i + 1),
+                    selected: i === selectedAltShape,
+                    onSelect: () => pickAlt(i),
+                })),
+            });
+        return groups;
+    })();
+
+    // the live "which shape of it am I looking at" line under the match name
+    const matchDetail = !activeMatch
+        ? ""
+        : activeMatch.tab === "Scales" && activeMatch.scale
+          ? describeScaleSelection(
+                activeMatch.scale,
+                scaleSel ?? (activeMatch.scaleSelection as ScaleSelection),
+            )
+          : [
+                (finalFormulas as any)?.[selectedPosition]?.name ||
+                    selectedPosition,
+                availableAltsForUI.length > 1
+                    ? `Shape ${selectedAltShape + 1}/${availableAltsForUI.length}`
+                    : "",
+            ]
+                .filter(Boolean)
+                .join(" · ");
+
     const cycleBtn =
         "w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors";
 
@@ -1161,6 +1292,14 @@ export default function DrawMode({
                     document.body,
                 )}
 
+            <ShapesPanel
+                open={shapesOpen && !!activeMatch}
+                onClose={() => setShapesOpen(false)}
+                title={`${effectiveRoot} ${activeMatch?.displayLabel ?? ""}`}
+                subtitle={activeMatch?.contextLabel}
+                groups={shapeGroups}
+            />
+
             {/* ── MOBILE (max-sm) ─────────────────────────────────────── */}
             <div className='sm:hidden flex-1 min-h-0 flex flex-col'>
                 {/* Chord / scale label */}
@@ -1169,23 +1308,6 @@ export default function DrawMode({
                         {autoChordLabel ||
                             (chordShape.length > 0 ? freeformLabel : root)}
                     </span>
-                    {!chordLabel && scaleMatches.length > 0 && (
-                        <p className='text-xs font-semibold text-ink/50 mt-0.5 leading-relaxed'>
-                            {scaleMatches.map((m, i) => (
-                                <React.Fragment
-                                    key={`${m.scaleName}|${m.modeName ?? ""}`}>
-                                    {i > 0 && <span className='mx-1'>·</span>}
-                                    <span
-                                        className={m.exact ? "" : "opacity-60"}>
-                                        {m.modeName ?? m.scaleName}
-                                        {!m.exact &&
-                                            scaleMatches.length > 1 &&
-                                            " *"}
-                                    </span>
-                                </React.Fragment>
-                            ))}
-                        </p>
-                    )}
                 </div>
 
                 {/* Fretboard */}
@@ -1288,6 +1410,11 @@ export default function DrawMode({
                                             }
                                         </span>
                                     )}
+                                    {matchDetail && (
+                                        <span className='text-[10px] font-semibold text-ink/80 leading-tight'>
+                                            {matchDetail}
+                                        </span>
+                                    )}
                                 </>
                             )}
                         </button>
@@ -1305,26 +1432,13 @@ export default function DrawMode({
                             </span>
                         )}
 
-                        {availableAltsForUI.length > 1 && (
-                            <>
-                                <div className='w-px h-4 bg-ink mx-1' />
-                                <button
-                                    onClick={goPrevAlt}
-                                    title='Previous alt shape'
-                                    className={cycleBtn}>
-                                    <ChevronLeft />
-                                </button>
-                                <span className='text-xs font-semibold text-ink w-8 text-center'>
-                                    {selectedAltShape + 1}/
-                                    {availableAltsForUI.length}
-                                </span>
-                                <button
-                                    onClick={goNextAlt}
-                                    title='Next alt shape'
-                                    className={cycleBtn}>
-                                    <ChevronRight />
-                                </button>
-                            </>
+                        {anchorMatches.length > 0 && shapeGroups.length > 0 && (
+                            <button
+                                onClick={() => setShapesOpen(true)}
+                                title='Change the inversion, shape, pattern or variant'
+                                className='ml-1 px-3 py-1.5 rounded-full border border-ink/40 text-xs font-semibold text-ink hover:border-ink transition-colors'>
+                                Shapes
+                            </button>
                         )}
                     </div>
                 )}
@@ -1531,9 +1645,9 @@ export default function DrawMode({
                         {chordShape.length > 0 && (
                             <button
                                 onClick={handleAnchor}
-                                title='Find chords that contain the notes you drew'
+                                title='Find the chords and scales that contain the notes you drew'
                                 className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${anchored ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                                Find chord
+                                Find shape
                             </button>
                         )}
 
@@ -1554,23 +1668,6 @@ export default function DrawMode({
                         {autoChordLabel ||
                             (chordShape.length > 0 ? freeformLabel : root)}
                     </span>
-                    {!chordLabel && scaleMatches.length > 0 && (
-                        <p className='text-xs font-semibold text-ink/50 mt-0.5 leading-relaxed'>
-                            {scaleMatches.map((m, i) => (
-                                <React.Fragment
-                                    key={`${m.scaleName}|${m.modeName ?? ""}`}>
-                                    {i > 0 && <span className='mx-1'>·</span>}
-                                    <span
-                                        className={m.exact ? "" : "opacity-60"}>
-                                        {m.modeName ?? m.scaleName}
-                                        {!m.exact &&
-                                            scaleMatches.length > 1 &&
-                                            " *"}
-                                    </span>
-                                </React.Fragment>
-                            ))}
-                        </p>
-                    )}
                 </div>
 
                 {/* Fretboard */}
@@ -1694,6 +1791,11 @@ export default function DrawMode({
                                             }
                                         </span>
                                     )}
+                                    {matchDetail && (
+                                        <span className='text-xs font-semibold text-ink/80'>
+                                            {matchDetail}
+                                        </span>
+                                    )}
                                 </>
                             )}
                         </button>
@@ -1710,12 +1812,21 @@ export default function DrawMode({
                                 {anchorIndex + 1}/{anchorMatches.length}
                             </span>
                         )}
+                        {anchorMatches.length > 0 && shapeGroups.length > 0 && (
+                            <button
+                                onClick={() => setShapesOpen(true)}
+                                title='Change the inversion, shape, pattern or variant'
+                                className='ml-1 px-4 py-1.5 rounded-full border border-ink/40 text-sm font-semibold text-ink hover:border-ink transition-colors'>
+                                Shapes
+                            </button>
+                        )}
                     </div>
                 )}
 
-                {/* Position / alt row */}
-                {((!anchored && positions.length > 0) ||
-                    availableAltsForUI.length > 1) && (
+                {/* Position / alt row (while a match is open, the Shapes panel does this) */}
+                {!anchored &&
+                    (positions.length > 0 ||
+                        availableAltsForUI.length > 1) && (
                     <div className='flex items-center justify-center gap-4 px-4 shrink-0'>
                         {!anchored && positions.length > 0 && (
                             <div className='flex flex-col items-center gap-1.5'>
@@ -1755,7 +1866,7 @@ export default function DrawMode({
                         {availableAltsForUI.length > 1 && (
                             <div className='flex flex-col items-center gap-1.5'>
                                 <span className='text-xs font-semibold text-ink/60'>
-                                    {anchored ? "Shape" : "Alternate Positions"}
+                                    Alternate Positions
                                 </span>
                                 <div className='flex items-center gap-2 border border-ink rounded overflow-hidden'>
                                     <button
@@ -1900,9 +2011,9 @@ export default function DrawMode({
                     {chordShape.length > 0 && (
                         <button
                             onClick={handleAnchor}
-                            title='Find chords that contain the notes you drew'
+                            title='Find the chords and scales that contain the notes you drew'
                             className={`px-4 py-1.5 text-sm font-semibold rounded-full border transition-colors ${anchored ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                            Find chord
+                            Find shape
                         </button>
                     )}
 

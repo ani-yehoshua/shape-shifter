@@ -6,7 +6,7 @@
  *  - every named mode starts on the same note in the Std. pattern as in each
  *    N-notes-per-string pattern (names must not drift off their positions
  *    around an added note)
- *  - the "Major (add b5)" mode of the 9-note Jazz Dominant matches in Draw Mode
+ *  - the "Major (add b5, b7)" mode of the 9-note Jazz Dominant matches in Draw Mode
  *    and is spelled C D E F Gb G A Bb B
  *
  * Run:  npx tsx scripts/validate-scales.ts
@@ -15,7 +15,7 @@
 import { SCALE_SHAPES } from '../lib/Shapes/Scales.js';
 import { CHORD_SHAPES } from '../lib/Shapes/Chords.js';
 import { generateFretboardMap } from '../lib/fretboardMap.js';
-import { findDrawMatches, summarizeDrawn } from '../lib/drawMatches.js';
+import { findDrawMatches, shapeForMatch, summarizeDrawn } from '../lib/drawMatches.js';
 import { spellNote } from '../lib/MusicTheory.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -56,9 +56,9 @@ console.log(`scales checked: ${scales}`);
 {
     const TUNING = ['E', 'B', 'G', 'D', 'A', 'E'];
     const map = generateFretboardMap(TUNING, 24);
-    const entry: any = (SCALE_SHAPES as any)['9-note']['Jazz Dominant (add ♭3 ,♮7)'];
-    const pos = entry.altPatterns['4nps'][0].find((p: any) => p.modeName === 'Major (add ♭5)');
-    check(!!pos, 'Jazz Dominant (add b3, nat7) 4nps should have a "Major (add b5)" mode');
+    const entry: any = (SCALE_SHAPES as any)['9-note']['Jazz Dominant (add ♭3, ♮7)'];
+    const pos = entry.altPatterns['4nps'][0].find((p: any) => p.modeName === 'Major (add ♭5, ♭7)');
+    check(!!pos, 'Jazz Dominant (add b3, nat7) 4nps should have a "Major (add b5, b7)" mode');
     if (pos) {
         const rootFret = (((3 - pos.notes[0].semitones - 7) % 12) + 12) % 12; // C is index 3 in NOTES
         const keys = pos.notes.map((n: any) => `${n.string}:${n.fretOffset + rootFret}`);
@@ -70,10 +70,14 @@ console.log(`scales checked: ${scales}`);
             Shells: (CHORD_SHAPES as any).Shells,
         };
         const matches = findDrawMatches({ drawnSemis: semis, drawnPositions: positions, drawnKeys: keys, chordShapes, root: 'C', fretboardMap: map, tuning: TUNING });
-        const m = matches.find(x => x.displayLabel === 'Major (add ♭5)' && x.contextLabel.includes('Jazz Dominant (add ♭3 ,♮7) · 4nps · Variant 1'));
-        check(!!m, 'drawing that box should match "Major (add b5)" in Jazz Dominant (add b3, nat7) 4nps variant 1');
+        const m = matches.find(x => x.displayLabel === 'Major (add ♭5, ♭7)' && x.contextLabel === 'Scales · 9-note · Jazz Dominant (add ♭3, ♮7)');
+        check(!!m, 'drawing that box should match "Major (add b5, b7)" in Jazz Dominant (add b3, nat7)');
+        // one row per scale mode: no pattern/variant/box rows
+        const scaleRows = matches.filter(x => x.tab === 'Scales').map(x => `${x.contextLabel}|${x.displayLabel}`);
+        check(new Set(scaleRows).size === scaleRows.length, 'each scale mode should appear once');
+        const shape = m ? shapeForMatch(m, { drawnPositions: positions, drawnKeys: keys, root: 'C', fretboardMap: map, tuning: TUNING }) : null;
         const spelled = new Map<number, string>();
-        for (const n of m?.scaleNotes ?? []) spelled.set(n.semitones ?? 0, spellNote('C', n.semitones ?? 0, n.degree ?? 1));
+        for (const n of shape ?? []) spelled.set(n.semitones ?? 0, spellNote('C', n.semitones ?? 0, n.degree ?? 1));
         const text = [...spelled.entries()].sort((a, b) => a[0] - b[0]).map(x => x[1]).join(' ');
         check(text === 'C D E F Gb G A Bb B', `spelled "${text}", expected "C D E F Gb G A Bb B"`);
     }
