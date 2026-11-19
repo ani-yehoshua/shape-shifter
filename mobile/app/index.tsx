@@ -1909,12 +1909,15 @@ export default function ChordsScreen() {
         );
     }, [drawSelected, drawFretboardMap, drawEffectiveRoot, drawBrowsedVoicing]);
 
-    // Is what the user drew a chord we know? Judged from the drawn notes
-    // themselves, not the displayed shape (which becomes a scale box while a
-    // scale match is open).
-    const drawnIsKnownChord = useMemo(() => {
+    // Is what the user drew a chord? Judged from the drawn notes themselves, not
+    // the displayed shape (which becomes a scale box while a scale match is open).
+    // One note per string is how a chord is played, so that counts too, even if
+    // the library doesn't have the chord yet.
+    const drawnIsChord = useMemo(() => {
         if (drawMatchInfo) return true;
         if (!drawSelected.size) return false;
+        const strings = new Set([...drawSelected].map((k) => k.split(":")[0]));
+        if (drawSelected.size >= 2 && strings.size === drawSelected.size) return true;
         const rootSemi = noteNameToSemitone(drawEffectiveRoot);
         const drawnSemis = new Set<number>();
         for (const key of drawSelected) {
@@ -1936,7 +1939,7 @@ export default function ChordsScreen() {
     // scale match only the drawn notes are joined, so the chord shows in the
     // middle of whichever scale is being viewed.
     const drawActiveMatch = drawAnchored ? drawAnchorMatches[drawAnchorIndex] : undefined;
-    const drawShowConnectors = drawActiveMatch?.tab === "Chords" || drawnIsKnownChord;
+    const drawShowConnectors = drawActiveMatch?.tab === "Chords" || drawnIsChord;
     const drawConnectorPositions = drawActiveMatch?.tab === "Scales" ? drawSelected : undefined;
 
     // what the drawing is, for putting a match's shape on the fretboard
@@ -2013,8 +2016,11 @@ export default function ChordsScreen() {
         });
     };
 
+    // Re-run the search when the root changes while Find shape is on (a pivot or
+    // the root picker): the drawn notes stay, their intervals and the matches follow the new root
     useEffect(() => {
-        if (!drawPivotKey || !drawSelected.size) return;
+        if (!drawSelected.size) return;
+        if (!drawPivotKey && !drawAnchored) return;
         const newSemis = [
             ...new Set(
                 [...drawSelectedAsMap.entries()]
@@ -2045,6 +2051,7 @@ export default function ChordsScreen() {
         else {
             setDrawPickedChord(null);
             setDrawBrowsedVoicing(null);
+            setDrawScaleSel(null);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawEffectiveRoot]);

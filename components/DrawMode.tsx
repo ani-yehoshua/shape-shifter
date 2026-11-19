@@ -742,9 +742,11 @@ export default function DrawMode({
         [anchorMatches, applyAnchorMatch],
     );
 
-    // Re-run anchor search when pivot changes the effective root
+    // Re-run the search when the root changes while Find shape is on (a pivot or
+    // the root picker): the drawn notes stay, their intervals and the matches follow the new root
     React.useEffect(() => {
-        if (!pivotKey || !selected.size) return;
+        if (!selected.size) return;
+        if (!pivotKey && !anchored) return;
         const newSemis = [
             ...new Set(
                 [...selectedAsMap.entries()]
@@ -775,6 +777,7 @@ export default function DrawMode({
         else {
             setPickedChord(null);
             setBrowsedVoicing(null);
+            setScaleSel(null);
         }
     }, [effectiveRoot]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1110,12 +1113,15 @@ export default function DrawMode({
         return "";
     }, [chordLabel, chordIntervalLabel, chordShape, effectiveRoot]);
 
-    // Is what the user drew a chord we know? Judged from the drawn notes
-    // themselves, not the displayed shape (which becomes a scale box while a
-    // scale match is open).
-    const drawnIsKnownChord = React.useMemo(() => {
+    // Is what the user drew a chord? Judged from the drawn notes themselves, not
+    // the displayed shape (which becomes a scale box while a scale match is open).
+    // One note per string is how a chord is played, so that counts too, even if
+    // the library doesn't have the chord yet.
+    const drawnIsChord = React.useMemo(() => {
         if (matchInfo) return true;
         if (!selected.size) return false;
+        const strings = new Set([...selected].map(k => k.split(":")[0]));
+        if (selected.size >= 2 && strings.size === selected.size) return true;
         const rootSemi = noteNameToSemitone(effectiveRoot);
         const drawnSemis = new Set<number>();
         for (const key of selected) {
@@ -1140,7 +1146,7 @@ export default function DrawMode({
     // scale match only the drawn notes are joined, so the chord shows in the
     // middle of whichever scale is being viewed.
     const activeMatch = anchored ? anchorMatches[anchorIndex] : undefined;
-    const showConnectors = activeMatch?.tab === "Chords" || drawnIsKnownChord;
+    const showConnectors = activeMatch?.tab === "Chords" || drawnIsChord;
     const connectorPositions =
         activeMatch?.tab === "Scales" ? selected : undefined;
 
