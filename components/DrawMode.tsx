@@ -1648,8 +1648,9 @@ export default function DrawMode({
                         {chordShape.length > 0 && (
                             <button
                                 onClick={handleAnchor}
+                                title='Find chords that contain the notes you drew'
                                 className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${anchored ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                                Anchor
+                                Find chord
                             </button>
                         )}
 
@@ -2004,8 +2005,9 @@ export default function DrawMode({
                     {chordShape.length > 0 && (
                         <button
                             onClick={handleAnchor}
+                            title='Find chords that contain the notes you drew'
                             className={`px-4 py-1.5 text-sm font-semibold rounded-full border transition-colors ${anchored ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                            Anchor
+                            Find chord
                         </button>
                     )}
 

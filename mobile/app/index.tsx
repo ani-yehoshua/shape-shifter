@@ -3199,7 +3199,7 @@ export default function ChordsScreen() {
                                         drawAnchored &&
                                             styles.anchorButtonTextActive,
                                     ]}>
-                                    Anchor
+                                    Find chord
                                 </Text>
                             </TouchableOpacity>
                         )}
