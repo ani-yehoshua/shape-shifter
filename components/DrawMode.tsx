@@ -629,12 +629,6 @@ export default function DrawMode({
         );
     }, [selected, fretboardMap, effectiveRoot, browsedVoicing]);
 
-    // The lines joining the notes belong to library chords, which draw them in
-    // the Chords tab anyway; freehand dots and scale boxes don't get any.
-    const isLibraryChord =
-        !!browsedVoicing?.length &&
-        !(anchored && anchorMatches[anchorIndex]?.tab === "Scales");
-
     const applyAnchorMatch = React.useCallback(
         (match: DrawMatch, positions: Map<number, number> = selectedAsMap) => {
             // a scale match has no chord behind it, so there is no picked chord or alt shapes
@@ -1076,6 +1070,40 @@ export default function DrawMode({
         return "";
     }, [chordLabel, chordIntervalLabel, chordShape, effectiveRoot]);
 
+    // Is what the user drew a chord we know? Judged from the drawn notes
+    // themselves, not the displayed shape (which becomes a scale box while a
+    // scale match is open).
+    const drawnIsKnownChord = React.useMemo(() => {
+        if (matchInfo) return true;
+        if (!selected.size) return false;
+        const rootSemi = noteNameToSemitone(effectiveRoot);
+        const drawnSemis = new Set<number>();
+        for (const key of selected) {
+            const [s, f] = key.split(":").map(Number);
+            const cell = fretboardMap[s]?.[f];
+            if (cell)
+                drawnSemis.add(
+                    wrap12(noteNameToSemitone(firstEnharmonic(cell)) - rootSemi),
+                );
+        }
+        return CANONICAL_ROOTS.some(candidateRoot => {
+            const shift = rootSemi - noteNameToSemitone(candidateRoot);
+            const semis = [...new Set([...drawnSemis].map(s => wrap12(s + shift)))]
+                .sort((a, b) => a - b)
+                .join(",");
+            return CHORD_QUALITY_MAP.has(semis);
+        });
+    }, [matchInfo, selected, fretboardMap, effectiveRoot]);
+
+    // Lines joining the notes: a chord match is a library chord, so its lines
+    // stay; otherwise they follow whether the drawing is a known chord. Inside a
+    // scale match only the drawn notes are joined, so the chord shows in the
+    // middle of whichever scale is being viewed.
+    const activeMatch = anchored ? anchorMatches[anchorIndex] : undefined;
+    const showConnectors = activeMatch?.tab === "Chords" || drawnIsKnownChord;
+    const connectorPositions =
+        activeMatch?.tab === "Scales" ? selected : undefined;
+
     const cycleBtn =
         "w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors";
 
@@ -1167,7 +1195,8 @@ export default function DrawMode({
                         }
                         rootNote={effectiveRoot}
                         showIntervals={showIntervals}
-                        showConnector={isLibraryChord}
+                        showConnector={showConnectors}
+                        connectorPositions={connectorPositions}
                         interactivePositions={anchored ? selected : undefined}
                         capo={capo}
                         tuningFreqs={tuningFreqs}
@@ -1544,7 +1573,8 @@ export default function DrawMode({
                         }
                         rootNote={effectiveRoot}
                         showIntervals={showIntervals}
-                        showConnector={isLibraryChord}
+                        showConnector={showConnectors}
+                        connectorPositions={connectorPositions}
                         interactivePositions={anchored ? selected : undefined}
                         capo={capo}
                         tuningFreqs={tuningFreqs}

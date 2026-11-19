@@ -1890,11 +1890,35 @@ export default function ChordsScreen() {
         );
     }, [drawSelected, drawFretboardMap, drawEffectiveRoot, drawBrowsedVoicing]);
 
-    // The lines joining the notes belong to library chords, which draw them in
-    // the Chords tab anyway; freehand dots and scale boxes don't get any.
-    const drawIsLibraryChord =
-        !!drawBrowsedVoicing?.length &&
-        !(drawAnchored && drawAnchorMatches[drawAnchorIndex]?.tab === "Scales");
+    // Is what the user drew a chord we know? Judged from the drawn notes
+    // themselves, not the displayed shape (which becomes a scale box while a
+    // scale match is open).
+    const drawnIsKnownChord = useMemo(() => {
+        if (drawMatchInfo) return true;
+        if (!drawSelected.size) return false;
+        const rootSemi = noteNameToSemitone(drawEffectiveRoot);
+        const drawnSemis = new Set<number>();
+        for (const key of drawSelected) {
+            const [s, f] = key.split(":").map(Number);
+            const cell = drawFretboardMap[s]?.[f];
+            if (cell) drawnSemis.add(wrap12(noteNameToSemitone(firstEnharmonic(cell)) - rootSemi));
+        }
+        return CANONICAL_ROOTS.some((candidateRoot) => {
+            const shift = rootSemi - noteNameToSemitone(candidateRoot);
+            const semis = [...new Set([...drawnSemis].map((s) => wrap12(s + shift)))]
+                .sort((a, b) => a - b)
+                .join(",");
+            return CHORD_QUALITY_MAP.has(semis);
+        });
+    }, [drawMatchInfo, drawSelected, drawFretboardMap, drawEffectiveRoot]);
+
+    // Lines joining the notes: a chord match is a library chord, so its lines
+    // stay; otherwise they follow whether the drawing is a known chord. Inside a
+    // scale match only the drawn notes are joined, so the chord shows in the
+    // middle of whichever scale is being viewed.
+    const drawActiveMatch = drawAnchored ? drawAnchorMatches[drawAnchorIndex] : undefined;
+    const drawShowConnectors = drawActiveMatch?.tab === "Chords" || drawnIsKnownChord;
+    const drawConnectorPositions = drawActiveMatch?.tab === "Scales" ? drawSelected : undefined;
 
     const applyDrawAnchorMatch = (
         match: DrawMatch,
@@ -2711,7 +2735,8 @@ export default function ChordsScreen() {
                         }
                         rootNote={drawEffectiveRoot}
                         showIntervals={drawShowIntervals}
-                        showConnector={drawIsLibraryChord}
+                        showConnector={drawShowConnectors}
+                        connectorPositions={drawConnectorPositions}
                         interactivePositions={
                             drawAnchored ? drawSelected : undefined
                         }

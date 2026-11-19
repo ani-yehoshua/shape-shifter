@@ -13,6 +13,8 @@ type Props = {
     onTogglePosition?: (pos: { string: number; fret: number }) => void;
     handedness?: "left" | "right";
     showConnector?: boolean;
+    /** join only the notes at these "string:fret" positions (e.g. the drawn chord inside a scale box) */
+    connectorPositions?: Set<string>;
     chordGroups?: NotePosition[][];
     interactivePositions?: Set<string>;
     playOnClick?: boolean;
@@ -30,6 +32,7 @@ const FretboardVertical = ({
     onTogglePosition,
     handedness = "right",
     showConnector = false,
+    connectorPositions,
     chordGroups,
     interactivePositions,
     playOnClick = false,
@@ -221,7 +224,11 @@ const FretboardVertical = ({
                                 p =>
                                     p.fret != null &&
                                     p.fret >= 0 &&
-                                    p.fret <= numFrets,
+                                    p.fret <= numFrets &&
+                                    (!connectorPositions ||
+                                        connectorPositions.has(
+                                            `${p.string}:${p.fret}`,
+                                        )),
                             )
                             .sort((a, b) => b.string - a.string);
                         if (sorted.length < 2) return null;
