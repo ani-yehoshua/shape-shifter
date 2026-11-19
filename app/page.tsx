@@ -2088,9 +2088,20 @@ export default function Home() {
         return shifted[shifted.length - 1];
     }, [modeRootNote, capo]);
 
+    // CAGED is major or minor. A quality left over from another category, or
+    // from a session or saved chord made before CAGED had one, falls back to major.
+    React.useEffect(() => {
+        if (selectedCategory !== "CAGED") return;
+        const qualities = Object.keys(
+            (allChordShapes as Record<string, ChordLevel>).CAGED?.options ?? {},
+        );
+        if (qualities.length && !qualities.includes(selectedChordQuality))
+            setSelectedChordQuality(qualities[0]);
+    }, [selectedCategory, selectedChordQuality]);
+
     // ── chord label ─────────────────────────────────────────────────────────────
     const chordLabel =
-        selectedCategory === "CAGED"
+        selectedCategory === "CAGED" && selectedChordQuality !== "Min"
             ? capoRootNote
             : `${capoRootNote} ${selectedChordQuality}`;
 
@@ -3004,7 +3015,7 @@ export default function Home() {
 
                                 {/* Submit Feedback — above mode tabs */}
                                 <div className='shrink-0 flex justify-center mb-4'>
-                                    <SubmitFeedback className='text-ink/50' />
+                                    <SubmitFeedback className='text-ink' />
                                 </div>
 
                                 {/* Mode toggle — always visible, never scrolls */}
@@ -4532,7 +4543,7 @@ export default function Home() {
                                 </div>
                             </div>
                             <div className='flex justify-center mt-auto pt-2'>
-                                <SubmitFeedback className='text-ink/40' />
+                                <SubmitFeedback className='text-ink' />
                             </div>
                         </div>
                     </>

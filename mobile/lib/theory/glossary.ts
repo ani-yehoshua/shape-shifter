@@ -74,7 +74,7 @@ export const QUALITY_INFO: Record<string, QualityInfo> = {
 
 export const CATEGORY_BLURB: Record<string, string> = {
     CAGED:
-        'Five movable chord shapes named for the open chords they come from (C, A, G, E, D). Slide each one up the neck with a barre and together they cover the whole fretboard for any major chord.',
+        'Five movable chord shapes named for the open chords they come from (C, A, G, E, D). Slide each one up the neck with a barre and together they cover the whole fretboard for any major or minor chord.',
     Triads: 'Three-note chords played on three strings. A small, clear view of the chord: just the root, 3rd and 5th.',
     Sevenths: 'Four-note chords: a triad plus a 7th. Spreading the notes across four strings is what the voicing names below describe.',
     Shells: 'Just the root, 3rd and 7th. The 5th is left out because the 3rd and 7th are the notes that define what kind of chord it is.',

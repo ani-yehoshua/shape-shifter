@@ -113,10 +113,24 @@ const shape = (formula: any, root: string) => lowestVoicing(root, formula) as an
     check(/not in this shape/.test(flat(c)), 'a shell should say the 5th is not in the shape');
 }
 {
-    const f = cs.CAGED.options['E'];
-    const c = explainChord({ rootNote: 'G', qualityKey: 'Min7', category: 'CAGED', position: 'E', shape: shape(f, 'G'), tuningMidi: MIDI, tuningNotes: NOTES });
+    const f = cs.CAGED.options.Maj.options['E'];
+    const c = explainChord({ rootNote: 'G', qualityKey: 'Maj', category: 'CAGED', position: 'E', shape: shape(f, 'G'), tuningMidi: MIDI, tuningNotes: NOTES });
     show(c);
     check(c.title === 'G Major', `CAGED title should be G Major, got ${c.title}`);
+    // a stale quality (left over from another category) reads as major
+    const stale = explainChord({ rootNote: 'G', qualityKey: 'Min7', category: 'CAGED', position: 'E', shape: shape(f, 'G'), tuningMidi: MIDI, tuningNotes: NOTES });
+    check(stale.title === 'G Major', `a stale quality in CAGED should read as major, got ${stale.title}`);
+}
+{
+    // CAGED minor: the same five forms with the 3rd lowered
+    for (const shapeName of ['C', 'A', 'G', 'E', 'D']) {
+        const f = cs.CAGED.options.Min.options[shapeName];
+        const c = explainChord({ rootNote: 'G', qualityKey: 'Min', category: 'CAGED', position: shapeName, shape: shape(f, 'G'), tuningMidi: MIDI, tuningNotes: NOTES });
+        check(c.title === 'G Minor', `CAGED ${shapeName} minor title should be G Minor, got ${c.title}`);
+        const chord = section(c, 'The chord') as any;
+        check(chord.items.map((i: any) => i.label).join(' ') === 'G Bb D', `Gm notes: ${chord.items.map((i: any) => i.label)}`);
+        check(/3rd lowered/.test(flat(c)), `CAGED ${shapeName} minor should say its 3rd is lowered`);
+    }
 }
 {
     // "All positions" view: no dots to describe

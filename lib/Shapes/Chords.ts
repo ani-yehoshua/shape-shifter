@@ -7,67 +7,141 @@
 
 export const CHORD_SHAPES = {
     CAGED: {
-        levelName: 'Positions',
+        levelName: 'Chord Qualities',
         options: {
-            C: {
-                name: 'C Shape',
-                rootString: 4,
-                pattern: [
-                    { string: 0, fretOffset: -3, semitones: 4, degree: 3 },
-                    { string: 1, fretOffset: -2, semitones: 0, degree: 1 },
-                    { string: 2, fretOffset: -3, semitones: 7, degree: 5 },
-                    { string: 3, fretOffset: -1, semitones: 4, degree: 3 },
-                    { string: 4, fretOffset: 0, semitones: 0, degree: 1 },
-                    // 6th-string not played
-                ],
+            Maj: {
+                levelName: 'Positions',
+                options: {
+                    C: {
+                        name: 'C Shape',
+                        rootString: 4,
+                        pattern: [
+                            { string: 0, fretOffset: -3, semitones: 4, degree: 3 },
+                            { string: 1, fretOffset: -2, semitones: 0, degree: 1 },
+                            { string: 2, fretOffset: -3, semitones: 7, degree: 5 },
+                            { string: 3, fretOffset: -1, semitones: 4, degree: 3 },
+                            { string: 4, fretOffset: 0, semitones: 0, degree: 1 },
+                            // 6th-string not played
+                        ],
+                    },
+                    A: {
+                        name: 'A Shape',
+                        rootString: 4,
+                        pattern: [
+                            { string: 0, fretOffset: 0, semitones: 7, degree: 5 },
+                            { string: 1, fretOffset: 2, semitones: 4, degree: 3 },
+                            { string: 2, fretOffset: 2, semitones: 0, degree: 1 },
+                            { string: 3, fretOffset: 2, semitones: 7, degree: 5 },
+                            { string: 4, fretOffset: 0, semitones: 0, degree: 1 },
+                            // 6th-string not played
+                        ],
+                    },
+                    G: {
+                        name: 'G Shape',
+                        rootString: 5,
+                        pattern: [
+                            { string: 0, fretOffset: 0, semitones: 0, degree: 1 },
+                            { string: 1, fretOffset: -3, semitones: 4, degree: 3 },
+                            { string: 2, fretOffset: -3, semitones: 0, degree: 1 },
+                            { string: 3, fretOffset: -3, semitones: 7, degree: 5 },
+                            { string: 4, fretOffset: -1, semitones: 4, degree: 3 },
+                            { string: 5, fretOffset: 0, semitones: 0, degree: 1 },
+                        ],
+                    },
+                    E: {
+                        name: 'E Shape',
+                        rootString: 5,
+                        pattern: [
+                            { string: 0, fretOffset: 0, semitones: 0, degree: 1 },
+                            { string: 1, fretOffset: 0, semitones: 7, degree: 5 },
+                            { string: 2, fretOffset: 1, semitones: 4, degree: 3 },
+                            { string: 3, fretOffset: 2, semitones: 0, degree: 1 },
+                            { string: 4, fretOffset: 2, semitones: 7, degree: 5 },
+                            { string: 5, fretOffset: 0, semitones: 0, degree: 1 },
+                        ],
+                    },
+                    D: {
+                        name: 'D Shape',
+                        rootString: 3,
+                        pattern: [
+                            { string: 0, fretOffset: 2, semitones: 4, degree: 3 },
+                            { string: 1, fretOffset: 3, semitones: 0, degree: 1 },
+                            { string: 2, fretOffset: 2, semitones: 7, degree: 5 },
+                            { string: 3, fretOffset: 0, semitones: 0, degree: 1 },
+                            // 5th-string not played
+                            // 6th-string not played
+                        ],
+                    },
+                },
             },
-            A: {
-                name: 'A Shape',
-                rootString: 4,
-                pattern: [
-                    { string: 0, fretOffset: 0, semitones: 7, degree: 5 },
-                    { string: 1, fretOffset: 2, semitones: 4, degree: 3 },
-                    { string: 2, fretOffset: 2, semitones: 0, degree: 1 },
-                    { string: 3, fretOffset: 2, semitones: 7, degree: 5 },
-                    { string: 4, fretOffset: 0, semitones: 0, degree: 1 },
-                    // 6th-string not played
-                ],
-            },
-            G: {
-                name: 'G Shape',
-                rootString: 5,
-                pattern: [
-                    { string: 0, fretOffset: 0, semitones: 0, degree: 1 },
-                    { string: 1, fretOffset: -3, semitones: 4, degree: 3 },
-                    { string: 2, fretOffset: -3, semitones: 0, degree: 1 },
-                    { string: 3, fretOffset: -3, semitones: 7, degree: 5 },
-                    { string: 4, fretOffset: -1, semitones: 4, degree: 3 },
-                    { string: 5, fretOffset: 0, semitones: 0, degree: 1 },
-                ],
-            },
-            E: {
-                name: 'E Shape',
-                rootString: 5,
-                pattern: [
-                    { string: 0, fretOffset: 0, semitones: 0, degree: 1 },
-                    { string: 1, fretOffset: 0, semitones: 7, degree: 5 },
-                    { string: 2, fretOffset: 1, semitones: 4, degree: 3 },
-                    { string: 3, fretOffset: 2, semitones: 0, degree: 1 },
-                    { string: 4, fretOffset: 2, semitones: 7, degree: 5 },
-                    { string: 5, fretOffset: 0, semitones: 0, degree: 1 },
-                ],
-            },
-            D: {
-                name: 'D Shape',
-                rootString: 3,
-                pattern: [
-                    { string: 0, fretOffset: 2, semitones: 4, degree: 3 },
-                    { string: 1, fretOffset: 3, semitones: 0, degree: 1 },
-                    { string: 2, fretOffset: 2, semitones: 7, degree: 5 },
-                    { string: 3, fretOffset: 0, semitones: 0, degree: 1 },
-                    // 5th-string not played
-                    // 6th-string not played
-                ],
+            // The same five open-chord forms, in minor: each is the major form with
+            // its 3rd lowered a half step (the C and G forms also drop the notes that
+            // would have to move off the neck: no high string in the C form, and the
+            // G form's 2nd-string 3rd becomes the 5th).
+            Min: {
+                levelName: 'Positions',
+                options: {
+                    C: {
+                        name: 'C Shape',
+                        rootString: 4,
+                        pattern: [
+                            // 1st-string not played
+                            { string: 1, fretOffset: -2, semitones: 0, degree: 1 },
+                            { string: 2, fretOffset: -3, semitones: 7, degree: 5 },
+                            { string: 3, fretOffset: -2, semitones: 3, degree: 3 },
+                            { string: 4, fretOffset: 0, semitones: 0, degree: 1 },
+                            // 6th-string not played
+                        ],
+                    },
+                    A: {
+                        name: 'A Shape',
+                        rootString: 4,
+                        pattern: [
+                            { string: 0, fretOffset: 0, semitones: 7, degree: 5 },
+                            { string: 1, fretOffset: 1, semitones: 3, degree: 3 },
+                            { string: 2, fretOffset: 2, semitones: 0, degree: 1 },
+                            { string: 3, fretOffset: 2, semitones: 7, degree: 5 },
+                            { string: 4, fretOffset: 0, semitones: 0, degree: 1 },
+                            // 6th-string not played
+                        ],
+                    },
+                    G: {
+                        name: 'G Shape',
+                        rootString: 5,
+                        pattern: [
+                            { string: 0, fretOffset: 0, semitones: 0, degree: 1 },
+                            { string: 1, fretOffset: 0, semitones: 7, degree: 5 },
+                            { string: 2, fretOffset: -3, semitones: 0, degree: 1 },
+                            { string: 3, fretOffset: -3, semitones: 7, degree: 5 },
+                            { string: 4, fretOffset: -2, semitones: 3, degree: 3 },
+                            { string: 5, fretOffset: 0, semitones: 0, degree: 1 },
+                        ],
+                    },
+                    E: {
+                        name: 'E Shape',
+                        rootString: 5,
+                        pattern: [
+                            { string: 0, fretOffset: 0, semitones: 0, degree: 1 },
+                            { string: 1, fretOffset: 0, semitones: 7, degree: 5 },
+                            { string: 2, fretOffset: 0, semitones: 3, degree: 3 },
+                            { string: 3, fretOffset: 2, semitones: 0, degree: 1 },
+                            { string: 4, fretOffset: 2, semitones: 7, degree: 5 },
+                            { string: 5, fretOffset: 0, semitones: 0, degree: 1 },
+                        ],
+                    },
+                    D: {
+                        name: 'D Shape',
+                        rootString: 3,
+                        pattern: [
+                            { string: 0, fretOffset: 1, semitones: 3, degree: 3 },
+                            { string: 1, fretOffset: 3, semitones: 0, degree: 1 },
+                            { string: 2, fretOffset: 2, semitones: 7, degree: 5 },
+                            { string: 3, fretOffset: 0, semitones: 0, degree: 1 },
+                            // 5th-string not played
+                            // 6th-string not played
+                        ],
+                    },
+                },
             },
         },
     },

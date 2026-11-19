@@ -1329,8 +1329,19 @@ export default function ChordsScreen() {
         return shifted[shifted.length - 1];
     }, [modeRootNote, capo]);
 
+    // CAGED is major or minor. A quality left over from another category, or
+    // from a session or saved chord made before CAGED had one, falls back to major.
+    useEffect(() => {
+        if (selectedCategory !== "CAGED") return;
+        const qualities = Object.keys(
+            (allChordShapes as Record<string, ChordLevel>).CAGED?.options ?? {},
+        );
+        if (qualities.length && !qualities.includes(selectedChordQuality))
+            setSelectedChordQuality(qualities[0]);
+    }, [selectedCategory, selectedChordQuality]);
+
     const chordLabel =
-        selectedCategory === "CAGED"
+        selectedCategory === "CAGED" && selectedChordQuality !== "Min"
             ? capoRootNote
             : `${capoRootNote} ${selectedChordQuality}`;
 
