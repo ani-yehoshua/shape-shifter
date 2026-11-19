@@ -1216,7 +1216,7 @@ export default function DrawMode({
             });
         if (availableAltsForUI.length > 1)
             groups.push({
-                title: "Shape",
+                title: "Alternate shape",
                 options: availableAltsForUI.map((_, i) => ({
                     label: String(i + 1),
                     selected: i === selectedAltShape,
@@ -1238,7 +1238,7 @@ export default function DrawMode({
                 (finalFormulas as any)?.[selectedPosition]?.name ||
                     selectedPosition,
                 availableAltsForUI.length > 1
-                    ? `Shape ${selectedAltShape + 1}/${availableAltsForUI.length}`
+                    ? `Alternate shape ${selectedAltShape + 1}/${availableAltsForUI.length}`
                     : "",
             ]
                 .filter(Boolean)

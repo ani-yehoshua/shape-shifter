@@ -2420,7 +2420,7 @@ export default function ChordsScreen() {
             });
         if (drawAvailableAltsForUI.length > 1)
             groups.push({
-                title: "Shape",
+                title: "Alternate shape",
                 options: drawAvailableAltsForUI.map((_, i) => ({
                     label: String(i + 1),
                     selected: i === drawSelectedAltShape,
@@ -2441,7 +2441,7 @@ export default function ChordsScreen() {
           : [
                 (drawFinalFormulas as any)?.[drawSelectedPosition]?.name || drawSelectedPosition,
                 drawAvailableAltsForUI.length > 1
-                    ? `Shape ${drawSelectedAltShape + 1}/${drawAvailableAltsForUI.length}`
+                    ? `Alternate shape ${drawSelectedAltShape + 1}/${drawAvailableAltsForUI.length}`
                     : "",
             ]
                 .filter(Boolean)
