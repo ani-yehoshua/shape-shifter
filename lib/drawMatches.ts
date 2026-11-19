@@ -140,6 +140,25 @@ function chordMatches({ drawnSemis, drawnPositions, chordShapes, root, fretboard
 
 // ── scales ────────────────────────────────────────────────────────────────
 
+const NATURAL_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
+
+/**
+ * A mode's name says how its added notes are spelled: "Major (add ♭5)" means the
+ * added note is a ♭5 (G♭ over C), not a ♯4. The scale data only labels notes
+ * against the parent scale's tonic, which makes the same note a ♯4 here, so
+ * read the spelling off the name: semitone -> degree number.
+ */
+function addedNoteDegrees(modeName: string | undefined): Map<number, number> {
+    const out = new Map<number, number>();
+    const adds = modeName?.match(/\(add ([^)]*)\)/)?.[1] ?? '';
+    for (const m of adds.matchAll(/([♭♯♮])(\d)/g)) {
+        const degree = Number(m[2]);
+        const shift = m[1] === '♭' ? -1 : m[1] === '♯' ? 1 : 0;
+        if (degree >= 1 && degree <= 7) out.set((((NATURAL_SEMITONES[degree - 1] + shift) % 12) + 12) % 12, degree);
+    }
+    return out;
+}
+
 function scaleMatches({ drawnKeys, root, tuning }: DrawMatchInput): DrawMatch[] {
     const drawn = [...drawnKeys];
     if (drawn.length < MIN_NOTES_FOR_SCALES) return [];
@@ -171,6 +190,7 @@ function scaleMatches({ drawnKeys, root, tuning }: DrawMatchInput): DrawMatch[] 
                             const have = new Set(position.notes.map((n, i) => `${n.string}:${frets[i]}`));
                             if (!drawn.every(key => have.has(key))) continue;
                             const tonicParentDegree = parentDegrees[tonic.degree];
+                            const addedDegrees = addedNoteDegrees(position.modeName);
                             results.push({
                                 tab: 'Scales',
                                 displayLabel: position.modeName ?? `${entry.name} Pos. ${positionIdx + 1}`,
@@ -187,13 +207,18 @@ function scaleMatches({ drawnKeys, root, tuning }: DrawMatchInput): DrawMatch[] 
                                 finalFormulas: {},
                                 posKey: '',
                                 altIndex: 0,
-                                scaleNotes: position.notes.map((n, i) => ({
-                                    string: n.string,
-                                    fret: frets[i],
-                                    semitones: (n.semitones - tonic.semitones + 12) % 12,
-                                    degree: ((parentDegrees[n.degree] - tonicParentDegree + 7) % 7) + 1,
-                                    isTonic: n.semitones === tonic.semitones,
-                                })),
+                                scaleNotes: position.notes.map((n, i) => {
+                                    const semitones = (n.semitones - tonic.semitones + 12) % 12;
+                                    return {
+                                        string: n.string,
+                                        fret: frets[i],
+                                        semitones,
+                                        degree:
+                                            addedDegrees.get(semitones) ??
+                                            ((parentDegrees[n.degree] - tonicParentDegree + 7) % 7) + 1,
+                                        isTonic: n.semitones === tonic.semitones,
+                                    };
+                                }),
                             });
                             break;
                         }

@@ -249,10 +249,25 @@ function buildBluesStandard(): ScalePosition[] {
 
 function withModeNames(
     positions: ScalePosition[],
-    modeNames?: string[],
+    modeNames?: (string | undefined)[],
 ): ScalePosition[] {
     if (!modeNames) return positions;
     return positions.map((p, i) => ({ ...p, modeName: modeNames[i] }));
+}
+
+// Mode names list one name per mode of the base scale, but the N-notes-per-
+// string patterns make one position per *interval*, added notes included. Leave
+// a gap (no name) at each added note's position so the names after it still
+// line up with their positions. (The Std. patterns have one position per base
+// mode, so they use the list as is.)
+function spreadModeNames(
+    modeNames: string[] | undefined,
+    count: number,
+    addedNotes: number[],
+): (string | undefined)[] | undefined {
+    if (!modeNames || addedNotes.length === 0) return modeNames;
+    let next = 0;
+    return Array.from({ length: count }, (_, i) => (addedNotes.includes(i) ? undefined : modeNames[next++]));
 }
 
 function buildScale(
@@ -264,15 +279,19 @@ function buildScale(
     npsOptions: number[] = [2, 3, 4],
     standardPositions?: ScalePosition[],
     npsOverlaps: Partial<Record<number, number[]>> = {},
+    // indices (into `intervals`) of the notes added to the base scale: the
+    // ones that have no mode of their own
+    addedNotes: number[] = [],
 ): ScaleEntry {
     const generated: Record<string, ScalePosition[][]> = {};
     if (standardPositions) {
         generated['Std.'] = [withModeNames(standardPositions, modeNames)];
     }
+    const npsModeNames = spreadModeNames(modeNames, intervals.length, addedNotes);
     for (const nps of npsOptions) {
         const base = withModeNames(
             generateNpsPositions(intervals, nps),
-            modeNames,
+            npsModeNames,
         );
         const overlaps = npsOverlaps[nps] ?? [];
         generated[`${nps}nps`] = [
@@ -286,7 +305,7 @@ function buildScale(
                         undefined,
                         ov,
                     ),
-                    modeNames,
+                    npsModeNames,
                 ),
             ),
         ];
@@ -502,6 +521,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopMajorFlat6Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [5],
         ),
         'Jazz Dominant (add ♮7)': buildScale(
             'Jazz Dominant (add ♮7)',
@@ -521,6 +541,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopDominantNat7Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [7],
         ),
         'Jazz Minor (add ♭7)': buildScale(
             'Jazz Minor (add ♭7)',
@@ -540,6 +561,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopMinorFlat7Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [6],
         ),
         'Jazz Minor (add ♭6)': buildScale(
             'Jazz Minor (add ♭6)',
@@ -559,6 +581,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopMinorFlat6Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [5],
         ),
         'Jazz Minor (add ♯4)': buildScale(
             'Jazz Minor (add ♯4)',
@@ -578,6 +601,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopMinorSharp4Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [4],
         ),
     },
 
@@ -605,11 +629,12 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopMajorFlat3Flat6Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [2, 6],
         ),
         'Jazz Dominant (add ♭3 ,♮7)': buildScale(
             'Jazz Dominant (add ♭3 ,♮7)',
             [0, 2, 3, 4, 5, 7, 9, 10, 11],
-            ['1', '2', '3', '4', '5', '6', '♭7', '7'],
+            ['1', '2', '♭3', '3', '4', '5', '6', '♭7', '7'],
             [
                 'Jazz Dominant (add ♭3 ,♮7)',
                 'Nat. Minor (add ♮6)',
@@ -625,6 +650,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopDominantFlat3Nat7Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [2, 8],
         ),
     },
 };
