@@ -1972,6 +1972,11 @@ export default function ChordsScreen() {
             setDrawAnchorMatches([]);
             setDrawAnchorIndex(0);
             setDrawPickedChord(null);
+            // back to just what the user drew: drop the matched chord/scale shape
+            // that was filling in the rest of the fretboard
+            setDrawBrowsedVoicing(null);
+            setDrawScaleSel(null);
+            setDrawShapesOpen(false);
             setDrawPivotKey(null);
             setDrawPivotInterval(0);
             setDrawChordPickerOpen(false);

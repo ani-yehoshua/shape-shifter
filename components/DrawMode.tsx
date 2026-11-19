@@ -690,6 +690,11 @@ export default function DrawMode({
             setAnchorMatches([]);
             setAnchorIndex(0);
             setPickedChord(null);
+            // back to just what the user drew: drop the matched chord/scale shape
+            // that was filling in the rest of the fretboard
+            setBrowsedVoicing(null);
+            setScaleSel(null);
+            setShapesOpen(false);
             setPivotKey(null);
             setPivotInterval(0);
             setChordPickerOpen(false);
