@@ -15,6 +15,8 @@ type Props = {
     showConnector?: boolean;
     /** join only the notes at these "string:fret" positions (e.g. the drawn chord inside a scale box) */
     connectorPositions?: Set<string>;
+    /** draw the connector lines in this color (with a dark outline) instead of plain ink */
+    connectorColor?: string;
     chordGroups?: NotePosition[][];
     interactivePositions?: Set<string>;
     playOnClick?: boolean;
@@ -33,6 +35,7 @@ const FretboardVertical = ({
     handedness = "right",
     showConnector = false,
     connectorPositions,
+    connectorColor,
     chordGroups,
     interactivePositions,
     playOnClick = false,
@@ -246,17 +249,36 @@ const FretboardVertical = ({
                             if (len === 0) return null;
                             const ux = dx / len;
                             const uy = dy / len;
+                            const x1 = a.x + ux * a.r;
+                            const y1 = a.y + uy * a.r;
+                            const x2 = b.x - ux * b.r;
+                            const y2 = b.y - uy * b.r;
                             return (
-                                <line
-                                    key={`connector-${gi}-${i}`}
-                                    x1={a.x + ux * a.r}
-                                    y1={a.y + uy * a.r}
-                                    x2={b.x - ux * b.r}
-                                    y2={b.y - uy * b.r}
-                                    stroke='var(--color-ink)'
-                                    strokeWidth={2.5}
-                                    strokeLinecap='round'
-                                />
+                                <g key={`connector-${gi}-${i}`}>
+                                    {connectorColor && (
+                                        <line
+                                            x1={x1}
+                                            y1={y1}
+                                            x2={x2}
+                                            y2={y2}
+                                            stroke='var(--color-ink)'
+                                            strokeWidth={6}
+                                            strokeLinecap='round'
+                                        />
+                                    )}
+                                    <line
+                                        x1={x1}
+                                        y1={y1}
+                                        x2={x2}
+                                        y2={y2}
+                                        stroke={
+                                            connectorColor ??
+                                            "var(--color-ink)"
+                                        }
+                                        strokeWidth={connectorColor ? 3.5 : 2.5}
+                                        strokeLinecap='round'
+                                    />
+                                </g>
                             );
                         });
                     })}

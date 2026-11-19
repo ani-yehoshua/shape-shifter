@@ -2737,6 +2737,7 @@ export default function ChordsScreen() {
                         showIntervals={drawShowIntervals}
                         showConnector={drawShowConnectors}
                         connectorPositions={drawConnectorPositions}
+                        connectorColor={drawConnectorPositions ? SAVED_YELLOW : undefined}
                         interactivePositions={
                             drawAnchored ? drawSelected : undefined
                         }
