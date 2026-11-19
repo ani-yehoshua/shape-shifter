@@ -3,6 +3,8 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { playChord } from "@/lib/guitarAudio";
+import DiagramView from "@/components/DiagramView";
+import { previewChord } from "@/lib/progressionPreview";
 import {
     fetchProgressions,
     saveProgression,
@@ -41,6 +43,31 @@ type Props = {
     pendingChord?: CurrentChord | null;
     onPendingConsumed?: () => void;
 };
+
+// What a saved chord looks like, shown when its row is opened.
+function ChordPreview({ chord }: { chord: ProgressionChord }) {
+    const preview = React.useMemo(() => previewChord(chord), [chord]);
+    return (
+        <div className='basis-full flex items-center gap-4 rounded-xl bg-ink/5 p-3'>
+            <DiagramView spec={preview.diagram} />
+            <div className='min-w-0 flex flex-col gap-2'>
+                <div>
+                    <p className='text-[10px] font-bold uppercase tracking-wider text-ink/50'>
+                        Notes, low to high
+                    </p>
+                    <p className='text-sm font-semibold text-ink'>
+                        {preview.noteNames}
+                    </p>
+                </div>
+                <button
+                    onClick={() => playChord(chord.notes, chord.tuningFreqs)}
+                    className='self-start px-3 py-1 rounded-full border border-ink/40 text-xs font-semibold text-ink hover:border-ink transition-colors'>
+                    Play
+                </button>
+            </div>
+        </div>
+    );
+}
 
 // ── small icons ───────────────────────────────────────────────────────────────
 
@@ -240,6 +267,8 @@ export default function ProgressionPanel({
     const hasRestoredDraft = React.useRef(false);
 
     // inline rename
+    // the chord whose shape is open under its row
+    const [previewId, setPreviewId] = React.useState<string | null>(null);
     const [editingChordId, setEditingChordId] = React.useState<string | null>(
         null,
     );
@@ -528,7 +557,7 @@ export default function ProgressionPanel({
                             {chords.map((chord, i) => (
                                 <li
                                     key={chord.id}
-                                    className={`px-5 py-3 flex items-center gap-3 transition-colors ${playingIndex === i ? "bg-ink/5" : ""}`}>
+                                    className={`px-5 py-3 flex flex-wrap items-center gap-3 transition-colors ${playingIndex === i ? "bg-ink/5" : ""}`}>
                                     {/* Position indicator */}
                                     <span
                                         className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${playingIndex === i ? "bg-ink text-sand-1" : "bg-ink/10 text-ink/50"}`}>
@@ -536,7 +565,17 @@ export default function ProgressionPanel({
                                     </span>
 
                                     {/* Label */}
-                                    <div className='flex-1 min-w-0'>
+                                    <div
+                                        className={`flex-1 min-w-0 ${editingChordId === chord.id ? "" : "cursor-pointer"}`}
+                                        title='Show this chord'
+                                        onClick={() =>
+                                            editingChordId !== chord.id &&
+                                            setPreviewId(prev =>
+                                                prev === chord.id
+                                                    ? null
+                                                    : chord.id,
+                                            )
+                                        }>
                                         {editingChordId === chord.id ? (
                                             <input
                                                 autoFocus
@@ -560,6 +599,11 @@ export default function ProgressionPanel({
                                         ) : (
                                             <p className='text-sm font-semibold text-ink truncate'>
                                                 {chord.label}
+                                                <span className='ml-1.5 text-ink/30'>
+                                                    {previewId === chord.id
+                                                        ? "▴"
+                                                        : "▾"}
+                                                </span>
                                             </p>
                                         )}
                                         <p className='text-[10px] text-ink/40'>
@@ -623,6 +667,10 @@ export default function ProgressionPanel({
                                         className='shrink-0 text-ink/25 hover:text-red-500 transition-colors'>
                                         <TrashIcon />
                                     </button>
+
+                                    {previewId === chord.id && (
+                                        <ChordPreview chord={chord} />
+                                    )}
                                 </li>
                             ))}
                         </ul>

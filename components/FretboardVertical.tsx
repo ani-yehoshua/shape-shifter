@@ -13,6 +13,13 @@ type Props = {
     onTogglePosition?: (pos: { string: number; fret: number }) => void;
     handedness?: "left" | "right";
     showConnector?: boolean;
+    /** join only the notes at these "string:fret" positions (e.g. the drawn chord inside a scale box) */
+    connectorPositions?: Set<string>;
+    /** draw the connector lines in this color (with a dark outline) instead of plain ink */
+    connectorColor?: string;
+    /** fill the non-root notes at these "string:fret" positions with `highlightColor` */
+    highlightPositions?: Set<string>;
+    highlightColor?: string;
     chordGroups?: NotePosition[][];
     interactivePositions?: Set<string>;
     playOnClick?: boolean;
@@ -30,6 +37,10 @@ const FretboardVertical = ({
     onTogglePosition,
     handedness = "right",
     showConnector = false,
+    connectorPositions,
+    connectorColor,
+    highlightPositions,
+    highlightColor,
     chordGroups,
     interactivePositions,
     playOnClick = false,
@@ -221,7 +232,11 @@ const FretboardVertical = ({
                                 p =>
                                     p.fret != null &&
                                     p.fret >= 0 &&
-                                    p.fret <= numFrets,
+                                    p.fret <= numFrets &&
+                                    (!connectorPositions ||
+                                        connectorPositions.has(
+                                            `${p.string}:${p.fret}`,
+                                        )),
                             )
                             .sort((a, b) => b.string - a.string);
                         if (sorted.length < 2) return null;
@@ -239,17 +254,36 @@ const FretboardVertical = ({
                             if (len === 0) return null;
                             const ux = dx / len;
                             const uy = dy / len;
+                            const x1 = a.x + ux * a.r;
+                            const y1 = a.y + uy * a.r;
+                            const x2 = b.x - ux * b.r;
+                            const y2 = b.y - uy * b.r;
                             return (
-                                <line
-                                    key={`connector-${gi}-${i}`}
-                                    x1={a.x + ux * a.r}
-                                    y1={a.y + uy * a.r}
-                                    x2={b.x - ux * b.r}
-                                    y2={b.y - uy * b.r}
-                                    stroke='var(--color-ink)'
-                                    strokeWidth={2.5}
-                                    strokeLinecap='round'
-                                />
+                                <g key={`connector-${gi}-${i}`}>
+                                    {connectorColor && (
+                                        <line
+                                            x1={x1}
+                                            y1={y1}
+                                            x2={x2}
+                                            y2={y2}
+                                            stroke='var(--color-ink)'
+                                            strokeWidth={6}
+                                            strokeLinecap='round'
+                                        />
+                                    )}
+                                    <line
+                                        x1={x1}
+                                        y1={y1}
+                                        x2={x2}
+                                        y2={y2}
+                                        stroke={
+                                            connectorColor ??
+                                            "var(--color-ink)"
+                                        }
+                                        strokeWidth={connectorColor ? 3.5 : 2.5}
+                                        strokeLinecap='round'
+                                    />
+                                </g>
                             );
                         });
                     })}
@@ -266,6 +300,10 @@ const FretboardVertical = ({
                         return null;
                     const isRoot = semitones === 0;
                     const isHollowTonic = isTonic && !isRoot;
+                    const highlighted =
+                        !!highlightColor &&
+                        !isRoot &&
+                        !!highlightPositions?.has(`${string}:${fret}`);
                     const label = showIntervals
                         ? spellInterval(rootNote, semitones!, degree!)
                         : spellNote(rootNote, semitones!, degree!);
@@ -292,7 +330,11 @@ const FretboardVertical = ({
                                     cx={x}
                                     cy={openY}
                                     r={14}
-                                    fill='transparent'
+                                    fill={
+                                        highlighted
+                                            ? highlightColor
+                                            : "transparent"
+                                    }
                                     stroke={isRoot ? "var(--color-root-red)" : "var(--color-ink)"}
                                     strokeWidth='2'
                                 />
@@ -303,7 +345,13 @@ const FretboardVertical = ({
                                     dominantBaseline='central'
                                     fontSize={fontSize}
                                     fontWeight={600}
-                                    fill={isRoot ? "var(--color-root-red)" : "var(--color-ink)"}>
+                                    fill={
+                                        isRoot
+                                            ? "var(--color-root-red)"
+                                            : highlighted
+                                              ? "#1f2d3d"
+                                              : "var(--color-ink)"
+                                    }>
                                     {label}
                                 </text>
                             </g>
@@ -323,12 +371,18 @@ const FretboardVertical = ({
                                 fill={
                                     isRoot
                                         ? "var(--color-root-red)"
-                                        : isHollowTonic
-                                          ? "transparent"
-                                          : "var(--color-ink)"
+                                        : highlighted
+                                          ? highlightColor
+                                          : isHollowTonic
+                                            ? "transparent"
+                                            : "var(--color-ink)"
                                 }
-                                stroke={isHollowTonic ? "var(--color-ink)" : "none"}
-                                strokeWidth={isHollowTonic ? 2 : 0}
+                                stroke={
+                                    isHollowTonic || highlighted
+                                        ? "var(--color-ink)"
+                                        : "none"
+                                }
+                                strokeWidth={isHollowTonic || highlighted ? 2 : 0}
                             />
                             <text
                                 x={x}
@@ -338,11 +392,13 @@ const FretboardVertical = ({
                                 fontSize={fontSize}
                                 fontWeight={600}
                                 fill={
-                                    isRoot || isHollowTonic
-                                        ? isRoot
-                                            ? "var(--color-sand-1)"
-                                            : "var(--color-ink)"
-                                        : "var(--color-sand-1)"
+                                    highlighted
+                                        ? "#1f2d3d"
+                                        : isRoot || isHollowTonic
+                                          ? isRoot
+                                              ? "var(--color-sand-1)"
+                                              : "var(--color-ink)"
+                                          : "var(--color-sand-1)"
                                 }>
                                 {label}
                             </text>

@@ -18,6 +18,23 @@ import {
 } from "@/lib/API";
 import { generateAllVoicingsForShape } from "@/lib/fretboardMap";
 import type { NotePosition } from "@/lib/fretboardMap";
+import {
+    describeScaleSelection,
+    findDrawMatches,
+    scaleBoxForPosition,
+    scaleModeName,
+    scalePatterns,
+    scalePositionCount,
+    scalePositionNumber,
+    scaleSelectionFor,
+    scaleShiftState,
+    scaleVariantCount,
+    shapeForMatch,
+    WHOLE_NECK,
+} from "@/lib/drawMatches";
+import type { DrawMatch, ScaleSelection } from "@/lib/drawMatches";
+import ShapesPanel from "@/components/ShapesPanel";
+import type { ShapeGroup } from "@/components/ShapesPanel";
 import CapoButton from "@/components/CapoButton";
 import { SCALE_SHAPES } from "@/lib/Shapes/Scales";
 import { CHORD_SHAPES } from "@/lib/Shapes/Chords";
@@ -197,107 +214,7 @@ const wrap12 = (n: number) => ((n % 12) + 12) % 12;
 
 // ─── flat chord finder ────────────────────────────────────────────────────────
 
-type FlatChordMatch = {
-    qualityKey: string;
-    displayLabel: string;
-    contextLabel: string;
-    finalFormulas: Record<string, any>;
-    posKey: string;
-};
-
-function findChordsAtPositions(
-    drawnSemis: number[],
-    drawnPositions: Map<number, number>,
-    shapes: Record<string, any>,
-    root: string,
-    fretboardMap: string[][],
-    pitchOnly = false,
-): FlatChordMatch[] {
-    if (!drawnSemis.length) return [];
-    const results: FlatChordMatch[] = [];
-
-    function semisMatch(formula: any): boolean {
-        if (!Array.isArray(formula?.pattern)) return false;
-        const semis = new Set<number>(
-            formula.pattern.map((n: any) => n.semitones as number),
-        );
-        return drawnSemis.every(s => semis.has(s));
-    }
-
-    function voicingCoversPositions(formula: any): boolean {
-        if (pitchOnly) return true;
-        const raw =
-            generateAllVoicingsForShape(root, formula, fretboardMap) || [];
-        const voicings: NotePosition[][] = Array.isArray(raw[0])
-            ? (raw as any)
-            : [raw as any];
-        return voicings.some(v =>
-            [...drawnPositions.entries()].every(([s, f]) =>
-                v.some((n: NotePosition) => n.string === s && n.fret === f),
-            ),
-        );
-    }
-
-    function formulaMatches(formula: any): boolean {
-        if (!semisMatch(formula)) return false;
-        return voicingCoversPositions(formula);
-    }
-
-    function anyFormulaMatches(formula: any): boolean {
-        if (formulaMatches(formula)) return true;
-        if (Array.isArray(formula?.altShapes)) {
-            return formula.altShapes.some((alt: any) => formulaMatches(alt));
-        }
-        return false;
-    }
-
-    function isPosBag(options: Record<string, any>): boolean {
-        const v = Object.values(options)[0] as any;
-        return (
-            !!v && typeof v === "object" && ("pattern" in v || "altShapes" in v)
-        );
-    }
-
-    function walk(
-        node: any,
-        pathSegments: string[],
-        qualityKey: string | null,
-    ) {
-        if (!node || typeof node !== "object") return;
-        if (node.options && isPosBag(node.options)) {
-            if (!qualityKey) return;
-            const matchingPosKey = Object.keys(node.options).find(pk =>
-                anyFormulaMatches(node.options[pk]),
-            );
-            if (matchingPosKey !== undefined) {
-                results.push({
-                    qualityKey,
-                    displayLabel: QUALITY_DISPLAY[qualityKey] ?? qualityKey,
-                    contextLabel: pathSegments.slice(1, -1).join(" · "),
-                    finalFormulas: node.options,
-                    posKey: matchingPosKey,
-                });
-            }
-            return;
-        }
-        if (node.options) {
-            const isQualityLevel = node.levelName === "Chord Qualities";
-            for (const [key, child] of Object.entries(node.options)) {
-                walk(
-                    child,
-                    [...pathSegments, key],
-                    isQualityLevel ? key : qualityKey,
-                );
-            }
-        }
-    }
-
-    for (const [category, node] of Object.entries(shapes)) {
-        walk(node, [category], null);
-    }
-
-    return results;
-}
+// (chord + scale matching for "Find chord" lives in lib/drawMatches.ts, shared with the mobile app)
 
 const CHROMATIC_INTERVALS = [
     "1",
@@ -435,11 +352,12 @@ export default function DrawMode({
         onCapoChange?.(next);
     };
     const [anchored, setAnchored] = React.useState(false);
-    const [anchorMatches, setAnchorMatches] = React.useState<FlatChordMatch[]>(
-        [],
-    );
+    const [anchorMatches, setAnchorMatches] = React.useState<DrawMatch[]>([]);
     const [anchorIndex, setAnchorIndex] = React.useState(0);
     const [chordPickerOpen, setChordPickerOpen] = React.useState(false);
+    // the Shapes panel, and the shape of the scale match being viewed (pattern/variant/box)
+    const [shapesOpen, setShapesOpen] = React.useState(false);
+    const [scaleSel, setScaleSel] = React.useState<ScaleSelection | null>(null);
     const [octaveUp, setOctaveUp] = React.useState(false);
     const [pivotKey, setPivotKey] = React.useState<string | null>(null);
     const [pivotInterval, setPivotInterval] = React.useState(0);
@@ -522,63 +440,23 @@ export default function DrawMode({
                     ),
                 ].sort((a, b) => a - b);
 
-                const matches = findChordsAtPositions(
-                    newSemis,
-                    newMap,
-                    allChordShapes,
-                    effectiveRoot,
+                const matches = findDrawMatches({
+                    drawnSemis: newSemis,
+                    drawnPositions: newMap,
+                    drawnKeys: newSelected,
+                    chordShapes: allChordShapes,
+                    root: effectiveRoot,
                     fretboardMap,
-                );
+                    tuning,
+                });
                 setAnchorMatches(matches);
                 setAnchorIndex(0);
                 if (matches[0]) {
-                    const match = matches[0];
-                    setPickedChord({
-                        finalFormulas: match.finalFormulas,
-                        posKey: match.posKey,
-                        label: match.displayLabel,
+                    // selectedAsMap is stale here, so hand the fresh drawing in
+                    applyAnchorMatch(matches[0], {
+                        positions: newMap,
+                        keys: newSelected,
                     });
-                    setSelectedPosition(match.posKey);
-                    setSelectedAltShape(0);
-                    setOctaveUp(false);
-                    const posData = match.finalFormulas[match.posKey] as any;
-                    const variants = [
-                        posData,
-                        ...(Array.isArray(posData.altShapes)
-                            ? posData.altShapes
-                            : []),
-                    ];
-                    for (const formula of variants) {
-                        const raw =
-                            generateAllVoicingsForShape(
-                                root,
-                                formula,
-                                fretboardMap,
-                            ) || [];
-                        const voicings: NotePosition[][] = Array.isArray(raw[0])
-                            ? (raw as any)
-                            : [raw as any];
-                        const hit = voicings.find(v =>
-                            [...newMap.entries()].every(([s, f]) =>
-                                (v as NotePosition[]).some(
-                                    n => n.string === s && n.fret === f,
-                                ),
-                            ),
-                        );
-                        if (hit) {
-                            setBrowsedVoicing(
-                                (hit as NotePosition[])
-                                    .slice()
-                                    .sort(
-                                        (a, b) =>
-                                            a.string - b.string ||
-                                            (a.fret ?? 0) - (b.fret ?? 0),
-                                    ),
-                            );
-                            return;
-                        }
-                    }
-                    setBrowsedVoicing(null);
                 } else {
                     setPickedChord(null);
                     setBrowsedVoicing(null);
@@ -772,57 +650,41 @@ export default function DrawMode({
         );
     }, [selected, fretboardMap, effectiveRoot, browsedVoicing]);
 
-    const applyAnchorMatch = React.useCallback(
-        (match: FlatChordMatch) => {
-            setPickedChord({
-                finalFormulas: match.finalFormulas,
-                posKey: match.posKey,
-                label: match.displayLabel,
-            });
-            setSelectedPosition(match.posKey);
-            setSelectedAltShape(0);
-            setOctaveUp(false);
+    // what the drawing is, for putting a match's shape on the fretboard
+    const shapeContext = React.useCallback(
+        (drawn?: { positions: Map<number, number>; keys: Iterable<string> }) => ({
+            drawnPositions: drawn?.positions ?? selectedAsMap,
+            drawnKeys: drawn?.keys ?? selected,
+            root: effectiveRoot,
+            fretboardMap,
+            tuning,
+        }),
+        [selectedAsMap, selected, effectiveRoot, fretboardMap, tuning],
+    );
 
-            // Find the voicing covering the drawn positions directly from match formulas
-            // (can't use pickVoicingFor here — finalFormulas memo hasn't updated yet)
-            const posData = match.finalFormulas[match.posKey] as any;
-            const variants = [
-                posData,
-                ...(Array.isArray(posData.altShapes) ? posData.altShapes : []),
-            ];
-            for (const formula of variants) {
-                const raw =
-                    generateAllVoicingsForShape(
-                        effectiveRoot,
-                        formula,
-                        fretboardMap,
-                    ) || [];
-                const voicings: NotePosition[][] = Array.isArray(raw[0])
-                    ? (raw as any)
-                    : [raw as any];
-                const hit = voicings.find(v =>
-                    [...selectedAsMap.entries()].every(([s, f]) =>
-                        (v as NotePosition[]).some(
-                            n => n.string === s && n.fret === f,
-                        ),
-                    ),
-                );
-                if (hit) {
-                    setBrowsedVoicing(
-                        (hit as NotePosition[])
-                            .slice()
-                            .sort(
-                                (a, b) =>
-                                    a.string - b.string ||
-                                    (a.fret ?? 0) - (b.fret ?? 0),
-                            ),
-                    );
-                    return;
-                }
-            }
-            setBrowsedVoicing(null);
+    const applyAnchorMatch = React.useCallback(
+        (
+            match: DrawMatch,
+            drawn?: { positions: Map<number, number>; keys: Iterable<string> },
+        ) => {
+            // a scale match has no chord behind it, so there is no picked chord or alt shapes
+            setPickedChord(
+                match.tab === "Chords"
+                    ? {
+                          finalFormulas: match.finalFormulas,
+                          posKey: match.posKey,
+                          label: match.displayLabel,
+                      }
+                    : null,
+            );
+            setSelectedPosition(match.posKey);
+            setSelectedAltShape(match.altIndex);
+            setScaleSel(match.scaleSelection ?? null);
+            setOctaveUp(false);
+            // can't use pickVoicingFor here — the finalFormulas memo hasn't updated yet
+            setBrowsedVoicing(shapeForMatch(match, shapeContext(drawn)));
         },
-        [effectiveRoot, fretboardMap, selectedAsMap],
+        [shapeContext],
     );
 
     const handleAnchor = React.useCallback(() => {
@@ -831,6 +693,11 @@ export default function DrawMode({
             setAnchorMatches([]);
             setAnchorIndex(0);
             setPickedChord(null);
+            // back to just what the user drew: drop the matched chord/scale shape
+            // that was filling in the rest of the fretboard
+            setBrowsedVoicing(null);
+            setScaleSel(null);
+            setShapesOpen(false);
             setPivotKey(null);
             setPivotInterval(0);
             setChordPickerOpen(false);
@@ -839,13 +706,15 @@ export default function DrawMode({
         const drawnSemis = [
             ...new Set(chordShape.map(n => n.semitones ?? 0)),
         ].sort((a, b) => a - b);
-        const matches = findChordsAtPositions(
+        const matches = findDrawMatches({
             drawnSemis,
-            selectedAsMap,
-            allChordShapes,
-            effectiveRoot,
+            drawnPositions: selectedAsMap,
+            drawnKeys: selected,
+            chordShapes: allChordShapes,
+            root: effectiveRoot,
             fretboardMap,
-        );
+            tuning,
+        });
         setAnchorMatches(matches);
         setAnchorIndex(0);
         setAnchored(true);
@@ -853,9 +722,11 @@ export default function DrawMode({
     }, [
         anchored,
         chordShape,
+        selected,
         selectedAsMap,
         effectiveRoot,
         fretboardMap,
+        tuning,
         applyAnchorMatch,
     ]);
 
@@ -871,9 +742,11 @@ export default function DrawMode({
         [anchorMatches, applyAnchorMatch],
     );
 
-    // Re-run anchor search when pivot changes the effective root
+    // Re-run the search when the root changes while Find shape is on (a pivot or
+    // the root picker): the drawn notes stay, their intervals and the matches follow the new root
     React.useEffect(() => {
-        if (!pivotKey || !selected.size) return;
+        if (!selected.size) return;
+        if (!pivotKey && !anchored) return;
         const newSemis = [
             ...new Set(
                 [...selectedAsMap.entries()]
@@ -888,13 +761,15 @@ export default function DrawMode({
                     .filter(v => v >= 0),
             ),
         ].sort((a, b) => a - b);
-        const matches = findChordsAtPositions(
-            newSemis,
-            selectedAsMap,
-            allChordShapes,
-            effectiveRoot,
+        const matches = findDrawMatches({
+            drawnSemis: newSemis,
+            drawnPositions: selectedAsMap,
+            drawnKeys: selected,
+            chordShapes: allChordShapes,
+            root: effectiveRoot,
             fretboardMap,
-        );
+            tuning,
+        });
         setAnchorMatches(matches);
         setAnchorIndex(0);
         setAnchored(true);
@@ -902,6 +777,7 @@ export default function DrawMode({
         else {
             setPickedChord(null);
             setBrowsedVoicing(null);
+            setScaleSel(null);
         }
     }, [effectiveRoot]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1007,7 +883,7 @@ export default function DrawMode({
                             : null;
                     results.push({
                         scaleName: entry.name,
-                        modeName: entry.positions[d]?.modeName,
+                        modeName: scaleModeName(entry, d),
                         exact: drawnSemis.length === rotated.size,
                         degreeMap,
                     });
@@ -1237,6 +1113,190 @@ export default function DrawMode({
         return "";
     }, [chordLabel, chordIntervalLabel, chordShape, effectiveRoot]);
 
+    // Is what the user drew a chord? Judged from the drawn notes themselves, not
+    // the displayed shape (which becomes a scale box while a scale match is open).
+    // One note per string is how a chord is played, so that counts too, even if
+    // the library doesn't have the chord yet.
+    const drawnIsChord = React.useMemo(() => {
+        if (matchInfo) return true;
+        if (!selected.size) return false;
+        const strings = new Set([...selected].map(k => k.split(":")[0]));
+        if (selected.size >= 2 && strings.size === selected.size) return true;
+        const rootSemi = noteNameToSemitone(effectiveRoot);
+        const drawnSemis = new Set<number>();
+        for (const key of selected) {
+            const [s, f] = key.split(":").map(Number);
+            const cell = fretboardMap[s]?.[f];
+            if (cell)
+                drawnSemis.add(
+                    wrap12(noteNameToSemitone(firstEnharmonic(cell)) - rootSemi),
+                );
+        }
+        return CANONICAL_ROOTS.some(candidateRoot => {
+            const shift = rootSemi - noteNameToSemitone(candidateRoot);
+            const semis = [...new Set([...drawnSemis].map(s => wrap12(s + shift)))]
+                .sort((a, b) => a - b)
+                .join(",");
+            return CHORD_QUALITY_MAP.has(semis);
+        });
+    }, [matchInfo, selected, fretboardMap, effectiveRoot]);
+
+    // Lines joining the notes: a chord match is a library chord, so its lines
+    // stay; otherwise they follow whether the drawing is a known chord. Inside a
+    // scale match only the drawn notes are joined, so the chord shows in the
+    // middle of whichever scale is being viewed.
+    const activeMatch = anchored ? anchorMatches[anchorIndex] : undefined;
+    const showConnectors = activeMatch?.tab === "Chords" || drawnIsChord;
+    const connectorPositions =
+        activeMatch?.tab === "Scales" ? selected : undefined;
+
+    // ── Shapes panel: what can be changed about the match being viewed ──
+    const changeScaleSel = (next: ScaleSelection) => {
+        if (activeMatch?.tab !== "Scales") return;
+        setScaleSel(next);
+        setBrowsedVoicing(shapeForMatch(activeMatch, shapeContext(), next));
+    };
+    const pickInversion = (p: string) => {
+        setSelectedPosition(p);
+        setSelectedAltShape(0);
+        setBrowsedVoicing(pickVoicingFor(p, 0, octaveUp, selectedAsMap));
+    };
+    const pickAlt = (idx: number) => {
+        setSelectedAltShape(idx);
+        setBrowsedVoicing(
+            pickVoicingFor(selectedPosition, idx, octaveUp, selectedAsMap),
+        );
+    };
+
+    const shapeGroups: ShapeGroup[] = (() => {
+        if (!activeMatch) return [];
+        const groups: ShapeGroup[] = [];
+        if (activeMatch.tab === "Scales") {
+            const ref = activeMatch.scale;
+            const sel = scaleSel ?? activeMatch.scaleSelection;
+            if (!ref || !sel) return [];
+            groups.push({
+                title: "Pattern",
+                options: scalePatterns(ref).map(p => ({
+                    label: p,
+                    selected: sel.pattern === p,
+                    onSelect: () =>
+                        changeScaleSel(scaleSelectionFor(ref, shapeContext(), p)),
+                })),
+            });
+            const variants = scaleVariantCount(ref, sel.pattern);
+            if (variants > 1)
+                groups.push({
+                    title: "Variant",
+                    options: Array.from({ length: variants }, (_, v) => ({
+                        label: String(v + 1),
+                        selected: sel.variant === v,
+                        onSelect: () =>
+                            changeScaleSel(
+                                scaleSelectionFor(ref, shapeContext(), sel.pattern, v),
+                            ),
+                    })),
+                });
+            if (sel.pattern !== WHOLE_NECK)
+                groups.push({
+                    title: "Position",
+                    options: Array.from(
+                        {
+                            length: scalePositionCount(
+                                ref,
+                                sel.pattern,
+                                sel.variant,
+                            ),
+                        },
+                        (_, i) => ({
+                            label: String(i + 1),
+                            selected: scalePositionNumber(ref, sel) === i + 1,
+                            onSelect: () =>
+                                changeScaleSel({
+                                    ...sel,
+                                    box: scaleBoxForPosition(
+                                        ref,
+                                        sel.pattern,
+                                        sel.variant,
+                                        i + 1,
+                                    ),
+                                    shift: undefined,
+                                }),
+                        }),
+                    ),
+                });
+            return groups;
+        }
+        const inversions = Object.keys(finalFormulas ?? {});
+        if (inversions.length > 1)
+            groups.push({
+                title: "Inversion",
+                options: inversions.map(p => ({
+                    label: (finalFormulas as any)[p]?.name || p,
+                    selected: p === selectedPosition,
+                    onSelect: () => pickInversion(p),
+                })),
+            });
+        if (availableAltsForUI.length > 1)
+            groups.push({
+                title: "Alternate shape",
+                options: availableAltsForUI.map((_, i) => ({
+                    label: String(i + 1),
+                    selected: i === selectedAltShape,
+                    onSelect: () => pickAlt(i),
+                })),
+            });
+        return groups;
+    })();
+
+    // the live "which shape of it am I looking at" line under the match name
+    const matchDetail = !activeMatch
+        ? ""
+        : activeMatch.tab === "Scales" && activeMatch.scale
+          ? describeScaleSelection(
+                activeMatch.scale,
+                scaleSel ?? (activeMatch.scaleSelection as ScaleSelection),
+            )
+          : [
+                (finalFormulas as any)?.[selectedPosition]?.name ||
+                    selectedPosition,
+                availableAltsForUI.length > 1
+                    ? `Alternate shape ${selectedAltShape + 1}/${availableAltsForUI.length}`
+                    : "",
+            ]
+                .filter(Boolean)
+                .join(" · ");
+
+    // The octave button also moves a matched scale position, when that position fits
+    // an octave up or down on the 24 frets; for chords it keeps its own +12 / -12.
+    const scaleShifts =
+        activeMatch?.tab === "Scales" && activeMatch.scale
+            ? scaleShiftState(
+                  activeMatch.scale,
+                  scaleSel ?? (activeMatch.scaleSelection as ScaleSelection),
+                  shapeContext(),
+              )
+            : null;
+    const otherShift = scaleShifts?.options.find(s => s !== scaleShifts.current);
+    const canOctave = scaleShifts ? otherShift !== undefined : hasOctave;
+    const octaveActive = scaleShifts ? scaleShifts.current > 0 : octaveUp;
+    const octaveLabel = scaleShifts
+        ? (otherShift ?? 0) > scaleShifts.current
+            ? "+12"
+            : "-12"
+        : octaveUp
+          ? "-12"
+          : "+12";
+    const toggleOctave = () => {
+        if (scaleShifts && activeMatch?.tab === "Scales") {
+            if (otherShift === undefined) return;
+            changeScaleSel({
+                ...(scaleSel ?? (activeMatch.scaleSelection as ScaleSelection)),
+                shift: otherShift,
+            });
+        } else setOctaveUp(o => !o);
+    };
+
     const cycleBtn =
         "w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors";
 
@@ -1250,12 +1310,12 @@ export default function DrawMode({
                         className='fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/40'
                         onClick={() => setChordPickerOpen(false)}>
                         <div
-                            className='bg-sand-2 rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:w-80 max-h-72 flex flex-col'
+                            className='bg-sand-2 rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:w-80 max-h-[70dvh] flex flex-col'
                             onClick={e => e.stopPropagation()}>
                             <div className='px-4 py-3 border-b border-ink/10 shrink-0'>
                                 <span className='text-sm font-bold text-ink'>
-                                    {anchorMatches.length} chord
-                                    {anchorMatches.length !== 1 ? "s" : ""}{" "}
+                                    {anchorMatches.length} match
+                                    {anchorMatches.length !== 1 ? "es" : ""}{" "}
                                     found
                                 </span>
                             </div>
@@ -1290,6 +1350,14 @@ export default function DrawMode({
                     document.body,
                 )}
 
+            <ShapesPanel
+                open={shapesOpen && !!activeMatch}
+                onClose={() => setShapesOpen(false)}
+                title={`${effectiveRoot} ${activeMatch?.displayLabel ?? ""}`}
+                subtitle={activeMatch?.contextLabel}
+                groups={shapeGroups}
+            />
+
             {/* ── MOBILE (max-sm) ─────────────────────────────────────── */}
             <div className='sm:hidden flex-1 min-h-0 flex flex-col'>
                 {/* Chord / scale label */}
@@ -1298,23 +1366,6 @@ export default function DrawMode({
                         {autoChordLabel ||
                             (chordShape.length > 0 ? freeformLabel : root)}
                     </span>
-                    {!chordLabel && scaleMatches.length > 0 && (
-                        <p className='text-xs font-semibold text-ink/50 mt-0.5 leading-relaxed'>
-                            {scaleMatches.map((m, i) => (
-                                <React.Fragment
-                                    key={`${m.scaleName}|${m.modeName ?? ""}`}>
-                                    {i > 0 && <span className='mx-1'>·</span>}
-                                    <span
-                                        className={m.exact ? "" : "opacity-60"}>
-                                        {m.modeName ?? m.scaleName}
-                                        {!m.exact &&
-                                            scaleMatches.length > 1 &&
-                                            " *"}
-                                    </span>
-                                </React.Fragment>
-                            ))}
-                        </p>
-                    )}
                 </div>
 
                 {/* Fretboard */}
@@ -1328,7 +1379,15 @@ export default function DrawMode({
                         }
                         rootNote={effectiveRoot}
                         showIntervals={showIntervals}
-                        showConnector={chordShape.length > 0}
+                        showConnector={showConnectors}
+                        connectorPositions={connectorPositions}
+                        connectorColor={
+                            connectorPositions ? "#facc15" : undefined
+                        }
+                        highlightPositions={connectorPositions}
+                        highlightColor={
+                            connectorPositions ? "#facc15" : undefined
+                        }
                         interactivePositions={anchored ? selected : undefined}
                         capo={capo}
                         tuningFreqs={tuningFreqs}
@@ -1383,7 +1442,8 @@ export default function DrawMode({
                                 anchorMatches.length > 0 &&
                                 setChordPickerOpen(true)
                             }
-                            className='flex flex-col items-center min-w-[6rem] text-center'>
+                            title='See all matches'
+                            className='flex flex-col items-center min-w-[6rem] max-w-[14rem] text-center rounded-xl border border-ink/30 bg-sand-2 px-3 py-1 hover:border-ink active:scale-[0.98] transition-all cursor-pointer'>
                             {anchorMatches.length === 0 ? (
                                 <span className='text-xs text-ink/50'>
                                     No matches
@@ -1395,6 +1455,9 @@ export default function DrawMode({
                                             anchorMatches[anchorIndex]
                                                 ?.displayLabel
                                         }
+                                        <span className='ml-1 text-ink/40'>
+                                            ▾
+                                        </span>
                                     </span>
                                     {anchorMatches[anchorIndex]
                                         ?.contextLabel && (
@@ -1403,6 +1466,11 @@ export default function DrawMode({
                                                 anchorMatches[anchorIndex]
                                                     .contextLabel
                                             }
+                                        </span>
+                                    )}
+                                    {matchDetail && (
+                                        <span className='text-[10px] font-semibold text-ink/80 leading-tight'>
+                                            {matchDetail}
                                         </span>
                                     )}
                                 </>
@@ -1422,26 +1490,13 @@ export default function DrawMode({
                             </span>
                         )}
 
-                        {availableAltsForUI.length > 1 && (
-                            <>
-                                <div className='w-px h-4 bg-ink mx-1' />
-                                <button
-                                    onClick={goPrevAlt}
-                                    title='Previous alt shape'
-                                    className={cycleBtn}>
-                                    <ChevronLeft />
-                                </button>
-                                <span className='text-xs font-semibold text-ink w-8 text-center'>
-                                    {selectedAltShape + 1}/
-                                    {availableAltsForUI.length}
-                                </span>
-                                <button
-                                    onClick={goNextAlt}
-                                    title='Next alt shape'
-                                    className={cycleBtn}>
-                                    <ChevronRight />
-                                </button>
-                            </>
+                        {anchorMatches.length > 0 && shapeGroups.length > 0 && (
+                            <button
+                                onClick={() => setShapesOpen(true)}
+                                title='Change the inversion, shape, pattern or variant'
+                                className='ml-1 px-3 py-1.5 rounded-full border border-ink/40 text-xs font-semibold text-ink hover:border-ink transition-colors'>
+                                Shapes
+                            </button>
                         )}
                     </div>
                 )}
@@ -1541,11 +1596,11 @@ export default function DrawMode({
                                 size='sm'
                             />
 
-                            {hasOctave && (
+                            {canOctave && (
                                 <button
-                                    onClick={() => setOctaveUp(o => !o)}
-                                    className={`shrink-0 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
-                                    {octaveUp ? "-12" : "+12"}
+                                    onClick={toggleOctave}
+                                    className={`shrink-0 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${octaveActive ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
+                                    {octaveLabel}
                                 </button>
                             )}
                         </div>
@@ -1648,8 +1703,9 @@ export default function DrawMode({
                         {chordShape.length > 0 && (
                             <button
                                 onClick={handleAnchor}
+                                title='Find the chords and scales that contain the notes you drew'
                                 className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${anchored ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                                Anchor
+                                Find shape
                             </button>
                         )}
 
@@ -1670,23 +1726,6 @@ export default function DrawMode({
                         {autoChordLabel ||
                             (chordShape.length > 0 ? freeformLabel : root)}
                     </span>
-                    {!chordLabel && scaleMatches.length > 0 && (
-                        <p className='text-xs font-semibold text-ink/50 mt-0.5 leading-relaxed'>
-                            {scaleMatches.map((m, i) => (
-                                <React.Fragment
-                                    key={`${m.scaleName}|${m.modeName ?? ""}`}>
-                                    {i > 0 && <span className='mx-1'>·</span>}
-                                    <span
-                                        className={m.exact ? "" : "opacity-60"}>
-                                        {m.modeName ?? m.scaleName}
-                                        {!m.exact &&
-                                            scaleMatches.length > 1 &&
-                                            " *"}
-                                    </span>
-                                </React.Fragment>
-                            ))}
-                        </p>
-                    )}
                 </div>
 
                 {/* Fretboard */}
@@ -1700,7 +1739,15 @@ export default function DrawMode({
                         }
                         rootNote={effectiveRoot}
                         showIntervals={showIntervals}
-                        showConnector={chordShape.length > 0}
+                        showConnector={showConnectors}
+                        connectorPositions={connectorPositions}
+                        connectorColor={
+                            connectorPositions ? "#facc15" : undefined
+                        }
+                        highlightPositions={connectorPositions}
+                        highlightColor={
+                            connectorPositions ? "#facc15" : undefined
+                        }
                         interactivePositions={anchored ? selected : undefined}
                         capo={capo}
                         tuningFreqs={tuningFreqs}
@@ -1776,7 +1823,8 @@ export default function DrawMode({
                                 anchorMatches.length > 0 &&
                                 setChordPickerOpen(true)
                             }
-                            className='flex flex-col items-center min-w-[8rem] text-center'>
+                            title='See all matches'
+                            className='flex flex-col items-center min-w-[8rem] max-w-[28rem] text-center rounded-xl border border-ink/30 bg-sand-2 px-4 py-1.5 hover:border-ink active:scale-[0.99] transition-all cursor-pointer'>
                             {anchorMatches.length === 0 ? (
                                 <span className='text-sm text-ink/50'>
                                     No matches
@@ -1788,6 +1836,9 @@ export default function DrawMode({
                                             anchorMatches[anchorIndex]
                                                 ?.displayLabel
                                         }
+                                        <span className='ml-1 text-ink/40'>
+                                            ▾
+                                        </span>
                                     </span>
                                     {anchorMatches[anchorIndex]
                                         ?.contextLabel && (
@@ -1796,6 +1847,11 @@ export default function DrawMode({
                                                 anchorMatches[anchorIndex]
                                                     .contextLabel
                                             }
+                                        </span>
+                                    )}
+                                    {matchDetail && (
+                                        <span className='text-xs font-semibold text-ink/80'>
+                                            {matchDetail}
                                         </span>
                                     )}
                                 </>
@@ -1814,12 +1870,21 @@ export default function DrawMode({
                                 {anchorIndex + 1}/{anchorMatches.length}
                             </span>
                         )}
+                        {anchorMatches.length > 0 && shapeGroups.length > 0 && (
+                            <button
+                                onClick={() => setShapesOpen(true)}
+                                title='Change the inversion, shape, pattern or variant'
+                                className='ml-1 px-4 py-1.5 rounded-full border border-ink/40 text-sm font-semibold text-ink hover:border-ink transition-colors'>
+                                Shapes
+                            </button>
+                        )}
                     </div>
                 )}
 
-                {/* Position / alt row */}
-                {((!anchored && positions.length > 0) ||
-                    availableAltsForUI.length > 1) && (
+                {/* Position / alt row (while a match is open, the Shapes panel does this) */}
+                {!anchored &&
+                    (positions.length > 0 ||
+                        availableAltsForUI.length > 1) && (
                     <div className='flex items-center justify-center gap-4 px-4 shrink-0'>
                         {!anchored && positions.length > 0 && (
                             <div className='flex flex-col items-center gap-1.5'>
@@ -1859,7 +1924,7 @@ export default function DrawMode({
                         {availableAltsForUI.length > 1 && (
                             <div className='flex flex-col items-center gap-1.5'>
                                 <span className='text-xs font-semibold text-ink/60'>
-                                    {anchored ? "Shape" : "Alternate Positions"}
+                                    Alternate Positions
                                 </span>
                                 <div className='flex items-center gap-2 border border-ink rounded overflow-hidden'>
                                     <button
@@ -1902,11 +1967,11 @@ export default function DrawMode({
                         size='md'
                     />
 
-                    {hasOctave && (
+                    {canOctave && (
                         <button
-                            onClick={() => setOctaveUp(o => !o)}
-                            className={`px-4 py-1.5 rounded-full border text-sm font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
-                            {octaveUp ? "-12" : "+12"}
+                            onClick={toggleOctave}
+                            className={`px-4 py-1.5 rounded-full border text-sm font-semibold transition-colors ${octaveActive ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
+                            {octaveLabel}
                         </button>
                     )}
 
@@ -2004,8 +2069,9 @@ export default function DrawMode({
                     {chordShape.length > 0 && (
                         <button
                             onClick={handleAnchor}
+                            title='Find the chords and scales that contain the notes you drew'
                             className={`px-4 py-1.5 text-sm font-semibold rounded-full border transition-colors ${anchored ? "bg-ink text-sand-1 border-ink" : "text-ink border-ink/40 hover:border-ink"}`}>
-                            Anchor
+                            Find shape
                         </button>
                     )}
 

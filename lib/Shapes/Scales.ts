@@ -247,10 +247,25 @@ function buildBluesStandard(): ScalePosition[] {
 
 function withModeNames(
     positions: ScalePosition[],
-    modeNames?: string[],
+    modeNames?: (string | undefined)[],
 ): ScalePosition[] {
     if (!modeNames) return positions;
     return positions.map((p, i) => ({ ...p, modeName: modeNames[i] }));
+}
+
+// Mode names list one name per mode of the base scale, but the N-notes-per-
+// string patterns make one position per *interval*, added notes included. Leave
+// a gap (no name) at each added note's position so the names after it still
+// line up with their positions. (The Std. patterns have one position per base
+// mode, so they use the list as is.)
+function spreadModeNames(
+    modeNames: string[] | undefined,
+    count: number,
+    addedNotes: number[],
+): (string | undefined)[] | undefined {
+    if (!modeNames || addedNotes.length === 0) return modeNames;
+    let next = 0;
+    return Array.from({ length: count }, (_, i) => (addedNotes.includes(i) ? undefined : modeNames[next++]));
 }
 
 function buildScale(
@@ -262,15 +277,19 @@ function buildScale(
     npsOptions: number[] = [2, 3, 4],
     standardPositions?: ScalePosition[],
     npsOverlaps: Partial<Record<number, number[]>> = {},
+    // indices (into `intervals`) of the notes added to the base scale: the
+    // ones that have no mode of their own
+    addedNotes: number[] = [],
 ): ScaleEntry {
     const generated: Record<string, ScalePosition[][]> = {};
     if (standardPositions) {
         generated['Std.'] = [withModeNames(standardPositions, modeNames)];
     }
+    const npsModeNames = spreadModeNames(modeNames, intervals.length, addedNotes);
     for (const nps of npsOptions) {
         const base = withModeNames(
             generateNpsPositions(intervals, nps),
-            modeNames,
+            npsModeNames,
         );
         const overlaps = npsOverlaps[nps] ?? [];
         generated[`${nps}nps`] = [
@@ -284,7 +303,7 @@ function buildScale(
                         undefined,
                         ov,
                     ),
-                    modeNames,
+                    npsModeNames,
                 ),
             ),
         ];
@@ -500,6 +519,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopMajorFlat6Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [5],
         ),
         'Jazz Dominant (add ♮7)': buildScale(
             'Jazz Dominant (add ♮7)',
@@ -519,6 +539,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopDominantNat7Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [7],
         ),
         'Jazz Minor (add ♭7)': buildScale(
             'Jazz Minor (add ♭7)',
@@ -538,6 +559,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopMinorFlat7Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [6],
         ),
         'Jazz Minor (add ♭6)': buildScale(
             'Jazz Minor (add ♭6)',
@@ -557,6 +579,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopMinorFlat6Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [5],
         ),
         'Jazz Minor (add ♯4)': buildScale(
             'Jazz Minor (add ♯4)',
@@ -576,6 +599,7 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
             [2, 3, 4],
             buildBebopMinorSharp4Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [4],
         ),
     },
 
@@ -584,45 +608,47 @@ export const SCALE_SHAPES: Record<string, ScaleGroup> = {
     // Hand-authored positions are strongly recommended for dense scales since
     // NPS patterns cycle 1.5+ times across 6 strings.
     '9-note': {
-        'Jazz Major (add ♭3 ,♭6)': buildScale(
-            'Jazz Major (add ♭3 ,♭6)',
+        'Jazz Major (add ♭3, ♭6)': buildScale(
+            'Jazz Major (add ♭3, ♭6)',
             [0, 2, 3, 4, 5, 7, 8, 9, 11],
             ['1', '2', '♭3', '3', '4', '5', '♭6', '6', '7'],
             [
-                'Jazz Major (add ♭3 ,♭6)',
-                'Minor (add ♭2 ,♭5)',
+                'Jazz Major (add ♭3, ♭6)',
+                'Minor (add ♭2, ♭5)',
                 // no ♭3 mode
-                'Phrygian (add ♮3 ,♮7)',
-                'Lydian (add ♭3 ,♭7)',
-                'Dominant (add ♭2 ,♭6)',
+                'Phrygian (add ♮3, ♮7)',
+                'Lydian (add ♭3, ♭7)',
+                'Dominant (add ♭2, ♭6)',
                 // no ♭6 mode
-                'Nat. Minor (add ♭5 ,♮7)',
-                'Locrian (add ♮3 ,♮6)',
+                'Nat. Minor (add ♭5, ♮7)',
+                'Locrian (add ♮3, ♮6)',
             ],
             3,
             [2, 3, 4],
             buildBebopMajorFlat3Flat6Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [2, 6],
         ),
-        'Jazz Dominant (add ♭3 ,♮7)': buildScale(
-            'Jazz Dominant (add ♭3 ,♮7)',
+        'Jazz Dominant (add ♭3, ♮7)': buildScale(
+            'Jazz Dominant (add ♭3, ♮7)',
             [0, 2, 3, 4, 5, 7, 9, 10, 11],
-            ['1', '2', '3', '4', '5', '6', '♭7', '7'],
+            ['1', '2', '♭3', '3', '4', '5', '6', '♭7', '7'],
             [
-                'Jazz Dominant (add ♭3 ,♮7)',
-                'Nat. Minor (add ♮6)',
+                'Jazz Dominant (add ♭3, ♮7)',
+                'Nat. Minor (add ♭2, ♮6)',
                 // no ♭3 mode
-                'Locrian (add ♮5)',
-                'Major (add ♭5)',
-                'Minor (add ♮3)',
-                'Phrygian (add ♮2)',
-                'Lydian (add ♭2)',
+                'Locrian (add ♮5, ♮7)',
+                'Major (add ♭5, ♭7)',
+                'Minor (add ♮3, ♭6)',
+                'Phrygian (add ♮2, ♭5)',
+                'Lydian (add ♭2, ♮4)',
                 // no ♮7 mode
             ],
             3,
             [2, 3, 4],
             buildBebopDominantFlat3Nat7Std(),
             { 3: [1, -1], 4: [1, 2] },
+            [2, 8],
         ),
     },
 };
