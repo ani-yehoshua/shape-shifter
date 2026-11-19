@@ -27,6 +27,7 @@ import {
     scalePositionCount,
     scalePositionNumber,
     scaleSelectionFor,
+    scaleShiftState,
     scaleVariantCount,
     shapeForMatch,
     WHOLE_NECK,
@@ -1213,6 +1214,7 @@ export default function DrawMode({
                                         sel.variant,
                                         i + 1,
                                     ),
+                                    shift: undefined,
                                 }),
                         }),
                     ),
@@ -1258,6 +1260,36 @@ export default function DrawMode({
             ]
                 .filter(Boolean)
                 .join(" · ");
+
+    // The octave button also moves a matched scale position, when that position fits
+    // an octave up or down on the 24 frets; for chords it keeps its own +12 / -12.
+    const scaleShifts =
+        activeMatch?.tab === "Scales" && activeMatch.scale
+            ? scaleShiftState(
+                  activeMatch.scale,
+                  scaleSel ?? (activeMatch.scaleSelection as ScaleSelection),
+                  shapeContext(),
+              )
+            : null;
+    const otherShift = scaleShifts?.options.find(s => s !== scaleShifts.current);
+    const canOctave = scaleShifts ? otherShift !== undefined : hasOctave;
+    const octaveActive = scaleShifts ? scaleShifts.current > 0 : octaveUp;
+    const octaveLabel = scaleShifts
+        ? (otherShift ?? 0) > scaleShifts.current
+            ? "+12"
+            : "-12"
+        : octaveUp
+          ? "-12"
+          : "+12";
+    const toggleOctave = () => {
+        if (scaleShifts && activeMatch?.tab === "Scales") {
+            if (otherShift === undefined) return;
+            changeScaleSel({
+                ...(scaleSel ?? (activeMatch.scaleSelection as ScaleSelection)),
+                shift: otherShift,
+            });
+        } else setOctaveUp(o => !o);
+    };
 
     const cycleBtn =
         "w-7 h-7 flex items-center justify-center rounded-full border border-ink/40 hover:border-ink transition-colors";
@@ -1558,11 +1590,11 @@ export default function DrawMode({
                                 size='sm'
                             />
 
-                            {hasOctave && (
+                            {canOctave && (
                                 <button
-                                    onClick={() => setOctaveUp(o => !o)}
-                                    className={`shrink-0 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
-                                    {octaveUp ? "-12" : "+12"}
+                                    onClick={toggleOctave}
+                                    className={`shrink-0 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${octaveActive ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
+                                    {octaveLabel}
                                 </button>
                             )}
                         </div>
@@ -1929,11 +1961,11 @@ export default function DrawMode({
                         size='md'
                     />
 
-                    {hasOctave && (
+                    {canOctave && (
                         <button
-                            onClick={() => setOctaveUp(o => !o)}
-                            className={`px-4 py-1.5 rounded-full border text-sm font-semibold transition-colors ${octaveUp ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
-                            {octaveUp ? "-12" : "+12"}
+                            onClick={toggleOctave}
+                            className={`px-4 py-1.5 rounded-full border text-sm font-semibold transition-colors ${octaveActive ? "bg-ink text-sand-1 border-ink" : "border-ink/40 text-ink hover:border-ink"}`}>
+                            {octaveLabel}
                         </button>
                     )}
 

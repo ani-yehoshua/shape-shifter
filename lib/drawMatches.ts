@@ -37,8 +37,12 @@ export const WHOLE_NECK = 'Whole neck';
 
 /** Which mode of which scale: `mode` indexes the scale's intervals. */
 export type ScaleRef = { group: string; scale: string; mode: number };
-/** One shape of a scale: pattern ("3nps", "Std."...), variant of it, box (position) of that variant. */
-export type ScaleSelection = { pattern: string; variant: number; box: number };
+/**
+ * One shape of a scale: pattern ("3nps", "Std."...), variant of it, box (position) of that variant.
+ * `shift` is an octave (-12 or +12 frets) the user picked for it; left out, the box sits
+ * wherever it holds the drawing.
+ */
+export type ScaleSelection = { pattern: string; variant: number; box: number; shift?: number };
 
 export type DrawMatch = {
     tab: 'Chords' | 'Scales';
@@ -260,6 +264,38 @@ function holdingShift(notes: { string: number }[], base: number[], drawn: string
     });
 }
 
+/** The octave shifts (0, -12, +12) at which a box still sits on the 24 frets. */
+const shiftOptions = (base: number[]) =>
+    [0, -12, 12].filter(s => Math.min(...base) + s >= 0 && Math.max(...base) + s <= 24);
+
+/**
+ * The shift a box is shown at: the one the user picked if the box fits there,
+ * else the one that holds the drawing, else the copy nearest to the drawn notes.
+ */
+function chooseShift(notes: { string: number }[], base: number[], drawn: string[], requested?: number): number {
+    const options = shiftOptions(base);
+    if (requested !== undefined && options.includes(requested)) return requested;
+    const holding = holdingShift(notes, base, drawn);
+    if (holding !== undefined) return holding;
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / (xs.length || 1);
+    const target = drawn.length ? mean(drawn.map(k => Number(k.split(':')[1]))) : mean(base);
+    return [...options].sort((a, b) => Math.abs(mean(base) + a - target) - Math.abs(mean(base) + b - target))[0] ?? 0;
+}
+
+/**
+ * Whether a scale shape can move an octave: the shifts it fits at, and the one it
+ * is at now. A box sits on at most two of them (a shape that fits both 12 frets
+ * down and 12 up would have to be only on the 12th fret), so the octave button
+ * just flips to the other one. Whole-neck has nothing to move.
+ */
+export function scaleShiftState(ref: ScaleRef, sel: ScaleSelection, ctx: ShapeContext): { options: number[]; current: number } {
+    const entry = scaleEntryFor(ref);
+    const box = sel.pattern === WHOLE_NECK ? undefined : entry?.altPatterns[sel.pattern]?.[sel.variant]?.[sel.box];
+    if (!entry || !box?.notes.length) return { options: [0], current: 0 };
+    const base = boxFrets(entry, ref.mode, box.notes, ctx);
+    return { options: shiftOptions(base), current: chooseShift(box.notes, base, [...ctx.drawnKeys], sel.shift) };
+}
+
 /** The box's frets for a mode: the parent scale is the root minus the mode's interval. */
 function boxFrets(entry: ScaleEntry, d: number, notes: { string: number; fretOffset: number }[], ctx: ShapeContext) {
     const rootIdx = NOTES.findIndex(pair => pair.includes(ctx.root));
@@ -339,20 +375,12 @@ export function scaleShape(ref: ScaleRef, sel: ScaleSelection, ctx: ShapeContext
     const box = entry.altPatterns[sel.pattern]?.[sel.variant]?.[sel.box];
     if (!box?.notes.length) return [];
     const base = boxFrets(entry, d, box.notes, ctx);
-    const drawn = [...ctx.drawnKeys];
-    let shift = holdingShift(box.notes, base, drawn);
-    if (shift === undefined) {
-        // this box doesn't hold the drawing: show the copy of it nearest to the drawn notes
-        const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / (xs.length || 1);
-        const fits = [0, -12, 12].filter(s => Math.min(...base) + s >= 0 && Math.max(...base) + s <= 24);
-        const target = drawn.length ? mean(drawn.map(k => Number(k.split(':')[1]))) : mean(base);
-        shift = fits.sort((a, b) => Math.abs(mean(base) + a - target) - Math.abs(mean(base) + b - target))[0] ?? 0;
-    }
+    const shift = chooseShift(box.notes, base, [...ctx.drawnKeys], sel.shift);
     return box.notes.map((n, i) => {
         const semitones = (n.semitones - tonicSemi + 12) % 12;
         return {
             string: n.string,
-            fret: base[i] + (shift as number),
+            fret: base[i] + shift,
             semitones,
             degree: degreeFor(n.degree, semitones),
             isTonic: n.semitones === tonicSemi,

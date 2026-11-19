@@ -67,6 +67,7 @@ import {
     scalePositionCount,
     scalePositionNumber,
     scaleSelectionFor,
+    scaleShiftState,
     scaleVariantCount,
     shapeForMatch,
     WHOLE_NECK,
@@ -2409,6 +2410,7 @@ export default function ChordsScreen() {
                             changeDrawScaleSel({
                                 ...sel,
                                 box: scaleBoxForPosition(ref, sel.pattern, sel.variant, i + 1),
+                                shift: undefined,
                             }),
                     })),
                 });
@@ -2452,6 +2454,36 @@ export default function ChordsScreen() {
             ]
                 .filter(Boolean)
                 .join(" · ");
+
+    // The octave button also moves a matched scale position, when that position fits
+    // an octave up or down on the 24 frets; for chords it keeps its own +12 / -12.
+    const drawScaleShifts =
+        drawActiveMatch?.tab === "Scales" && drawActiveMatch.scale
+            ? scaleShiftState(
+                  drawActiveMatch.scale,
+                  drawScaleSel ?? (drawActiveMatch.scaleSelection as ScaleSelection),
+                  drawShapeContext(),
+              )
+            : null;
+    const drawOtherShift = drawScaleShifts?.options.find(s => s !== drawScaleShifts.current);
+    const drawCanOctave = drawScaleShifts ? drawOtherShift !== undefined : drawHasOctave;
+    const drawOctaveActive = drawScaleShifts ? drawScaleShifts.current > 0 : drawOctaveUp;
+    const drawOctaveLabel = drawScaleShifts
+        ? (drawOtherShift ?? 0) > drawScaleShifts.current
+            ? "+12"
+            : "-12"
+        : drawOctaveUp
+          ? "-12"
+          : "+12";
+    const toggleDrawOctave = () => {
+        if (drawScaleShifts && drawActiveMatch?.tab === "Scales") {
+            if (drawOtherShift === undefined) return;
+            changeDrawScaleSel({
+                ...(drawScaleSel ?? (drawActiveMatch.scaleSelection as ScaleSelection)),
+                shift: drawOtherShift,
+            });
+        } else setDrawOctaveUp(o => !o);
+    };
 
     const getDrawQuality = (info: any) =>
         Array.isArray(info?.trail) && info.trail.length
@@ -3105,20 +3137,20 @@ export default function ChordsScreen() {
                             setCapo={setCapo}
                         />
 
-                        {drawHasOctave && (
+                        {drawCanOctave && (
                             <TouchableOpacity
-                                onPress={() => setDrawOctaveUp(o => !o)}
+                                onPress={toggleDrawOctave}
                                 style={[
                                     styles.octaveButton,
-                                    drawOctaveUp && styles.octaveButtonActive,
+                                    drawOctaveActive && styles.octaveButtonActive,
                                 ]}>
                                 <Text
                                     style={[
                                         styles.octaveButtonText,
-                                        drawOctaveUp &&
+                                        drawOctaveActive &&
                                             styles.octaveButtonTextActive,
                                     ]}>
-                                    {drawOctaveUp ? "-12" : "+12"}
+                                    {drawOctaveLabel}
                                 </Text>
                             </TouchableOpacity>
                         )}
