@@ -25,7 +25,7 @@
 //   panel the way a full-page redirect would, so there's nothing to lose in
 //   the first place -- the auth-gate modal is just an overlay on top of the
 //   same screen.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Modal,
@@ -41,6 +41,8 @@ import Svg, { Path, Polygon, Rect } from 'react-native-svg';
 import { useAuth } from '../lib/auth-context';
 import { playChord } from '../lib/guitarAudio';
 import { useSubscription } from '../lib/hooks/useSubscription';
+import { previewChord } from '../lib/progressionPreview';
+import DiagramView from './DiagramView';
 import {
     deleteProgression,
     fetchProgressions,
@@ -144,6 +146,25 @@ function StarIcon() {
     );
 }
 
+// What a saved chord looks like, shown when its row is opened.
+function ChordPreview({ chord, styles }: { chord: ProgressionChord; styles: ReturnType<typeof makeStyles> }) {
+    const preview = useMemo(() => previewChord(chord), [chord]);
+    return (
+        <View style={styles.preview}>
+            <View style={styles.previewDiagram}>
+                <DiagramView spec={preview.diagram} />
+            </View>
+            <View style={styles.previewInfo}>
+                <Text style={styles.previewHeading}>Notes, low to high</Text>
+                <Text style={styles.previewNotes}>{preview.noteNames}</Text>
+                <TouchableOpacity onPress={() => playChord(chord.notes, chord.tuningFreqs)} style={styles.previewPlay}>
+                    <Text style={styles.previewPlayText}>Play</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+}
+
 export default function ProgressionPanel({ visible, onClose, currentChord, onAuthRequired, onProRequired, pendingChord, onPendingConsumed }: Props) {
     const { session } = useAuth();
     const { colors } = useTheme();
@@ -160,6 +181,8 @@ export default function ProgressionPanel({ visible, onClose, currentChord, onAut
     const [chords, setChords] = useState<ProgressionChord[]>([]);
     const [dirty, setDirty] = useState(false);
 
+    // the chord whose shape is open under its row
+    const [previewId, setPreviewId] = useState<string | null>(null);
     const [editingChordId, setEditingChordId] = useState<string | null>(null);
     const [editingChordLabel, setEditingChordLabel] = useState('');
 
@@ -386,7 +409,12 @@ export default function ProgressionPanel({ visible, onClose, currentChord, onAut
                                         </Text>
                                     </View>
 
-                                    <View style={styles.chordInfo}>
+                                    <TouchableOpacity
+                                        style={styles.chordInfo}
+                                        activeOpacity={0.6}
+                                        disabled={editingChordId === chord.id}
+                                        onPress={() => setPreviewId(prev => (prev === chord.id ? null : chord.id))}
+                                    >
                                         {editingChordId === chord.id ? (
                                             <TextInput
                                                 autoFocus
@@ -399,13 +427,14 @@ export default function ProgressionPanel({ visible, onClose, currentChord, onAut
                                         ) : (
                                             <Text style={styles.chordLabel} numberOfLines={1}>
                                                 {chord.label}
+                                                <Text style={styles.chordCaret}>{previewId === chord.id ? '  ▴' : '  ▾'}</Text>
                                             </Text>
                                         )}
                                         <Text style={styles.chordMeta}>
                                             {chord.tuningName}
                                             {chord.capo > 0 ? ` · Capo ${chord.capo}` : ''}
                                         </Text>
-                                    </View>
+                                    </TouchableOpacity>
 
                                     <View style={styles.reorderCol}>
                                         <TouchableOpacity onPress={() => moveChord(i, -1)} disabled={i === 0}>
@@ -434,6 +463,8 @@ export default function ProgressionPanel({ visible, onClose, currentChord, onAut
                                     <TouchableOpacity onPress={() => removeChord(chord.id)}>
                                         <TrashIcon />
                                     </TouchableOpacity>
+
+                                    {previewId === chord.id && <ChordPreview chord={chord} styles={styles} />}
                                 </View>
                             ))
                         )}
@@ -607,6 +638,7 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     },
     chordRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         alignItems: 'center',
         gap: spacing.sm,
         paddingHorizontal: spacing.md + 4,
@@ -659,6 +691,53 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     chordMeta: {
         fontSize: 10,
         color: `${colors.ink}66`,
+    },
+    chordCaret: {
+        color: `${colors.ink}4D`,
+    },
+    preview: {
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        padding: spacing.sm + 4,
+        borderRadius: radius.xl,
+        backgroundColor: `${colors.ink}0D`,
+    },
+    previewDiagram: {
+        flexShrink: 0,
+        width: 150,
+    },
+    previewInfo: {
+        flex: 1,
+        minWidth: 0,
+        gap: spacing.xs,
+    },
+    previewHeading: {
+        fontFamily: fonts.sans.bold,
+        fontSize: 10,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+        color: `${colors.ink}80`,
+    },
+    previewNotes: {
+        fontFamily: fonts.sans.semiBold,
+        fontSize: 14,
+        color: colors.ink,
+    },
+    previewPlay: {
+        alignSelf: 'flex-start',
+        marginTop: spacing.xs,
+        paddingHorizontal: spacing.sm + 4,
+        paddingVertical: spacing.xs + 1,
+        borderRadius: radius.pill,
+        borderWidth: 1,
+        borderColor: `${colors.ink}66`,
+    },
+    previewPlayText: {
+        fontFamily: fonts.sans.semiBold,
+        fontSize: 12,
+        color: colors.ink,
     },
     reorderCol: {
         alignItems: 'center',

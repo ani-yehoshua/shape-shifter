@@ -39,6 +39,7 @@ const SHARED = [
     'scaleAlgorithms.ts',
     'tunings.ts',
     'drawMatches.ts',
+    'progressionPreview.ts',
     'Shapes/Chords.ts',
     'Shapes/Scales.ts',
     // the Scale Chords layout table and the engine it needs (the preview

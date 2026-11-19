@@ -132,6 +132,14 @@ function fretboardDiagram(
     return { width, height, prims };
 }
 
+/** A plain shape on the mini fretboard (low string on the left), e.g. a chord saved in a progression. */
+export function shapeDiagram(dots: { string: number; fret: number; label: string }[], stringCount: number): DiagramSpec {
+    return fretboardDiagram(
+        dots.map(d => ({ column: stringCount - 1 - d.string, fret: d.fret, label: d.label, moved: false })),
+        stringCount,
+    );
+}
+
 // ── Derivation ────────────────────────────────────────────────────────────
 
 /** Gaps between consecutive pitches, so two voicings can be compared regardless of octave. */
