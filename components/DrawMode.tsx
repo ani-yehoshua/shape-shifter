@@ -21,9 +21,11 @@ import type { NotePosition } from "@/lib/fretboardMap";
 import {
     describeScaleSelection,
     findDrawMatches,
-    scaleBoxCount,
+    scaleBoxForPosition,
     scaleModeName,
     scalePatterns,
+    scalePositionCount,
+    scalePositionNumber,
     scaleSelectionFor,
     scaleVariantCount,
     shapeForMatch,
@@ -1190,15 +1192,28 @@ export default function DrawMode({
                 });
             if (sel.pattern !== WHOLE_NECK)
                 groups.push({
-                    title: "Box",
+                    title: "Position",
                     options: Array.from(
                         {
-                            length: scaleBoxCount(ref, sel.pattern, sel.variant),
+                            length: scalePositionCount(
+                                ref,
+                                sel.pattern,
+                                sel.variant,
+                            ),
                         },
-                        (_, b) => ({
-                            label: String(b + 1),
-                            selected: sel.box === b,
-                            onSelect: () => changeScaleSel({ ...sel, box: b }),
+                        (_, i) => ({
+                            label: String(i + 1),
+                            selected: scalePositionNumber(ref, sel) === i + 1,
+                            onSelect: () =>
+                                changeScaleSel({
+                                    ...sel,
+                                    box: scaleBoxForPosition(
+                                        ref,
+                                        sel.pattern,
+                                        sel.variant,
+                                        i + 1,
+                                    ),
+                                }),
                         }),
                     ),
                 });

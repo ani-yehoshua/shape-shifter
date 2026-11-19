@@ -14,8 +14,8 @@
  */
 import { SCALE_SHAPES } from '../lib/Shapes/Scales.js';
 import { CHORD_SHAPES } from '../lib/Shapes/Chords.js';
-import { generateFretboardMap } from '../lib/fretboardMap.js';
-import { findDrawMatches, shapeForMatch, summarizeDrawn } from '../lib/drawMatches.js';
+import { generateAllVoicingsForShape, generateFretboardMap } from '../lib/fretboardMap.js';
+import { describeScaleSelection, findDrawMatches, shapeForMatch, summarizeDrawn } from '../lib/drawMatches.js';
 import { spellNote } from '../lib/MusicTheory.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -80,6 +80,27 @@ console.log(`scales checked: ${scales}`);
         for (const n of shape ?? []) spelled.set(n.semitones ?? 0, spellNote('C', n.semitones ?? 0, n.degree ?? 1));
         const text = [...spelled.entries()].sort((a, b) => a[0] - b[0]).map(x => x[1]).join(' ');
         check(text === 'C D E F Gb G A Bb B', `spelled "${text}", expected "C D E F Gb G A Bb B"`);
+    }
+}
+
+// position numbers count from the box that starts on the drawn root: C Maj7#5 (Drop 2, high strings,
+// root position) matched to Lydian #2 #5 of Harmonic Major lies in the box starting on C = Position 1
+{
+    const TUNING = ['E', 'B', 'G', 'D', 'A', 'E'];
+    const map = generateFretboardMap(TUNING, 24);
+    const cs: any = CHORD_SHAPES;
+    const formula = cs.Sevenths.options['Drop 2'].options['High String Set'].options['Maj7#5'].options['Root'];
+    const voicings = generateAllVoicingsForShape('C', formula, map) as any[];
+    const lowest = voicings.sort((a, b) => Math.min(...a.map((n: any) => n.fret)) - Math.min(...b.map((n: any) => n.fret)))[0];
+    const keys = lowest.map((n: any) => `${n.string}:${n.fret}`);
+    const { positions, semis } = summarizeDrawn(keys, map, 'C');
+    const chordShapes: any = { CAGED: cs.CAGED, Triads: cs.Triads, Sevenths: cs.Sevenths, Shells: cs.Shells };
+    const matches = findDrawMatches({ drawnSemis: semis, drawnPositions: positions, drawnKeys: keys, chordShapes, root: 'C', fretboardMap: map, tuning: TUNING });
+    const m = matches.find(x => x.displayLabel === 'Lydian ♯2 ♯5' && x.contextLabel === 'Scales · 7-note · Harmonic Major');
+    check(!!m && !!m.scale && !!m.scaleSelection, 'C Maj7#5 should match Lydian #2 #5 of Harmonic Major');
+    if (m?.scale && m.scaleSelection) {
+        const text = describeScaleSelection(m.scale, m.scaleSelection);
+        check(text === '3nps · Variant 1/3 · Position 1/7', `position label "${text}", expected "3nps · Variant 1/3 · Position 1/7"`);
     }
 }
 

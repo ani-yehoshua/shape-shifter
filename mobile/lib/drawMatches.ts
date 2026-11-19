@@ -196,17 +196,48 @@ export function scaleVariantCount(ref: ScaleRef, pattern: string): number {
     return scaleEntryFor(ref)?.altPatterns[pattern]?.length ?? 1;
 }
 
-export function scaleBoxCount(ref: ScaleRef, pattern: string, variant: number): number {
+/** How many positions (hand-position boxes) a pattern's variant splits the scale into. */
+export function scalePositionCount(ref: ScaleRef, pattern: string, variant: number): number {
     if (pattern === WHOLE_NECK) return 1;
     return scaleEntryFor(ref)?.altPatterns[pattern]?.[variant]?.length ?? 1;
 }
 
-/** "3nps · Variant 1/3 · Box 2/7", or "Whole neck". */
+/** The index of the box that starts on the mode's own tonic (the drawn root); 0 if the pattern has none. */
+function tonicBox(ref: ScaleRef, pattern: string, variant: number): number {
+    const entry = scaleEntryFor(ref);
+    const tonic = entry?.intervals[ref.mode];
+    const boxes = entry?.altPatterns[pattern]?.[variant];
+    const i = boxes?.findIndex(box => box.notes[0]?.semitones === tonic) ?? -1;
+    return i < 0 ? 0 : i;
+}
+
+/**
+ * Which position (1-based) a shape is, counted from the box that starts on the
+ * drawn root: Position 1 is the root position, Position 2 the next one up the
+ * scale, and so on. (`sel.box` itself counts from the start of the parent scale.)
+ */
+export function scalePositionNumber(ref: ScaleRef, sel: ScaleSelection): number {
+    if (sel.pattern === WHOLE_NECK) return 1;
+    const n = scalePositionCount(ref, sel.pattern, sel.variant);
+    return ((sel.box - tonicBox(ref, sel.pattern, sel.variant) + n) % n) + 1;
+}
+
+/** The inverse: the box index for "Position `position`" of a pattern's variant. */
+export function scaleBoxForPosition(ref: ScaleRef, pattern: string, variant: number, position: number): number {
+    const n = scalePositionCount(ref, pattern, variant);
+    return (tonicBox(ref, pattern, variant) + position - 1) % n;
+}
+
+/** "3nps · Variant 1/3 · Position 1/7", or "Whole neck". */
 export function describeScaleSelection(ref: ScaleRef, sel: ScaleSelection): string {
     if (sel.pattern === WHOLE_NECK) return WHOLE_NECK;
     const variants = scaleVariantCount(ref, sel.pattern);
-    const boxes = scaleBoxCount(ref, sel.pattern, sel.variant);
-    return [sel.pattern, variants > 1 ? `Variant ${sel.variant + 1}/${variants}` : '', `Box ${sel.box + 1}/${boxes}`]
+    const positions = scalePositionCount(ref, sel.pattern, sel.variant);
+    return [
+        sel.pattern,
+        variants > 1 ? `Variant ${sel.variant + 1}/${variants}` : '',
+        `Position ${scalePositionNumber(ref, sel)}/${positions}`,
+    ]
         .filter(Boolean)
         .join(' · ');
 }

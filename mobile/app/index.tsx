@@ -61,9 +61,11 @@ import { explainChord, explainScale } from "../lib/theory";
 import {
     describeScaleSelection,
     findDrawMatches,
-    scaleBoxCount,
+    scaleBoxForPosition,
     scaleModeName,
     scalePatterns,
+    scalePositionCount,
+    scalePositionNumber,
     scaleSelectionFor,
     scaleVariantCount,
     shapeForMatch,
@@ -2399,11 +2401,15 @@ export default function ChordsScreen() {
                 });
             if (sel.pattern !== WHOLE_NECK)
                 groups.push({
-                    title: "Box",
-                    options: Array.from({ length: scaleBoxCount(ref, sel.pattern, sel.variant) }, (_, b) => ({
-                        label: String(b + 1),
-                        selected: sel.box === b,
-                        onSelect: () => changeDrawScaleSel({ ...sel, box: b }),
+                    title: "Position",
+                    options: Array.from({ length: scalePositionCount(ref, sel.pattern, sel.variant) }, (_, i) => ({
+                        label: String(i + 1),
+                        selected: scalePositionNumber(ref, sel) === i + 1,
+                        onSelect: () =>
+                            changeDrawScaleSel({
+                                ...sel,
+                                box: scaleBoxForPosition(ref, sel.pattern, sel.variant, i + 1),
+                            }),
                     })),
                 });
             return groups;
