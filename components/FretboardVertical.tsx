@@ -17,6 +17,9 @@ type Props = {
     connectorPositions?: Set<string>;
     /** draw the connector lines in this color (with a dark outline) instead of plain ink */
     connectorColor?: string;
+    /** fill the non-root notes at these "string:fret" positions with `highlightColor` */
+    highlightPositions?: Set<string>;
+    highlightColor?: string;
     chordGroups?: NotePosition[][];
     interactivePositions?: Set<string>;
     playOnClick?: boolean;
@@ -36,6 +39,8 @@ const FretboardVertical = ({
     showConnector = false,
     connectorPositions,
     connectorColor,
+    highlightPositions,
+    highlightColor,
     chordGroups,
     interactivePositions,
     playOnClick = false,
@@ -295,6 +300,10 @@ const FretboardVertical = ({
                         return null;
                     const isRoot = semitones === 0;
                     const isHollowTonic = isTonic && !isRoot;
+                    const highlighted =
+                        !!highlightColor &&
+                        !isRoot &&
+                        !!highlightPositions?.has(`${string}:${fret}`);
                     const label = showIntervals
                         ? spellInterval(rootNote, semitones!, degree!)
                         : spellNote(rootNote, semitones!, degree!);
@@ -321,7 +330,11 @@ const FretboardVertical = ({
                                     cx={x}
                                     cy={openY}
                                     r={14}
-                                    fill='transparent'
+                                    fill={
+                                        highlighted
+                                            ? highlightColor
+                                            : "transparent"
+                                    }
                                     stroke={isRoot ? "var(--color-root-red)" : "var(--color-ink)"}
                                     strokeWidth='2'
                                 />
@@ -332,7 +345,13 @@ const FretboardVertical = ({
                                     dominantBaseline='central'
                                     fontSize={fontSize}
                                     fontWeight={600}
-                                    fill={isRoot ? "var(--color-root-red)" : "var(--color-ink)"}>
+                                    fill={
+                                        isRoot
+                                            ? "var(--color-root-red)"
+                                            : highlighted
+                                              ? "#1f2d3d"
+                                              : "var(--color-ink)"
+                                    }>
                                     {label}
                                 </text>
                             </g>
@@ -352,12 +371,18 @@ const FretboardVertical = ({
                                 fill={
                                     isRoot
                                         ? "var(--color-root-red)"
-                                        : isHollowTonic
-                                          ? "transparent"
-                                          : "var(--color-ink)"
+                                        : highlighted
+                                          ? highlightColor
+                                          : isHollowTonic
+                                            ? "transparent"
+                                            : "var(--color-ink)"
                                 }
-                                stroke={isHollowTonic ? "var(--color-ink)" : "none"}
-                                strokeWidth={isHollowTonic ? 2 : 0}
+                                stroke={
+                                    isHollowTonic || highlighted
+                                        ? "var(--color-ink)"
+                                        : "none"
+                                }
+                                strokeWidth={isHollowTonic || highlighted ? 2 : 0}
                             />
                             <text
                                 x={x}
@@ -367,11 +392,13 @@ const FretboardVertical = ({
                                 fontSize={fontSize}
                                 fontWeight={600}
                                 fill={
-                                    isRoot || isHollowTonic
-                                        ? isRoot
-                                            ? "var(--color-sand-1)"
-                                            : "var(--color-ink)"
-                                        : "var(--color-sand-1)"
+                                    highlighted
+                                        ? "#1f2d3d"
+                                        : isRoot || isHollowTonic
+                                          ? isRoot
+                                              ? "var(--color-sand-1)"
+                                              : "var(--color-ink)"
+                                          : "var(--color-sand-1)"
                                 }>
                                 {label}
                             </text>

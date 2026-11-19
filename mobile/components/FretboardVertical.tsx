@@ -28,6 +28,9 @@ type Props = {
     connectorPositions?: Set<string>;
     /** draw the connector lines in this color (with a dark outline) instead of plain ink */
     connectorColor?: string;
+    /** fill the non-root notes at these "string:fret" positions with `highlightColor` */
+    highlightPositions?: Set<string>;
+    highlightColor?: string;
     chordGroups?: NotePosition[][];
     interactivePositions?: Set<string>;
     playOnClick?: boolean;
@@ -47,7 +50,9 @@ const FretboardVertical = ({
     showConnector = false,
     connectorPositions,
     connectorColor,
-chordGroups,
+    highlightPositions,
+    highlightColor,
+    chordGroups,
     interactivePositions,
     playOnClick = false,
     capo = 0,
@@ -286,6 +291,7 @@ chordGroups,
                     }
                     const isRoot = semitones === 0;
                     const isHollowTonic = isTonic && !isRoot;
+                    const highlighted = !!highlightColor && !isRoot && !!highlightPositions?.has(`${string}:${fret}`);
                     const label = showIntervals
                         ? spellInterval(rootNote, semitones!, degree!)
                         : spellNote(rootNote, semitones!, degree!);
@@ -301,7 +307,7 @@ chordGroups,
                                     cx={x}
                                     cy={openY}
                                     r={14}
-                                    fill="transparent"
+                                    fill={highlighted ? highlightColor : 'transparent'}
                                     stroke={isRoot ? colors.rootRed : colors.ink}
                                     strokeWidth={2}
                                 />
@@ -312,7 +318,7 @@ chordGroups,
                                     alignmentBaseline="central"
                                     fontSize={fontSize}
                                     fontFamily={fonts.sans.semiBold}
-                                    fill={isRoot ? colors.rootRed : colors.ink}
+                                    fill={isRoot ? colors.rootRed : highlighted ? '#1f2d3d' : colors.ink}
                                 >
                                     {label}
                                 </SvgText>
@@ -325,9 +331,17 @@ chordGroups,
                                 cx={x}
                                 cy={y}
                                 r={16}
-                                fill={isRoot ? colors.rootRed : isHollowTonic ? 'transparent' : colors.ink}
-                                stroke={isHollowTonic ? colors.ink : 'none'}
-                                strokeWidth={isHollowTonic ? 2 : 0}
+                                fill={
+                                    isRoot
+                                        ? colors.rootRed
+                                        : highlighted
+                                          ? highlightColor
+                                          : isHollowTonic
+                                            ? 'transparent'
+                                            : colors.ink
+                                }
+                                stroke={isHollowTonic || highlighted ? colors.ink : 'none'}
+                                strokeWidth={isHollowTonic || highlighted ? 2 : 0}
                             />
                             <SvgText
                                 x={x}
@@ -336,7 +350,15 @@ chordGroups,
                                 alignmentBaseline="central"
                                 fontSize={fontSize}
                                 fontFamily={fonts.sans.semiBold}
-                                fill={isRoot || isHollowTonic ? (isRoot ? colors.sand1 : colors.ink) : colors.sand1}
+                                fill={
+                                    highlighted
+                                        ? '#1f2d3d'
+                                        : isRoot || isHollowTonic
+                                          ? isRoot
+                                              ? colors.sand1
+                                              : colors.ink
+                                          : colors.sand1
+                                }
                             >
                                 {label}
                             </SvgText>

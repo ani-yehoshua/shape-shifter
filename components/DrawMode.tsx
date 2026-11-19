@@ -1200,6 +1200,10 @@ export default function DrawMode({
                         connectorColor={
                             connectorPositions ? "#facc15" : undefined
                         }
+                        highlightPositions={connectorPositions}
+                        highlightColor={
+                            connectorPositions ? "#facc15" : undefined
+                        }
                         interactivePositions={anchored ? selected : undefined}
                         capo={capo}
                         tuningFreqs={tuningFreqs}
@@ -1579,6 +1583,10 @@ export default function DrawMode({
                         showConnector={showConnectors}
                         connectorPositions={connectorPositions}
                         connectorColor={
+                            connectorPositions ? "#facc15" : undefined
+                        }
+                        highlightPositions={connectorPositions}
+                        highlightColor={
                             connectorPositions ? "#facc15" : undefined
                         }
                         interactivePositions={anchored ? selected : undefined}
