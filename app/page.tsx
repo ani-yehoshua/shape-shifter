@@ -9,6 +9,8 @@ import NotesIntervalsToggle from "@/components/NotesIntervalsToggle";
 import DrawMode from "@/components/DrawMode";
 import SavedChordsPanel from "@/components/SavedChordsPanel";
 import ProgressionPanel from "@/components/ProgressionPanel";
+import InfoPanel from "@/components/InfoPanel";
+import { explainChord, explainScale } from "@/lib/theory";
 import CapoButton from "@/components/CapoButton";
 import RootNoteButton from "@/components/RootNoteButton";
 import SubmitFeedback from "@/components/SubmitFeedback";
@@ -183,6 +185,25 @@ function voicingFretRange(v: NotePosition[]) {
         .filter((f): f is number => f != null && f >= 0);
     if (!frets.length) return null;
     return { min: Math.min(...frets), max: Math.max(...frets) };
+}
+
+function InfoIcon() {
+    return (
+        <svg
+            className='w-4 h-4'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth={2}
+            strokeLinecap='round'>
+            <circle
+                cx='12'
+                cy='12'
+                r='9'
+            />
+            <path d='M12 11v5M12 8h.01' />
+        </svg>
+    );
 }
 
 function ListIcon() {
@@ -529,6 +550,24 @@ const persistedSession: SessionState = (() => {
 
 // ─── main page ────────────────────────────────────────────────────────────────
 
+// Scale Chords is paused while its data is rebuilt (docs/phase-2-harmony-
+// engine.md). Everything for the mode is still in this file; this flag only
+// closes the doors into it: the two tabs, and a saved session that was last
+// left on it. It stays open on the dev server (`next dev`) so the work can
+// continue, and a deployed preview can opt in with NEXT_PUBLIC_SCALE_CHORDS=1;
+// production leaves it closed. Flip to true to bring it back for everyone.
+const SCALE_CHORDS_ENABLED =
+    process.env.NODE_ENV === "development" ||
+    process.env.NEXT_PUBLIC_SCALE_CHORDS === "1";
+
+function SoonBadge() {
+    return (
+        <span className='ml-1.5 align-middle rounded-full bg-olive/20 border border-olive/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-olive'>
+            Soon
+        </span>
+    );
+}
+
 export default function Home() {
     const router = useRouter();
     const hasPro = useSubscription();
@@ -566,6 +605,8 @@ export default function Home() {
         qualities: string[];
         inversions: string[];
         randomizeRoot: boolean;
+        // also pick among the chord's alternate shapes (Pro); off unless asked for
+        randomizeAlt: boolean;
     };
     type ScaleRandomizeConfig = {
         noteGroups: string[];
@@ -582,6 +623,7 @@ export default function Home() {
         qualities: string[];
         inversions: string[];
         randomizeRoot: boolean;
+        randomizeAlt: boolean;
     };
     const [randomizeOn, setRandomizeOn] = React.useState(false);
     const [randomizeSheetOpen, setRandomizeSheetOpen] = React.useState(false);
@@ -592,14 +634,15 @@ export default function Home() {
             stringSets: [],
             qualities: [],
             inversions: [],
-            randomizeRoot: true,
+            randomizeRoot: false,
+            randomizeAlt: false,
         });
     const [scaleRandomize, setScaleRandomize] =
         React.useState<ScaleRandomizeConfig>({
             noteGroups: [],
             scales: [],
             modes: [],
-            randomizeRoot: true,
+            randomizeRoot: false,
         });
     const [scaleChordRandomize, setScaleChordRandomize] =
         React.useState<ScaleChordRandomizeConfig>({
@@ -610,7 +653,8 @@ export default function Home() {
             stringSets: [],
             qualities: [],
             inversions: [],
-            randomizeRoot: true,
+            randomizeRoot: false,
+            randomizeAlt: false,
         });
     const [showIntervals, setShowIntervals] = React.useState(false);
     const isRight = preferences.handedness === "right";
@@ -651,6 +695,7 @@ export default function Home() {
         new Set(),
     );
     const [savedPanelOpen, setSavedPanelOpen] = React.useState(false);
+    const [infoOpen, setInfoOpen] = React.useState(false);
     const [savedRefreshKey, setSavedRefreshKey] = React.useState(0);
     const [progressionPanelOpen, setProgressionPanelOpen] =
         React.useState(false);
@@ -895,7 +940,12 @@ export default function Home() {
             setCurrentRootNote(p.currentRootNote);
         if (p.showIntervals !== undefined) setShowIntervals(p.showIntervals);
         if (p.capo !== undefined) setCapo(p.capo);
-        if (p.selectedMode !== undefined) setSelectedMode(p.selectedMode);
+        if (p.selectedMode !== undefined)
+            setSelectedMode(
+                p.selectedMode === "scaleChords" && !SCALE_CHORDS_ENABLED
+                    ? "chords"
+                    : p.selectedMode,
+            );
         if (p.selectedNoteGroup !== undefined)
             setSelectedNoteGroup(p.selectedNoteGroup);
         if (p.selectedScale !== undefined) setSelectedScale(p.selectedScale);
@@ -1031,6 +1081,18 @@ export default function Home() {
         selectedChordQuality,
         selectedPosition,
     });
+
+    // The alternate index only means something for the chord that's selected.
+    // Changing the voicing type, string set or chord quality can land on a
+    // chord with fewer alternates than the index being carried over, which
+    // used to leave an empty fretboard and a label like "3/2". Everything
+    // reads the index through `altIdx` (so there's never a render with an
+    // out-of-range value) and the state falls back to the first shape.
+    const altIdx = selectedAltShape < availableAlts.length ? selectedAltShape : 0;
+    React.useEffect(() => {
+        if (availableAlts.length > 0 && selectedAltShape >= availableAlts.length)
+            setSelectedAltShape(0);
+    }, [availableAlts, selectedAltShape]);
 
     // ── hierarchy helpers ──────────────────────────────────────────────────────
     const getSetterForLevel = (levelName: string): ((v: string) => void) => {
@@ -1347,7 +1409,7 @@ export default function Home() {
                 ];
             const alts = invTemplate?.altShapes ?? [];
             const altIdx =
-                hasPro && alts.length
+                hasPro && cfg.randomizeAlt && alts.length
                     ? Math.floor(Math.random() * alts.length)
                     : -1;
 
@@ -1445,7 +1507,9 @@ export default function Home() {
                 ? pd.altShapes
                 : [];
         newSelections.altShape =
-            hasPro && alts.length ? Math.floor(Math.random() * alts.length) : 0;
+            hasPro && cfg.randomizeAlt && alts.length
+                ? Math.floor(Math.random() * alts.length)
+                : 0;
 
         setSelectedCategory(cat);
         setSelectedVoicingType(newSelections.voicingType);
@@ -1546,7 +1610,7 @@ export default function Home() {
             selectedStringSet,
             selectedChordQuality,
             selectedPosition,
-            selectedAltShape,
+            selectedAltShape: altIdx, // never persist an out-of-range index
             selectedNoteGroup,
             selectedScale,
             selectedScalePosition,
@@ -1580,7 +1644,7 @@ export default function Home() {
         selectedStringSet,
         selectedChordQuality,
         selectedPosition,
-        selectedAltShape,
+        altIdx,
         selectedNoteGroup,
         selectedScale,
         selectedScalePosition,
@@ -1600,7 +1664,7 @@ export default function Home() {
     const voicingInfo = React.useMemo(() => {
         if (isDrawMode || selectedPosition === "All" || !currentRootNote)
             return null;
-        const formula = availableAlts[selectedAltShape];
+        const formula = availableAlts[altIdx];
         if (!formula) return null;
         const all = generateAllVoicingsForShape(
             currentRootNote,
@@ -1642,7 +1706,7 @@ export default function Home() {
         isDrawMode,
         selectedPosition,
         currentRootNote,
-        selectedAltShape,
+        altIdx,
         availableAlts,
         fretboardMap,
         selectedTuning.semitones,
@@ -1937,7 +2001,7 @@ export default function Home() {
 
     const { prev: goPrevAlt, next: goNextAlt } = useCycleList(
         availableAlts,
-        selectedAltShape,
+        altIdx,
         handleAltChange,
     );
 
@@ -2066,9 +2130,20 @@ export default function Home() {
         return shifted[shifted.length - 1];
     }, [modeRootNote, capo]);
 
+    // CAGED is major or minor. A quality left over from another category, or
+    // from a session or saved chord made before CAGED had one, falls back to major.
+    React.useEffect(() => {
+        if (selectedCategory !== "CAGED") return;
+        const qualities = Object.keys(
+            (allChordShapes as Record<string, ChordLevel>).CAGED?.options ?? {},
+        );
+        if (qualities.length && !qualities.includes(selectedChordQuality))
+            setSelectedChordQuality(qualities[0]);
+    }, [selectedCategory, selectedChordQuality]);
+
     // ── chord label ─────────────────────────────────────────────────────────────
     const chordLabel =
-        selectedCategory === "CAGED"
+        selectedCategory === "CAGED" && selectedChordQuality !== "Min"
             ? capoRootNote
             : `${capoRootNote} ${selectedChordQuality}`;
 
@@ -2116,6 +2191,48 @@ export default function Home() {
             : selectedMode === "scaleChords"
               ? scaleChordLabel
               : chordLabel;
+
+    // The Info panel's text, built (lib/theory) from the current selection
+    // each time it opens so it always matches what's on the fretboard. Same
+    // wiring as the mobile app. Scale Chords has no info yet (it's paused).
+    const soundingRoot = (name: string) => {
+        if (capo === 0) return name;
+        const idx = NOTES.findIndex(pair => pair.includes(name));
+        const shifted = NOTES[(idx + capo) % NOTES.length];
+        return shifted[shifted.length - 1];
+    };
+    const getInfoContent = () => {
+        if (selectedMode === "scaleChords") return null;
+        if (selectedMode === "scales") {
+            if (!scaleEntry) return null;
+            return explainScale({
+                rootNote: soundingRoot(currentRootNote),
+                scaleName: selectedScale,
+                intervals: scaleEntry.intervals,
+                degrees: scaleEntry.degrees,
+                pattern: selectedScalePattern,
+                modeName: showAllScalePositions
+                    ? undefined
+                    : scalePosition?.modeName,
+                positionNumber: showAllScalePositions
+                    ? undefined
+                    : selectedScalePosition + 1,
+            });
+        }
+        return explainChord({
+            rootNote: capoRootNote,
+            qualityKey: selectedChordQuality,
+            category: selectedCategory,
+            voicingType:
+                selectedCategory === "Sevenths" ? selectedVoicingType : undefined,
+            position: selectedPosition,
+            // with several positions shown at once ("All") there is no single shape to describe
+            shape: selectedPosition === "All" ? [] : capoDisplayShape,
+            tuningMidi: selectedTuning.semitones,
+            tuningNotes: selectedTuning.notes,
+            altCount: availableAlts.length,
+        });
+    };
 
     const currentChordForProgression = React.useMemo(
         () =>
@@ -2695,7 +2812,7 @@ export default function Home() {
                                                     altsLocked
                                                         ? "opacity-50"
                                                         : ""
-                                                }>{`${selectedAltShape + 1}/${availableAlts.length}`}</span>
+                                                }>{`${altIdx + 1}/${availableAlts.length}`}</span>
                                         </span>
                                         <button
                                             onClick={goNextAlt}
@@ -2854,7 +2971,7 @@ export default function Home() {
                                                                   position:
                                                                       selectedPosition,
                                                                   altShape:
-                                                                      selectedAltShape,
+                                                                      altIdx,
                                                               },
                                                     )
                                                 }
@@ -2893,6 +3010,16 @@ export default function Home() {
                                                     <StrumIcon />
                                                 )}
                                             </button>
+                                            {selectedMode !== "scaleChords" && (
+                                                <button
+                                                    onClick={() =>
+                                                        setInfoOpen(true)
+                                                    }
+                                                    title='Info'
+                                                    className='w-9 h-9 flex items-center justify-center rounded-full border border-ink/40 text-ink hover:border-ink transition-colors'>
+                                                    <InfoIcon />
+                                                </button>
+                                            )}
                                         </>
                                     )}
                                     {randomizeOn ? (
@@ -2930,7 +3057,7 @@ export default function Home() {
 
                                 {/* Submit Feedback — above mode tabs */}
                                 <div className='shrink-0 flex justify-center mb-4'>
-                                    <SubmitFeedback className='text-ink/50' />
+                                    <SubmitFeedback className='text-ink' />
                                 </div>
 
                                 {/* Mode toggle — always visible, never scrolls */}
@@ -2959,15 +3086,27 @@ export default function Home() {
                                             Scales
                                         </button>
                                         <button
+                                            disabled={!SCALE_CHORDS_ENABLED}
+                                            title={
+                                                SCALE_CHORDS_ENABLED
+                                                    ? undefined
+                                                    : "Coming soon"
+                                            }
                                             onClick={() =>
                                                 setSelectedMode("scaleChords")
                                             }
                                             className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                                                selectedMode === "scaleChords"
-                                                    ? "bg-sand-4 text-sand-1 font-semibold"
-                                                    : "bg-sand-1 text-ink hover:bg-sand-2"
+                                                !SCALE_CHORDS_ENABLED
+                                                    ? "bg-sand-1 text-ink/40 cursor-not-allowed"
+                                                    : selectedMode ===
+                                                        "scaleChords"
+                                                      ? "bg-sand-4 text-sand-1 font-semibold"
+                                                      : "bg-sand-1 text-ink hover:bg-sand-2"
                                             }`}>
                                             Scale Chords
+                                            {!SCALE_CHORDS_ENABLED && (
+                                                <SoonBadge />
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -3546,11 +3685,18 @@ export default function Home() {
                                         Scales
                                     </button>
                                     <button
+                                        disabled={!SCALE_CHORDS_ENABLED}
+                                        title={
+                                            SCALE_CHORDS_ENABLED
+                                                ? undefined
+                                                : "Coming soon"
+                                        }
                                         onClick={() =>
                                             setSelectedMode("scaleChords")
                                         }
-                                        className={`px-6 py-1.5 text-sm font-medium transition-colors ${selectedMode === "scaleChords" ? "bg-sand-4 text-sand-1 font-semibold" : "bg-sand-1 text-ink hover:bg-sand-2"}`}>
+                                        className={`px-6 py-1.5 text-sm font-medium transition-colors ${!SCALE_CHORDS_ENABLED ? "bg-sand-1 text-ink/40 cursor-not-allowed" : selectedMode === "scaleChords" ? "bg-sand-4 text-sand-1 font-semibold" : "bg-sand-1 text-ink hover:bg-sand-2"}`}>
                                         Scale Chords
+                                        {!SCALE_CHORDS_ENABLED && <SoonBadge />}
                                     </button>
                                 </div>
 
@@ -4234,7 +4380,7 @@ export default function Home() {
                                                                     altsLocked
                                                                         ? "opacity-50"
                                                                         : ""
-                                                                }>{`${selectedAltShape + 1}/${availableAlts.length}`}</span>
+                                                                }>{`${altIdx + 1}/${availableAlts.length}`}</span>
                                                         </span>
                                                         <button
                                                             onClick={goNextAlt}
@@ -4305,7 +4451,7 @@ export default function Home() {
                                                                   position:
                                                                       selectedPosition,
                                                                   altShape:
-                                                                      selectedAltShape,
+                                                                      altIdx,
                                                               },
                                                     )
                                                 }
@@ -4358,6 +4504,15 @@ export default function Home() {
                                                         : "Play"
                                                     : "Strum"}
                                             </button>
+                                            {selectedMode !== "scaleChords" && (
+                                                <button
+                                                    onClick={() => setInfoOpen(true)}
+                                                    title='Info'
+                                                    className='flex items-center gap-2 px-4 py-2 rounded-full border border-ink/40 text-ink text-sm font-semibold hover:border-ink transition-colors'>
+                                                    <InfoIcon />
+                                                    Info
+                                                </button>
+                                            )}
                                         </>
                                     )}
                                     {randomizeOn ? (
@@ -4449,7 +4604,7 @@ export default function Home() {
                                 </div>
                             </div>
                             <div className='flex justify-center mt-auto pt-2'>
-                                <SubmitFeedback className='text-ink/40' />
+                                <SubmitFeedback className='text-ink' />
                             </div>
                         </div>
                     </>
@@ -4463,6 +4618,13 @@ export default function Home() {
                 onLoad={handleLoadSaved}
                 refreshKey={savedRefreshKey}
                 onChange={() => setSavedRefreshKey(k => k + 1)}
+            />
+
+            {/* ── Info Panel ────────────────────────────────────── */}
+            <InfoPanel
+                open={infoOpen}
+                onClose={() => setInfoOpen(false)}
+                getContent={getInfoContent}
             />
 
             {/* ── Progression Builder Panel ─────────────────────── */}
@@ -4513,7 +4675,8 @@ export default function Home() {
                                             stringSets: [],
                                             qualities: [],
                                             inversions: [],
-                                            randomizeRoot: true,
+                                            randomizeRoot: false,
+                                            randomizeAlt: false,
                                         });
                                     } else if (selectedMode === "scaleChords") {
                                         setScaleChordRandomize({
@@ -4524,14 +4687,15 @@ export default function Home() {
                                             stringSets: [],
                                             qualities: [],
                                             inversions: [],
-                                            randomizeRoot: true,
+                                            randomizeRoot: false,
+                                            randomizeAlt: false,
                                         });
                                     } else {
                                         setScaleRandomize({
                                             noteGroups: [],
                                             scales: [],
                                             modes: [],
-                                            randomizeRoot: true,
+                                            randomizeRoot: false,
                                         });
                                     }
                                 }}
@@ -4824,6 +4988,30 @@ export default function Home() {
                                         className={`w-11 h-6 rounded-full transition-colors relative ${chordRandomize.randomizeRoot ? "bg-ink" : "bg-ink/20"}`}>
                                         <span
                                             className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${chordRandomize.randomizeRoot ? "translate-x-[22px]" : "translate-x-[2px]"}`}
+                                        />
+                                    </button>
+                                </div>
+
+                                {/* Alternate shapes */}
+                                <div className='flex items-center justify-between'>
+                                    <p className='text-sm font-semibold text-ink flex items-center gap-1.5'>
+                                        Randomize alternate shapes
+                                        {!hasPro && (
+                                            <span className='w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1'>
+                                                <StarIcon />
+                                            </span>
+                                        )}
+                                    </p>
+                                    <button
+                                        onClick={() =>
+                                            setChordRandomize(c => ({
+                                                ...c,
+                                                randomizeAlt: !c.randomizeAlt,
+                                            }))
+                                        }
+                                        className={`w-11 h-6 rounded-full transition-colors relative ${chordRandomize.randomizeAlt ? "bg-ink" : "bg-ink/20"}`}>
+                                        <span
+                                            className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${chordRandomize.randomizeAlt ? "translate-x-[22px]" : "translate-x-[2px]"}`}
                                         />
                                     </button>
                                 </div>
@@ -5305,6 +5493,30 @@ export default function Home() {
                                         className={`w-11 h-6 rounded-full transition-colors relative ${scaleChordRandomize.randomizeRoot ? "bg-ink" : "bg-ink/20"}`}>
                                         <span
                                             className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${scaleChordRandomize.randomizeRoot ? "translate-x-[22px]" : "translate-x-[2px]"}`}
+                                        />
+                                    </button>
+                                </div>
+
+                                {/* Alternate shapes */}
+                                <div className='flex items-center justify-between'>
+                                    <p className='text-sm font-semibold text-ink flex items-center gap-1.5'>
+                                        Randomize alternate shapes
+                                        {!hasPro && (
+                                            <span className='w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1'>
+                                                <StarIcon />
+                                            </span>
+                                        )}
+                                    </p>
+                                    <button
+                                        onClick={() =>
+                                            setScaleChordRandomize(c => ({
+                                                ...c,
+                                                randomizeAlt: !c.randomizeAlt,
+                                            }))
+                                        }
+                                        className={`w-11 h-6 rounded-full transition-colors relative ${scaleChordRandomize.randomizeAlt ? "bg-ink" : "bg-ink/20"}`}>
+                                        <span
+                                            className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${scaleChordRandomize.randomizeAlt ? "translate-x-[22px]" : "translate-x-[2px]"}`}
                                         />
                                     </button>
                                 </div>
