@@ -1890,6 +1890,12 @@ export default function ChordsScreen() {
         );
     }, [drawSelected, drawFretboardMap, drawEffectiveRoot, drawBrowsedVoicing]);
 
+    // The lines joining the notes belong to library chords, which draw them in
+    // the Chords tab anyway; freehand dots and scale boxes don't get any.
+    const drawIsLibraryChord =
+        !!drawBrowsedVoicing?.length &&
+        !(drawAnchored && drawAnchorMatches[drawAnchorIndex]?.tab === "Scales");
+
     const applyDrawAnchorMatch = (
         match: DrawMatch,
         positions: Map<number, number> = drawSelectedAsMap,
@@ -2705,7 +2711,7 @@ export default function ChordsScreen() {
                         }
                         rootNote={drawEffectiveRoot}
                         showIntervals={drawShowIntervals}
-                        showConnector={drawChordShape.length > 0}
+                        showConnector={drawIsLibraryChord}
                         interactivePositions={
                             drawAnchored ? drawSelected : undefined
                         }
@@ -2780,6 +2786,7 @@ export default function ChordsScreen() {
                                             drawAnchorMatches[drawAnchorIndex]
                                                 ?.displayLabel
                                         }
+                                        <Text style={styles.anchorCaret}>{"  ▾"}</Text>
                                     </Text>
                                     {!!drawAnchorMatches[drawAnchorIndex]
                                         ?.contextLabel && (
@@ -4013,10 +4020,20 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
         fontSize: 12,
         color: `${colors.ink}80`,
     },
+    // looks like a button (it opens the list of every match), not plain text
     anchorLabelWrap: {
         minWidth: 96,
         maxWidth: 230,
         alignItems: "center",
+        paddingHorizontal: spacing.sm + 4,
+        paddingVertical: spacing.xs,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: `${colors.ink}4D`,
+        backgroundColor: colors.sand2,
+    },
+    anchorCaret: {
+        color: `${colors.ink}66`,
     },
     anchorContext: {
         fontSize: 10,
@@ -4399,7 +4416,7 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     },
     pickerSheet: {
         width: "85%",
-        maxHeight: "60%",
+        maxHeight: "80%",
         backgroundColor: colors.sand2,
         borderRadius: radius.xl,
         padding: spacing.sm,

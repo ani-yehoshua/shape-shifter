@@ -629,6 +629,12 @@ export default function DrawMode({
         );
     }, [selected, fretboardMap, effectiveRoot, browsedVoicing]);
 
+    // The lines joining the notes belong to library chords, which draw them in
+    // the Chords tab anyway; freehand dots and scale boxes don't get any.
+    const isLibraryChord =
+        !!browsedVoicing?.length &&
+        !(anchored && anchorMatches[anchorIndex]?.tab === "Scales");
+
     const applyAnchorMatch = React.useCallback(
         (match: DrawMatch, positions: Map<number, number> = selectedAsMap) => {
             // a scale match has no chord behind it, so there is no picked chord or alt shapes
@@ -1083,7 +1089,7 @@ export default function DrawMode({
                         className='fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/40'
                         onClick={() => setChordPickerOpen(false)}>
                         <div
-                            className='bg-sand-2 rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:w-80 max-h-72 flex flex-col'
+                            className='bg-sand-2 rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:w-80 max-h-[70dvh] flex flex-col'
                             onClick={e => e.stopPropagation()}>
                             <div className='px-4 py-3 border-b border-ink/10 shrink-0'>
                                 <span className='text-sm font-bold text-ink'>
@@ -1161,7 +1167,7 @@ export default function DrawMode({
                         }
                         rootNote={effectiveRoot}
                         showIntervals={showIntervals}
-                        showConnector={chordShape.length > 0}
+                        showConnector={isLibraryChord}
                         interactivePositions={anchored ? selected : undefined}
                         capo={capo}
                         tuningFreqs={tuningFreqs}
@@ -1216,7 +1222,8 @@ export default function DrawMode({
                                 anchorMatches.length > 0 &&
                                 setChordPickerOpen(true)
                             }
-                            className='flex flex-col items-center min-w-[6rem] max-w-[14rem] text-center'>
+                            title='See all matches'
+                            className='flex flex-col items-center min-w-[6rem] max-w-[14rem] text-center rounded-xl border border-ink/30 bg-sand-2 px-3 py-1 hover:border-ink active:scale-[0.98] transition-all cursor-pointer'>
                             {anchorMatches.length === 0 ? (
                                 <span className='text-xs text-ink/50'>
                                     No matches
@@ -1228,6 +1235,9 @@ export default function DrawMode({
                                             anchorMatches[anchorIndex]
                                                 ?.displayLabel
                                         }
+                                        <span className='ml-1 text-ink/40'>
+                                            ▾
+                                        </span>
                                     </span>
                                     {anchorMatches[anchorIndex]
                                         ?.contextLabel && (
@@ -1534,7 +1544,7 @@ export default function DrawMode({
                         }
                         rootNote={effectiveRoot}
                         showIntervals={showIntervals}
-                        showConnector={chordShape.length > 0}
+                        showConnector={isLibraryChord}
                         interactivePositions={anchored ? selected : undefined}
                         capo={capo}
                         tuningFreqs={tuningFreqs}
@@ -1610,7 +1620,8 @@ export default function DrawMode({
                                 anchorMatches.length > 0 &&
                                 setChordPickerOpen(true)
                             }
-                            className='flex flex-col items-center min-w-[8rem] max-w-[28rem] text-center'>
+                            title='See all matches'
+                            className='flex flex-col items-center min-w-[8rem] max-w-[28rem] text-center rounded-xl border border-ink/30 bg-sand-2 px-4 py-1.5 hover:border-ink active:scale-[0.99] transition-all cursor-pointer'>
                             {anchorMatches.length === 0 ? (
                                 <span className='text-sm text-ink/50'>
                                     No matches
@@ -1622,6 +1633,9 @@ export default function DrawMode({
                                             anchorMatches[anchorIndex]
                                                 ?.displayLabel
                                         }
+                                        <span className='ml-1 text-ink/40'>
+                                            ▾
+                                        </span>
                                     </span>
                                     {anchorMatches[anchorIndex]
                                         ?.contextLabel && (
