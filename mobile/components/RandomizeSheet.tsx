@@ -28,6 +28,8 @@ export type ChordRandomizeConfig = {
     qualities: string[];
     inversions: string[];
     randomizeRoot: boolean;
+    // also pick among the chord's alternate shapes (Pro); off unless asked for
+    randomizeAlt: boolean;
 };
 
 export type ScaleRandomizeConfig = {
@@ -43,14 +45,15 @@ export const EMPTY_CHORD_RANDOMIZE: ChordRandomizeConfig = {
     stringSets: [],
     qualities: [],
     inversions: [],
-    randomizeRoot: true,
+    randomizeRoot: false,
+    randomizeAlt: false,
 };
 
 export const EMPTY_SCALE_RANDOMIZE: ScaleRandomizeConfig = {
     noteGroups: [],
     scales: [],
     modes: [],
-    randomizeRoot: true,
+    randomizeRoot: false,
 };
 
 type Props = {
@@ -60,6 +63,8 @@ type Props = {
     setChordCfg: (fn: (c: ChordRandomizeConfig) => ChordRandomizeConfig) => void;
     scaleCfg: ScaleRandomizeConfig;
     setScaleCfg: (fn: (c: ScaleRandomizeConfig) => ScaleRandomizeConfig) => void;
+    /** alternate shapes are Pro, so the toggle says so for everyone else */
+    hasPro: boolean;
     onClose: () => void;
     onDone: () => void;
 };
@@ -107,12 +112,12 @@ function PillGroup({
     );
 }
 
-function RootToggle({ value, onChange }: { value: boolean; onChange: () => void }) {
+function SwitchRow({ label, value, onChange }: { label: string; value: boolean; onChange: () => void }) {
     const { colors } = useTheme();
     const styles = useThemedStyles(makeStyles);
     return (
         <View style={styles.rootRow}>
-            <Text style={styles.rootLabel}>Randomize root note</Text>
+            <Text style={styles.rootLabel}>{label}</Text>
             <Switch
                 value={value}
                 onValueChange={onChange}
@@ -137,6 +142,7 @@ export default function RandomizeSheet({
     setChordCfg,
     scaleCfg,
     setScaleCfg,
+    hasPro,
     onClose,
     onDone,
 }: Props) {
@@ -220,9 +226,15 @@ export default function RandomizeSheet({
                         onToggle={(pos) => setChordCfg((c) => ({ ...c, inversions: toggle(c.inversions, pos) }))}
                     />
                 )}
-                <RootToggle
+                <SwitchRow
+                    label="Randomize root note"
                     value={chordCfg.randomizeRoot}
                     onChange={() => setChordCfg((c) => ({ ...c, randomizeRoot: !c.randomizeRoot }))}
+                />
+                <SwitchRow
+                    label={hasPro ? 'Randomize alternate shapes' : 'Randomize alternate shapes (Pro)'}
+                    value={chordCfg.randomizeAlt}
+                    onChange={() => setChordCfg((c) => ({ ...c, randomizeAlt: !c.randomizeAlt }))}
                 />
             </>
         );
@@ -273,7 +285,8 @@ export default function RandomizeSheet({
                         onToggle={(m) => setScaleCfg((c) => ({ ...c, modes: toggle(c.modes, m) }))}
                     />
                 )}
-                <RootToggle
+                <SwitchRow
+                    label="Randomize root note"
                     value={scaleCfg.randomizeRoot}
                     onChange={() => setScaleCfg((c) => ({ ...c, randomizeRoot: !c.randomizeRoot, modes: [] }))}
                 />

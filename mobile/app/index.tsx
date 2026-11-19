@@ -1524,7 +1524,7 @@ export default function ChordsScreen() {
         newSelections.position = pick(filteredPosKeys.length ? filteredPosKeys : posKeys);
         const pd = cursor.options[newSelections.position];
         const alts = Array.isArray(pd.altShapes) && pd.altShapes.length ? pd.altShapes : [];
-        newSelections.altShape = hasPro && alts.length ? Math.floor(Math.random() * alts.length) : 0;
+        newSelections.altShape = hasPro && cfg.randomizeAlt && alts.length ? Math.floor(Math.random() * alts.length) : 0;
 
         setSelectedCategory(cat);
         setSelectedVoicingType(newSelections.voicingType);
@@ -4037,6 +4037,7 @@ export default function ChordsScreen() {
                 setChordCfg={setChordRandomize}
                 scaleCfg={scaleRandomize}
                 setScaleCfg={setScaleRandomize}
+                hasPro={hasPro}
                 onClose={() => setRandomizeSheetOpen(false)}
                 onDone={() => {
                     handleRandomize();

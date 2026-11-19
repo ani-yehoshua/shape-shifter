@@ -587,6 +587,8 @@ export default function Home() {
         qualities: string[];
         inversions: string[];
         randomizeRoot: boolean;
+        // also pick among the chord's alternate shapes (Pro); off unless asked for
+        randomizeAlt: boolean;
     };
     type ScaleRandomizeConfig = {
         noteGroups: string[];
@@ -603,6 +605,7 @@ export default function Home() {
         qualities: string[];
         inversions: string[];
         randomizeRoot: boolean;
+        randomizeAlt: boolean;
     };
     const [randomizeOn, setRandomizeOn] = React.useState(false);
     const [randomizeSheetOpen, setRandomizeSheetOpen] = React.useState(false);
@@ -613,14 +616,15 @@ export default function Home() {
             stringSets: [],
             qualities: [],
             inversions: [],
-            randomizeRoot: true,
+            randomizeRoot: false,
+            randomizeAlt: false,
         });
     const [scaleRandomize, setScaleRandomize] =
         React.useState<ScaleRandomizeConfig>({
             noteGroups: [],
             scales: [],
             modes: [],
-            randomizeRoot: true,
+            randomizeRoot: false,
         });
     const [scaleChordRandomize, setScaleChordRandomize] =
         React.useState<ScaleChordRandomizeConfig>({
@@ -631,7 +635,8 @@ export default function Home() {
             stringSets: [],
             qualities: [],
             inversions: [],
-            randomizeRoot: true,
+            randomizeRoot: false,
+            randomizeAlt: false,
         });
     const [showIntervals, setShowIntervals] = React.useState(false);
     const isRight = preferences.handedness === "right";
@@ -1369,7 +1374,7 @@ export default function Home() {
                 ];
             const alts = invTemplate?.altShapes ?? [];
             const altIdx =
-                hasPro && alts.length
+                hasPro && cfg.randomizeAlt && alts.length
                     ? Math.floor(Math.random() * alts.length)
                     : -1;
 
@@ -1467,7 +1472,9 @@ export default function Home() {
                 ? pd.altShapes
                 : [];
         newSelections.altShape =
-            hasPro && alts.length ? Math.floor(Math.random() * alts.length) : 0;
+            hasPro && cfg.randomizeAlt && alts.length
+                ? Math.floor(Math.random() * alts.length)
+                : 0;
 
         setSelectedCategory(cat);
         setSelectedVoicingType(newSelections.voicingType);
@@ -4614,7 +4621,8 @@ export default function Home() {
                                             stringSets: [],
                                             qualities: [],
                                             inversions: [],
-                                            randomizeRoot: true,
+                                            randomizeRoot: false,
+                                            randomizeAlt: false,
                                         });
                                     } else if (selectedMode === "scaleChords") {
                                         setScaleChordRandomize({
@@ -4625,14 +4633,15 @@ export default function Home() {
                                             stringSets: [],
                                             qualities: [],
                                             inversions: [],
-                                            randomizeRoot: true,
+                                            randomizeRoot: false,
+                                            randomizeAlt: false,
                                         });
                                     } else {
                                         setScaleRandomize({
                                             noteGroups: [],
                                             scales: [],
                                             modes: [],
-                                            randomizeRoot: true,
+                                            randomizeRoot: false,
                                         });
                                     }
                                 }}
@@ -4925,6 +4934,30 @@ export default function Home() {
                                         className={`w-11 h-6 rounded-full transition-colors relative ${chordRandomize.randomizeRoot ? "bg-ink" : "bg-ink/20"}`}>
                                         <span
                                             className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${chordRandomize.randomizeRoot ? "translate-x-[22px]" : "translate-x-[2px]"}`}
+                                        />
+                                    </button>
+                                </div>
+
+                                {/* Alternate shapes */}
+                                <div className='flex items-center justify-between'>
+                                    <p className='text-sm font-semibold text-ink flex items-center gap-1.5'>
+                                        Randomize alternate shapes
+                                        {!hasPro && (
+                                            <span className='w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1'>
+                                                <StarIcon />
+                                            </span>
+                                        )}
+                                    </p>
+                                    <button
+                                        onClick={() =>
+                                            setChordRandomize(c => ({
+                                                ...c,
+                                                randomizeAlt: !c.randomizeAlt,
+                                            }))
+                                        }
+                                        className={`w-11 h-6 rounded-full transition-colors relative ${chordRandomize.randomizeAlt ? "bg-ink" : "bg-ink/20"}`}>
+                                        <span
+                                            className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${chordRandomize.randomizeAlt ? "translate-x-[22px]" : "translate-x-[2px]"}`}
                                         />
                                     </button>
                                 </div>
@@ -5406,6 +5439,30 @@ export default function Home() {
                                         className={`w-11 h-6 rounded-full transition-colors relative ${scaleChordRandomize.randomizeRoot ? "bg-ink" : "bg-ink/20"}`}>
                                         <span
                                             className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${scaleChordRandomize.randomizeRoot ? "translate-x-[22px]" : "translate-x-[2px]"}`}
+                                        />
+                                    </button>
+                                </div>
+
+                                {/* Alternate shapes */}
+                                <div className='flex items-center justify-between'>
+                                    <p className='text-sm font-semibold text-ink flex items-center gap-1.5'>
+                                        Randomize alternate shapes
+                                        {!hasPro && (
+                                            <span className='w-4 h-4 rounded-full bg-olive border border-olive/60 flex items-center justify-center text-sand-1'>
+                                                <StarIcon />
+                                            </span>
+                                        )}
+                                    </p>
+                                    <button
+                                        onClick={() =>
+                                            setScaleChordRandomize(c => ({
+                                                ...c,
+                                                randomizeAlt: !c.randomizeAlt,
+                                            }))
+                                        }
+                                        className={`w-11 h-6 rounded-full transition-colors relative ${scaleChordRandomize.randomizeAlt ? "bg-ink" : "bg-ink/20"}`}>
+                                        <span
+                                            className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-sand-1 shadow transition-transform ${scaleChordRandomize.randomizeAlt ? "translate-x-[22px]" : "translate-x-[2px]"}`}
                                         />
                                     </button>
                                 </div>
