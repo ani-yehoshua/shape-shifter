@@ -113,10 +113,24 @@ const shape = (formula: any, root: string) => lowestVoicing(root, formula) as an
     check(/not in this shape/.test(flat(c)), 'a shell should say the 5th is not in the shape');
 }
 {
-    const f = cs.CAGED.options['E'];
-    const c = explainChord({ rootNote: 'G', qualityKey: 'Min7', category: 'CAGED', position: 'E', shape: shape(f, 'G'), tuningMidi: MIDI, tuningNotes: NOTES });
+    const f = cs.CAGED.options.Maj.options['E'];
+    const c = explainChord({ rootNote: 'G', qualityKey: 'Maj', category: 'CAGED', position: 'E', shape: shape(f, 'G'), tuningMidi: MIDI, tuningNotes: NOTES });
     show(c);
     check(c.title === 'G Major', `CAGED title should be G Major, got ${c.title}`);
+    // a stale quality (left over from another category) reads as major
+    const stale = explainChord({ rootNote: 'G', qualityKey: 'Min7', category: 'CAGED', position: 'E', shape: shape(f, 'G'), tuningMidi: MIDI, tuningNotes: NOTES });
+    check(stale.title === 'G Major', `a stale quality in CAGED should read as major, got ${stale.title}`);
+}
+{
+    // CAGED minor: the same five forms with the 3rd lowered
+    for (const shapeName of ['C', 'A', 'G', 'E', 'D']) {
+        const f = cs.CAGED.options.Min.options[shapeName];
+        const c = explainChord({ rootNote: 'G', qualityKey: 'Min', category: 'CAGED', position: shapeName, shape: shape(f, 'G'), tuningMidi: MIDI, tuningNotes: NOTES });
+        check(c.title === 'G Minor', `CAGED ${shapeName} minor title should be G Minor, got ${c.title}`);
+        const chord = section(c, 'The chord') as any;
+        check(chord.items.map((i: any) => i.label).join(' ') === 'G Bb D', `Gm notes: ${chord.items.map((i: any) => i.label)}`);
+        check(/3rd lowered/.test(flat(c)), `CAGED ${shapeName} minor should say its 3rd is lowered`);
+    }
 }
 {
     // "All positions" view: no dots to describe
@@ -138,28 +152,37 @@ const shape = (formula: any, root: string) => lowestVoicing(root, formula) as an
     check(/W – H – W – W – H – W\+H – H/.test((section(h, 'The scale') as any).intro), `A harmonic minor steps: ${(section(h, 'The scale') as any).intro}`);
 }
 
-// ── Voicing pictures: "closed stack, then drop" must reproduce every real seventh-chord shape ──
+// ── Voicing pictures: every real seventh-chord shape, in every root, must get the full sequence
+//    (default piano stack -> [inversion] -> drops/adjust/raises -> the shape), and the sequence
+//    starts from the root-position stack: Cmaj7 reads C - E - G - B ──
 {
+    const ROOTS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
     let total = 0;
     let derived = 0;
-    for (const [vt, vn] of Object.entries<any>(cs.Sevenths.options)) {
-        // Raise 3/1 of 2 has no string-set level: its qualities sit directly under it
-        for (const sn of vt === 'Raise 3/1 of 2' ? [vn] : Object.values<any>(vn.options)) {
-            for (const [q, qn] of Object.entries<any>(sn.options)) {
-                for (const [pos, f] of Object.entries<any>(qn.options ?? {})) {
-                    const all = generateAllVoicingsForShape('C', f, map, MIDI);
-                    if (!all.length) continue;
-                    const s = shape(f, 'C');
-                    const c = explainChord({ rootNote: 'C', qualityKey: q, category: 'Sevenths', voicingType: vt, position: pos, shape: s, tuningMidi: MIDI, tuningNotes: NOTES });
-                    const about: any = c.sections.find(x => x.title.startsWith('About'));
-                    total++;
-                    if (about?.figures?.[0]?.caption.startsWith('Start with')) derived++;
-                    else check(false, `no drop derivation for ${vt} / ${q} / ${pos}`);
+    for (const root of ROOTS) {
+        for (const [vt, vn] of Object.entries<any>(cs.Sevenths.options)) {
+            // Raise 3/1 of 2 has no string-set level: its qualities sit directly under it
+            for (const sn of vt === 'Raise 3/1 of 2' ? [vn] : Object.values<any>(vn.options)) {
+                for (const [q, qn] of Object.entries<any>(sn.options)) {
+                    for (const [pos, f] of Object.entries<any>(qn.options ?? {})) {
+                        const all = generateAllVoicingsForShape(root, f, map, MIDI);
+                        if (!all.length) continue;
+                        const s = shape(f, root);
+                        const c = explainChord({ rootNote: root, qualityKey: q, category: 'Sevenths', voicingType: vt, position: pos, shape: s, tuningMidi: MIDI, tuningNotes: NOTES });
+                        const about: any = c.sections.find(x => x.title.startsWith('About'));
+                        const first: string = about?.figures?.[0]?.caption ?? '';
+                        total++;
+                        if (!first.startsWith('Start with')) check(false, `no picture sequence for ${root} ${vt} / ${q} / ${pos}`);
+                        else {
+                            derived++;
+                            if (root === 'C' && q === 'Maj7') check(first.includes('C – E – G – B'), `Cmaj7 should start from the stack C - E - G - B: ${first}`);
+                        }
+                    }
                 }
             }
         }
     }
-    console.log(`voicing pictures: derived ${derived}/${total}`);
+    console.log(`voicing pictures: full sequence for ${derived}/${total} (12 roots)`);
 }
 
 if (failed) {

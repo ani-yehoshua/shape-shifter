@@ -114,7 +114,8 @@ function describeChange(from: ChordQuality, to: ChordQuality): { text: string; c
 export function explainChord(input: ChordInfoInput): InfoContent {
     const { rootNote, category, voicingType, position, shape, tuningMidi, tuningNotes, altCount = 1 } = input;
     const isCaged = category === 'CAGED';
-    const qualityKey = isCaged ? 'Maj' : input.qualityKey;
+    // CAGED comes in major and minor; anything else (a stale selection) reads as major
+    const qualityKey = isCaged && input.qualityKey !== 'Min' ? 'Maj' : input.qualityKey;
     const quality = CHORD_QUALITIES[qualityKey];
     const info = QUALITY_INFO[qualityKey];
     const sections: InfoSection[] = [];
@@ -161,10 +162,15 @@ export function explainChord(input: ChordInfoInput): InfoContent {
 
         const paragraphs: string[] = [];
         if (isCaged) {
+            const minor = qualityKey === 'Min';
             paragraphs.push(
                 position && position !== 'All'
-                    ? `This is the ${position}-shape: the fingering of the open ${position} chord, moved up the neck.`
-                    : 'Each CAGED shape is the fingering of an open chord, moved up the neck.',
+                    ? minor
+                        ? `This is the ${position}-shape in minor: the fingering of the open ${position} chord with its 3rd lowered a half step, moved up the neck.`
+                        : `This is the ${position}-shape: the fingering of the open ${position} chord, moved up the neck.`
+                    : minor
+                      ? 'Each CAGED shape is the fingering of an open chord with its 3rd lowered a half step, moved up the neck.'
+                      : 'Each CAGED shape is the fingering of an open chord, moved up the neck.',
             );
         } else {
             const bassDegree = low.degree ?? 1;
@@ -234,9 +240,13 @@ export function explainChord(input: ChordInfoInput): InfoContent {
             ? 'Switch to Intervals and find the 3rd and the 7th. Those two notes decide whether the chord sounds major, minor or dominant.'
             : 'Switch to Intervals and find the 3rd. It decides whether the chord sounds major or minor.',
     );
-    // CAGED has no quality picker, so only suggest changing the quality where you can
-    if (neighbours[0] && !isCaged) tries.push(`Change the quality to ${qualityTitle(neighbours[0].k)} and see which dots move: ${neighbours[0].change.text}.`);
-    if (isCaged) tries.push('Step through the five shapes (C, A, G, E, D) at the same root. They are all the same chord in different places on the neck.');
+    // CAGED only offers major and minor, so its suggestion is that one swap
+    if (isCaged) {
+        tries.push(`Switch to ${qualityKey === 'Min' ? 'Major' : 'Minor'} and see which dot moves: the 3rd, by a half step.`);
+        tries.push('Step through the five shapes (C, A, G, E, D) at the same root. They are all the same chord in different places on the neck.');
+    } else if (neighbours[0]) {
+        tries.push(`Change the quality to ${qualityTitle(neighbours[0].k)} and see which dots move: ${neighbours[0].change.text}.`);
+    }
     if (altCount > 1) tries.push('Step through the alternate shapes. The notes are the same; only the register and fingering change.');
     sections.push({ kind: 'text', title: 'Try this', paragraphs: tries });
 
