@@ -550,6 +550,20 @@ const persistedSession: SessionState = (() => {
 
 // ─── main page ────────────────────────────────────────────────────────────────
 
+// Scale Chords is paused while its data is rebuilt (docs/phase-2-harmony-
+// engine.md). Everything for the mode is still in this file; this flag only
+// closes the doors into it: the two tabs, and a saved session that was last
+// left on it. Flip to true to bring it back.
+const SCALE_CHORDS_ENABLED = false;
+
+function SoonBadge() {
+    return (
+        <span className='ml-1.5 align-middle rounded-full bg-olive/20 border border-olive/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-olive'>
+            Soon
+        </span>
+    );
+}
+
 export default function Home() {
     const router = useRouter();
     const hasPro = useSubscription();
@@ -917,7 +931,12 @@ export default function Home() {
             setCurrentRootNote(p.currentRootNote);
         if (p.showIntervals !== undefined) setShowIntervals(p.showIntervals);
         if (p.capo !== undefined) setCapo(p.capo);
-        if (p.selectedMode !== undefined) setSelectedMode(p.selectedMode);
+        if (p.selectedMode !== undefined)
+            setSelectedMode(
+                p.selectedMode === "scaleChords" && !SCALE_CHORDS_ENABLED
+                    ? "chords"
+                    : p.selectedMode,
+            );
         if (p.selectedNoteGroup !== undefined)
             setSelectedNoteGroup(p.selectedNoteGroup);
         if (p.selectedScale !== undefined) setSelectedScale(p.selectedScale);
@@ -3045,15 +3064,27 @@ export default function Home() {
                                             Scales
                                         </button>
                                         <button
+                                            disabled={!SCALE_CHORDS_ENABLED}
+                                            title={
+                                                SCALE_CHORDS_ENABLED
+                                                    ? undefined
+                                                    : "Coming soon"
+                                            }
                                             onClick={() =>
                                                 setSelectedMode("scaleChords")
                                             }
                                             className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                                                selectedMode === "scaleChords"
-                                                    ? "bg-sand-4 text-sand-1 font-semibold"
-                                                    : "bg-sand-1 text-ink hover:bg-sand-2"
+                                                !SCALE_CHORDS_ENABLED
+                                                    ? "bg-sand-1 text-ink/40 cursor-not-allowed"
+                                                    : selectedMode ===
+                                                        "scaleChords"
+                                                      ? "bg-sand-4 text-sand-1 font-semibold"
+                                                      : "bg-sand-1 text-ink hover:bg-sand-2"
                                             }`}>
                                             Scale Chords
+                                            {!SCALE_CHORDS_ENABLED && (
+                                                <SoonBadge />
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -3632,11 +3663,18 @@ export default function Home() {
                                         Scales
                                     </button>
                                     <button
+                                        disabled={!SCALE_CHORDS_ENABLED}
+                                        title={
+                                            SCALE_CHORDS_ENABLED
+                                                ? undefined
+                                                : "Coming soon"
+                                        }
                                         onClick={() =>
                                             setSelectedMode("scaleChords")
                                         }
-                                        className={`px-6 py-1.5 text-sm font-medium transition-colors ${selectedMode === "scaleChords" ? "bg-sand-4 text-sand-1 font-semibold" : "bg-sand-1 text-ink hover:bg-sand-2"}`}>
+                                        className={`px-6 py-1.5 text-sm font-medium transition-colors ${!SCALE_CHORDS_ENABLED ? "bg-sand-1 text-ink/40 cursor-not-allowed" : selectedMode === "scaleChords" ? "bg-sand-4 text-sand-1 font-semibold" : "bg-sand-1 text-ink hover:bg-sand-2"}`}>
                                         Scale Chords
+                                        {!SCALE_CHORDS_ENABLED && <SoonBadge />}
                                     </button>
                                 </div>
 
