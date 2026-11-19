@@ -18,7 +18,11 @@ import {
 } from "@/lib/API";
 import { generateAllVoicingsForShape } from "@/lib/fretboardMap";
 import type { NotePosition } from "@/lib/fretboardMap";
-import { findDrawMatches, shapeForMatch } from "@/lib/drawMatches";
+import {
+    findDrawMatches,
+    scaleModeName,
+    shapeForMatch,
+} from "@/lib/drawMatches";
 import type { DrawMatch } from "@/lib/drawMatches";
 import CapoButton from "@/components/CapoButton";
 import { SCALE_SHAPES } from "@/lib/Shapes/Scales";
@@ -840,7 +844,7 @@ export default function DrawMode({
                             : null;
                     results.push({
                         scaleName: entry.name,
-                        modeName: entry.positions[d]?.modeName,
+                        modeName: scaleModeName(entry, d),
                         exact: drawnSemis.length === rotated.size,
                         degreeMap,
                     });

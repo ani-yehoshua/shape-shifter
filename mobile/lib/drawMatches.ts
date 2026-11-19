@@ -26,8 +26,9 @@ const QUALITY_DISPLAY: Record<string, string> = {
 
 // open strings of standard tuning, high to low (the order every string index uses)
 const STANDARD_OPEN = ['E', 'B', 'G', 'D', 'A', 'E'];
-// scale drawings need a few notes to say anything; fewer would match half the library
-const MIN_NOTES_FOR_SCALES = 4;
+// scale drawings need a few distinct notes to say anything (the same threshold as the
+// scale names under the chord label); fewer would match half the library
+const MIN_PITCH_CLASSES_FOR_SCALES = 3;
 const GROUP_ORDER = ['7-note', '5-note', '6-note', '8-note', '9-note', 'Symmetrical'];
 
 export type DrawMatch = {
@@ -161,9 +162,28 @@ function addedNoteDegrees(modeName: string | undefined): Map<number, number> {
     return out;
 }
 
-function scaleMatches({ drawnKeys, root, tuning }: DrawMatchInput): DrawMatch[] {
+/**
+ * The name of mode `d` of a scale (d = index into its intervals). The per-
+ * interval patterns have one position per interval with the added notes left
+ * unnamed, so read the name from there; the default pattern's list is one name
+ * per base mode and doesn't line up with interval indices.
+ */
+export function scaleModeName(entry: { positions: { modeName?: string }[]; altPatterns: Record<string, { modeName?: string }[][]> }, d: number): string | undefined {
+    const perInterval = Object.entries(entry.altPatterns).find(([key]) => key.endsWith('nps'));
+    return (perInterval ? perInterval[1][0]?.[d]?.modeName : undefined) ?? entry.positions[d]?.modeName;
+}
+
+/**
+ * Every place the drawn notes sit inside a scale. The drawn root is a mode's
+ * tonic (so its parent scale is the root minus that mode's interval), and the
+ * notes can lie in ANY box of the parent scale, not only the one that starts on
+ * the tonic: C major drawn at frets 3-5 is in the box that starts on G. One row
+ * per mode, pattern and variant (the first box that holds the notes), so every
+ * mode that fits by pitch is listed whenever some box also holds the shape.
+ */
+function scaleMatches({ drawnSemis, drawnKeys, root, tuning, fretboardMap }: DrawMatchInput): DrawMatch[] {
     const drawn = [...drawnKeys];
-    if (drawn.length < MIN_NOTES_FOR_SCALES) return [];
+    if (drawnSemis.length < MIN_PITCH_CLASSES_FOR_SCALES) return [];
     const rootIdx = NOTES.findIndex(pair => pair.includes(root));
     if (rootIdx < 0) return [];
     // how far each string is tuned from standard (signed, so Drop D is -2 on the low string)
@@ -178,30 +198,42 @@ function scaleMatches({ drawnKeys, root, tuning }: DrawMatchInput): DrawMatch[] 
     for (const [group, scales] of Object.entries(SCALE_SHAPES).sort((a, b) => rank(a[0]) - rank(b[0]))) {
         for (const entry of Object.values(scales)) {
             const parentDegrees = entry.degrees.map(d => parseInt(d.match(/\d+/)?.[0] ?? '1'));
-            for (const [patternKey, variants] of Object.entries(entry.altPatterns)) {
-                variants.forEach((positions, variantIdx) => {
-                    positions.forEach((position, positionIdx) => {
-                        if (!position.notes.length) return;
-                        // the drawn root is the mode's tonic: the position's lowest note
-                        const tonic = position.notes[0];
-                        const rootFret = ((((rootIdx - tonic.semitones - 7) % 12) + 12) % 12);
-                        const base = position.notes.map(n => n.fretOffset + rootFret - (delta[n.string] ?? 0));
-                        // the app shows a position as is, or an octave lower when it sits above the 12th fret
-                        for (const shift of Math.min(...base) >= 12 ? [0, -12] : [0]) {
-                            const frets = base.map(f => f + shift);
-                            const have = new Set(position.notes.map((n, i) => `${n.string}:${frets[i]}`));
-                            if (!drawn.every(key => have.has(key))) continue;
-                            const tonicParentDegree = parentDegrees[tonic.degree];
-                            const addedDegrees = addedNoteDegrees(position.modeName);
+            for (let d = 0; d < entry.intervals.length; d++) {
+                const tonicSemi = entry.intervals[d];
+                // every drawn pitch class must be a note of this mode
+                const modeSemis = new Set(entry.intervals.map(i => (i - tonicSemi + 12) % 12));
+                if (!drawnSemis.every(s => modeSemis.has(s))) continue;
+
+                // the parent scale is the root minus this mode's interval; its box offsets are relative to its root fret
+                const rootFret = (((rootIdx - tonicSemi - 7) % 12) + 12) % 12;
+                const modeName = scaleModeName(entry, d);
+                const addedDegrees = addedNoteDegrees(modeName);
+                const rowsBefore = results.length;
+
+                for (const [patternKey, variants] of Object.entries(entry.altPatterns)) {
+                    variants.forEach((positions, variantIdx) => {
+                        for (let positionIdx = 0; positionIdx < positions.length; positionIdx++) {
+                            const position = positions[positionIdx];
+                            if (!position.notes.length) continue;
+                            const base = position.notes.map(n => n.fretOffset + rootFret - (delta[n.string] ?? 0));
+                            // the same box also sits an octave lower or higher when that stays on the 24 frets
+                            const shift = [0, -12, 12].find(s => {
+                                const frets = base.map(f => f + s);
+                                if (Math.min(...frets) < 0 || Math.max(...frets) > 24) return false;
+                                const have = new Set(position.notes.map((n, i) => `${n.string}:${frets[i]}`));
+                                return drawn.every(key => have.has(key));
+                            });
+                            if (shift === undefined) continue;
                             results.push({
                                 tab: 'Scales',
-                                displayLabel: position.modeName ?? `${entry.name} Pos. ${positionIdx + 1}`,
+                                displayLabel: modeName ?? `${entry.name} Pos. ${d + 1}`,
                                 contextLabel: [
                                     'Scales',
                                     group,
                                     entry.name,
                                     patternKey,
                                     variants.length > 1 ? `Variant ${variantIdx + 1}/${variants.length}` : '',
+                                    `Box ${positionIdx + 1}/${positions.length}`,
                                 ]
                                     .filter(Boolean)
                                     .join(' · '),
@@ -210,22 +242,53 @@ function scaleMatches({ drawnKeys, root, tuning }: DrawMatchInput): DrawMatch[] 
                                 posKey: '',
                                 altIndex: 0,
                                 scaleNotes: position.notes.map((n, i) => {
-                                    const semitones = (n.semitones - tonic.semitones + 12) % 12;
+                                    const semitones = (n.semitones - tonicSemi + 12) % 12;
                                     return {
                                         string: n.string,
-                                        fret: frets[i],
+                                        fret: base[i] + shift,
                                         semitones,
                                         degree:
                                             addedDegrees.get(semitones) ??
-                                            ((parentDegrees[n.degree] - tonicParentDegree + 7) % 7) + 1,
-                                        isTonic: n.semitones === tonic.semitones,
+                                            ((parentDegrees[n.degree] - parentDegrees[d] + 7) % 7) + 1,
+                                        isTonic: n.semitones === tonicSemi,
                                     };
                                 }),
                             });
-                            break;
+                            break; // the first box that holds the notes is this pattern's answer
                         }
                     });
-                });
+                }
+
+                // The notes belong to this mode but no single box holds them all (an open
+                // chord spread over two boxes, say): still list it, as the whole scale on the neck.
+                if (results.length === rowsBefore) {
+                    const rootSemi = noteNameToSemitone(root);
+                    const degreeBySemi = new Map<number, number>();
+                    entry.intervals.forEach((iv, i) => {
+                        const s = (iv - tonicSemi + 12) % 12;
+                        degreeBySemi.set(s, addedDegrees.get(s) ?? ((parentDegrees[i] - parentDegrees[d] + 7) % 7) + 1);
+                    });
+                    const neck: NotePosition[] = [];
+                    fretboardMap.forEach((row, string) =>
+                        row.forEach((cell, fret) => {
+                            const name = (cell || '').split('/')[0];
+                            if (!name) return;
+                            const semitones = (((noteNameToSemitone(name) - rootSemi) % 12) + 12) % 12;
+                            const degree = degreeBySemi.get(semitones);
+                            if (degree !== undefined) neck.push({ string, fret, semitones, degree, isTonic: semitones === 0 });
+                        }),
+                    );
+                    results.push({
+                        tab: 'Scales',
+                        displayLabel: modeName ?? `${entry.name} Pos. ${d + 1}`,
+                        contextLabel: ['Scales', group, entry.name, 'Whole neck'].join(' · '),
+                        qualityKey: '',
+                        finalFormulas: {},
+                        posKey: '',
+                        altIndex: 0,
+                        scaleNotes: neck,
+                    });
+                }
             }
         }
     }

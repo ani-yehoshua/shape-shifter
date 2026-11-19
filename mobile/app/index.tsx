@@ -58,7 +58,7 @@ import Svg, { Circle, Path, Rect } from "react-native-svg";
 import FretboardVertical from "../components/FretboardVertical";
 import InfoSheet from "../components/InfoSheet";
 import { explainChord, explainScale } from "../lib/theory";
-import { findDrawMatches, shapeForMatch, type DrawMatch } from "../lib/drawMatches";
+import { findDrawMatches, scaleModeName, shapeForMatch, type DrawMatch } from "../lib/drawMatches";
 import { PaywallModal, ProWelcomeModal, SignInToUnlockModal } from "../components/ProModals";
 import NotesIntervalsToggle from "../components/NotesIntervalsToggle";
 import RootNoteButton from "../components/RootNoteButton";
@@ -2114,7 +2114,7 @@ export default function ChordsScreen() {
                             : null;
                     results.push({
                         scaleName: entry.name,
-                        modeName: entry.positions[d]?.modeName,
+                        modeName: scaleModeName(entry, d),
                         exact: drawnSemis.length === rotated.size,
                         degreeMap,
                     });
