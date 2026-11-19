@@ -18,6 +18,8 @@ import {
 } from "@/lib/API";
 import { generateAllVoicingsForShape } from "@/lib/fretboardMap";
 import type { NotePosition } from "@/lib/fretboardMap";
+import { findDrawMatches, shapeForMatch } from "@/lib/drawMatches";
+import type { DrawMatch } from "@/lib/drawMatches";
 import CapoButton from "@/components/CapoButton";
 import { SCALE_SHAPES } from "@/lib/Shapes/Scales";
 import { CHORD_SHAPES } from "@/lib/Shapes/Chords";
@@ -197,107 +199,7 @@ const wrap12 = (n: number) => ((n % 12) + 12) % 12;
 
 // ─── flat chord finder ────────────────────────────────────────────────────────
 
-type FlatChordMatch = {
-    qualityKey: string;
-    displayLabel: string;
-    contextLabel: string;
-    finalFormulas: Record<string, any>;
-    posKey: string;
-};
-
-function findChordsAtPositions(
-    drawnSemis: number[],
-    drawnPositions: Map<number, number>,
-    shapes: Record<string, any>,
-    root: string,
-    fretboardMap: string[][],
-    pitchOnly = false,
-): FlatChordMatch[] {
-    if (!drawnSemis.length) return [];
-    const results: FlatChordMatch[] = [];
-
-    function semisMatch(formula: any): boolean {
-        if (!Array.isArray(formula?.pattern)) return false;
-        const semis = new Set<number>(
-            formula.pattern.map((n: any) => n.semitones as number),
-        );
-        return drawnSemis.every(s => semis.has(s));
-    }
-
-    function voicingCoversPositions(formula: any): boolean {
-        if (pitchOnly) return true;
-        const raw =
-            generateAllVoicingsForShape(root, formula, fretboardMap) || [];
-        const voicings: NotePosition[][] = Array.isArray(raw[0])
-            ? (raw as any)
-            : [raw as any];
-        return voicings.some(v =>
-            [...drawnPositions.entries()].every(([s, f]) =>
-                v.some((n: NotePosition) => n.string === s && n.fret === f),
-            ),
-        );
-    }
-
-    function formulaMatches(formula: any): boolean {
-        if (!semisMatch(formula)) return false;
-        return voicingCoversPositions(formula);
-    }
-
-    function anyFormulaMatches(formula: any): boolean {
-        if (formulaMatches(formula)) return true;
-        if (Array.isArray(formula?.altShapes)) {
-            return formula.altShapes.some((alt: any) => formulaMatches(alt));
-        }
-        return false;
-    }
-
-    function isPosBag(options: Record<string, any>): boolean {
-        const v = Object.values(options)[0] as any;
-        return (
-            !!v && typeof v === "object" && ("pattern" in v || "altShapes" in v)
-        );
-    }
-
-    function walk(
-        node: any,
-        pathSegments: string[],
-        qualityKey: string | null,
-    ) {
-        if (!node || typeof node !== "object") return;
-        if (node.options && isPosBag(node.options)) {
-            if (!qualityKey) return;
-            const matchingPosKey = Object.keys(node.options).find(pk =>
-                anyFormulaMatches(node.options[pk]),
-            );
-            if (matchingPosKey !== undefined) {
-                results.push({
-                    qualityKey,
-                    displayLabel: QUALITY_DISPLAY[qualityKey] ?? qualityKey,
-                    contextLabel: pathSegments.slice(1, -1).join(" · "),
-                    finalFormulas: node.options,
-                    posKey: matchingPosKey,
-                });
-            }
-            return;
-        }
-        if (node.options) {
-            const isQualityLevel = node.levelName === "Chord Qualities";
-            for (const [key, child] of Object.entries(node.options)) {
-                walk(
-                    child,
-                    [...pathSegments, key],
-                    isQualityLevel ? key : qualityKey,
-                );
-            }
-        }
-    }
-
-    for (const [category, node] of Object.entries(shapes)) {
-        walk(node, [category], null);
-    }
-
-    return results;
-}
+// (chord + scale matching for "Find chord" lives in lib/drawMatches.ts, shared with the mobile app)
 
 const CHROMATIC_INTERVALS = [
     "1",
@@ -435,9 +337,7 @@ export default function DrawMode({
         onCapoChange?.(next);
     };
     const [anchored, setAnchored] = React.useState(false);
-    const [anchorMatches, setAnchorMatches] = React.useState<FlatChordMatch[]>(
-        [],
-    );
+    const [anchorMatches, setAnchorMatches] = React.useState<DrawMatch[]>([]);
     const [anchorIndex, setAnchorIndex] = React.useState(0);
     const [chordPickerOpen, setChordPickerOpen] = React.useState(false);
     const [octaveUp, setOctaveUp] = React.useState(false);
@@ -522,63 +422,20 @@ export default function DrawMode({
                     ),
                 ].sort((a, b) => a - b);
 
-                const matches = findChordsAtPositions(
-                    newSemis,
-                    newMap,
-                    allChordShapes,
-                    effectiveRoot,
+                const matches = findDrawMatches({
+                    drawnSemis: newSemis,
+                    drawnPositions: newMap,
+                    drawnKeys: newSelected,
+                    chordShapes: allChordShapes,
+                    root: effectiveRoot,
                     fretboardMap,
-                );
+                    tuning,
+                });
                 setAnchorMatches(matches);
                 setAnchorIndex(0);
                 if (matches[0]) {
-                    const match = matches[0];
-                    setPickedChord({
-                        finalFormulas: match.finalFormulas,
-                        posKey: match.posKey,
-                        label: match.displayLabel,
-                    });
-                    setSelectedPosition(match.posKey);
-                    setSelectedAltShape(0);
-                    setOctaveUp(false);
-                    const posData = match.finalFormulas[match.posKey] as any;
-                    const variants = [
-                        posData,
-                        ...(Array.isArray(posData.altShapes)
-                            ? posData.altShapes
-                            : []),
-                    ];
-                    for (const formula of variants) {
-                        const raw =
-                            generateAllVoicingsForShape(
-                                root,
-                                formula,
-                                fretboardMap,
-                            ) || [];
-                        const voicings: NotePosition[][] = Array.isArray(raw[0])
-                            ? (raw as any)
-                            : [raw as any];
-                        const hit = voicings.find(v =>
-                            [...newMap.entries()].every(([s, f]) =>
-                                (v as NotePosition[]).some(
-                                    n => n.string === s && n.fret === f,
-                                ),
-                            ),
-                        );
-                        if (hit) {
-                            setBrowsedVoicing(
-                                (hit as NotePosition[])
-                                    .slice()
-                                    .sort(
-                                        (a, b) =>
-                                            a.string - b.string ||
-                                            (a.fret ?? 0) - (b.fret ?? 0),
-                                    ),
-                            );
-                            return;
-                        }
-                    }
-                    setBrowsedVoicing(null);
+                    // selectedAsMap is stale here, so hand the fresh map in
+                    applyAnchorMatch(matches[0], newMap);
                 } else {
                     setPickedChord(null);
                     setBrowsedVoicing(null);
@@ -773,54 +630,24 @@ export default function DrawMode({
     }, [selected, fretboardMap, effectiveRoot, browsedVoicing]);
 
     const applyAnchorMatch = React.useCallback(
-        (match: FlatChordMatch) => {
-            setPickedChord({
-                finalFormulas: match.finalFormulas,
-                posKey: match.posKey,
-                label: match.displayLabel,
-            });
+        (match: DrawMatch, positions: Map<number, number> = selectedAsMap) => {
+            // a scale match has no chord behind it, so there is no picked chord or alt shapes
+            setPickedChord(
+                match.tab === "Chords"
+                    ? {
+                          finalFormulas: match.finalFormulas,
+                          posKey: match.posKey,
+                          label: match.displayLabel,
+                      }
+                    : null,
+            );
             setSelectedPosition(match.posKey);
-            setSelectedAltShape(0);
+            setSelectedAltShape(match.altIndex);
             setOctaveUp(false);
-
-            // Find the voicing covering the drawn positions directly from match formulas
-            // (can't use pickVoicingFor here — finalFormulas memo hasn't updated yet)
-            const posData = match.finalFormulas[match.posKey] as any;
-            const variants = [
-                posData,
-                ...(Array.isArray(posData.altShapes) ? posData.altShapes : []),
-            ];
-            for (const formula of variants) {
-                const raw =
-                    generateAllVoicingsForShape(
-                        effectiveRoot,
-                        formula,
-                        fretboardMap,
-                    ) || [];
-                const voicings: NotePosition[][] = Array.isArray(raw[0])
-                    ? (raw as any)
-                    : [raw as any];
-                const hit = voicings.find(v =>
-                    [...selectedAsMap.entries()].every(([s, f]) =>
-                        (v as NotePosition[]).some(
-                            n => n.string === s && n.fret === f,
-                        ),
-                    ),
-                );
-                if (hit) {
-                    setBrowsedVoicing(
-                        (hit as NotePosition[])
-                            .slice()
-                            .sort(
-                                (a, b) =>
-                                    a.string - b.string ||
-                                    (a.fret ?? 0) - (b.fret ?? 0),
-                            ),
-                    );
-                    return;
-                }
-            }
-            setBrowsedVoicing(null);
+            // can't use pickVoicingFor here — the finalFormulas memo hasn't updated yet
+            setBrowsedVoicing(
+                shapeForMatch(match, positions, effectiveRoot, fretboardMap),
+            );
         },
         [effectiveRoot, fretboardMap, selectedAsMap],
     );
@@ -839,13 +666,15 @@ export default function DrawMode({
         const drawnSemis = [
             ...new Set(chordShape.map(n => n.semitones ?? 0)),
         ].sort((a, b) => a - b);
-        const matches = findChordsAtPositions(
+        const matches = findDrawMatches({
             drawnSemis,
-            selectedAsMap,
-            allChordShapes,
-            effectiveRoot,
+            drawnPositions: selectedAsMap,
+            drawnKeys: selected,
+            chordShapes: allChordShapes,
+            root: effectiveRoot,
             fretboardMap,
-        );
+            tuning,
+        });
         setAnchorMatches(matches);
         setAnchorIndex(0);
         setAnchored(true);
@@ -853,9 +682,11 @@ export default function DrawMode({
     }, [
         anchored,
         chordShape,
+        selected,
         selectedAsMap,
         effectiveRoot,
         fretboardMap,
+        tuning,
         applyAnchorMatch,
     ]);
 
@@ -888,13 +719,15 @@ export default function DrawMode({
                     .filter(v => v >= 0),
             ),
         ].sort((a, b) => a - b);
-        const matches = findChordsAtPositions(
-            newSemis,
-            selectedAsMap,
-            allChordShapes,
-            effectiveRoot,
+        const matches = findDrawMatches({
+            drawnSemis: newSemis,
+            drawnPositions: selectedAsMap,
+            drawnKeys: selected,
+            chordShapes: allChordShapes,
+            root: effectiveRoot,
             fretboardMap,
-        );
+            tuning,
+        });
         setAnchorMatches(matches);
         setAnchorIndex(0);
         setAnchored(true);
@@ -1254,8 +1087,8 @@ export default function DrawMode({
                             onClick={e => e.stopPropagation()}>
                             <div className='px-4 py-3 border-b border-ink/10 shrink-0'>
                                 <span className='text-sm font-bold text-ink'>
-                                    {anchorMatches.length} chord
-                                    {anchorMatches.length !== 1 ? "s" : ""}{" "}
+                                    {anchorMatches.length} match
+                                    {anchorMatches.length !== 1 ? "es" : ""}{" "}
                                     found
                                 </span>
                             </div>
@@ -1383,7 +1216,7 @@ export default function DrawMode({
                                 anchorMatches.length > 0 &&
                                 setChordPickerOpen(true)
                             }
-                            className='flex flex-col items-center min-w-[6rem] text-center'>
+                            className='flex flex-col items-center min-w-[6rem] max-w-[14rem] text-center'>
                             {anchorMatches.length === 0 ? (
                                 <span className='text-xs text-ink/50'>
                                     No matches
@@ -1777,7 +1610,7 @@ export default function DrawMode({
                                 anchorMatches.length > 0 &&
                                 setChordPickerOpen(true)
                             }
-                            className='flex flex-col items-center min-w-[8rem] text-center'>
+                            className='flex flex-col items-center min-w-[8rem] max-w-[28rem] text-center'>
                             {anchorMatches.length === 0 ? (
                                 <span className='text-sm text-ink/50'>
                                     No matches

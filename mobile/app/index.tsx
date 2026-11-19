@@ -58,6 +58,7 @@ import Svg, { Circle, Path, Rect } from "react-native-svg";
 import FretboardVertical from "../components/FretboardVertical";
 import InfoSheet from "../components/InfoSheet";
 import { explainChord, explainScale } from "../lib/theory";
+import { findDrawMatches, shapeForMatch, type DrawMatch } from "../lib/drawMatches";
 import { PaywallModal, ProWelcomeModal, SignInToUnlockModal } from "../components/ProModals";
 import NotesIntervalsToggle from "../components/NotesIntervalsToggle";
 import RootNoteButton from "../components/RootNoteButton";
@@ -506,107 +507,7 @@ function spellDegree(semitone: number, degreeNum: number): string {
 
 const wrap12 = (n: number) => ((n % 12) + 12) % 12;
 
-type FlatChordMatch = {
-    qualityKey: string;
-    displayLabel: string;
-    contextLabel: string;
-    finalFormulas: Record<string, any>;
-    posKey: string;
-};
-
-function findChordsAtPositions(
-    drawnSemis: number[],
-    drawnPositions: Map<number, number>,
-    shapes: Record<string, any>,
-    root: string,
-    fretboardMap: string[][],
-    pitchOnly = false,
-): FlatChordMatch[] {
-    if (!drawnSemis.length) return [];
-    const results: FlatChordMatch[] = [];
-
-    function semisMatch(formula: any): boolean {
-        if (!Array.isArray(formula?.pattern)) return false;
-        const semis = new Set<number>(
-            formula.pattern.map((n: any) => n.semitones as number),
-        );
-        return drawnSemis.every(s => semis.has(s));
-    }
-
-    function voicingCoversPositions(formula: any): boolean {
-        if (pitchOnly) return true;
-        const raw =
-            generateAllVoicingsForShape(root, formula, fretboardMap) || [];
-        const voicings: NotePosition[][] = Array.isArray(raw[0])
-            ? (raw as any)
-            : [raw as any];
-        return voicings.some(v =>
-            [...drawnPositions.entries()].every(([s, f]) =>
-                v.some((n: NotePosition) => n.string === s && n.fret === f),
-            ),
-        );
-    }
-
-    function formulaMatches(formula: any): boolean {
-        if (!semisMatch(formula)) return false;
-        return voicingCoversPositions(formula);
-    }
-
-    function anyFormulaMatches(formula: any): boolean {
-        if (formulaMatches(formula)) return true;
-        if (Array.isArray(formula?.altShapes)) {
-            return formula.altShapes.some((alt: any) => formulaMatches(alt));
-        }
-        return false;
-    }
-
-    function isPosBag(options: Record<string, any>): boolean {
-        const v = Object.values(options)[0] as any;
-        return (
-            !!v && typeof v === "object" && ("pattern" in v || "altShapes" in v)
-        );
-    }
-
-    function walk(
-        node: any,
-        pathSegments: string[],
-        qualityKey: string | null,
-    ) {
-        if (!node || typeof node !== "object") return;
-        if (node.options && isPosBag(node.options)) {
-            if (!qualityKey) return;
-            const matchingPosKey = Object.keys(node.options).find(pk =>
-                anyFormulaMatches(node.options[pk]),
-            );
-            if (matchingPosKey !== undefined) {
-                results.push({
-                    qualityKey,
-                    displayLabel: QUALITY_DISPLAY[qualityKey] ?? qualityKey,
-                    contextLabel: pathSegments.slice(1, -1).join(" · "),
-                    finalFormulas: node.options,
-                    posKey: matchingPosKey,
-                });
-            }
-            return;
-        }
-        if (node.options) {
-            const isQualityLevel = node.levelName === "Chord Qualities";
-            for (const [key, child] of Object.entries(node.options)) {
-                walk(
-                    child,
-                    [...pathSegments, key],
-                    isQualityLevel ? key : qualityKey,
-                );
-            }
-        }
-    }
-
-    for (const [category, node] of Object.entries(shapes)) {
-        walk(node, [category], null);
-    }
-
-    return results;
-}
+// (chord + scale matching for "Find chord" lives in lib/drawMatches.ts, shared with the website)
 
 const CHROMATIC_INTERVALS = [
     "1",
@@ -1678,9 +1579,7 @@ export default function ChordsScreen() {
         label: string;
     } | null>(null);
     const [drawAnchored, setDrawAnchored] = useState(false);
-    const [drawAnchorMatches, setDrawAnchorMatches] = useState<
-        FlatChordMatch[]
-    >([]);
+    const [drawAnchorMatches, setDrawAnchorMatches] = useState<DrawMatch[]>([]);
     const [drawAnchorIndex, setDrawAnchorIndex] = useState(0);
     const [drawChordPickerOpen, setDrawChordPickerOpen] = useState(false);
     const [drawOctaveUp, setDrawOctaveUp] = useState(false);
@@ -1786,62 +1685,20 @@ export default function ChordsScreen() {
                 ),
             ].sort((a, b) => a - b);
 
-            const matches = findChordsAtPositions(
-                newSemis,
-                newMap,
-                allChordShapes,
-                drawEffectiveRoot,
-                drawFretboardMap,
-            );
+            const matches = findDrawMatches({
+                drawnSemis: newSemis,
+                drawnPositions: newMap,
+                drawnKeys: newSelected,
+                chordShapes: allChordShapes,
+                root: drawEffectiveRoot,
+                fretboardMap: drawFretboardMap,
+                tuning: drawTuning,
+            });
             setDrawAnchorMatches(matches);
             setDrawAnchorIndex(0);
             if (matches[0]) {
-                const match = matches[0];
-                setDrawPickedChord({
-                    finalFormulas: match.finalFormulas,
-                    posKey: match.posKey,
-                    label: match.displayLabel,
-                });
-                setDrawSelectedPosition(match.posKey);
-                setDrawSelectedAltShape(0);
-                setDrawOctaveUp(false);
-                const posData = match.finalFormulas[match.posKey] as any;
-                const variants = [
-                    posData,
-                    ...(Array.isArray(posData.altShapes)
-                        ? posData.altShapes
-                        : []),
-                ];
-                let picked: NotePosition[] | null = null;
-                for (const formula of variants) {
-                    const raw =
-                        generateAllVoicingsForShape(
-                            drawRoot,
-                            formula,
-                            drawFretboardMap,
-                        ) || [];
-                    const voicings: NotePosition[][] = Array.isArray(raw[0])
-                        ? (raw as any)
-                        : [raw as any];
-                    const hit = voicings.find(v =>
-                        [...newMap.entries()].every(([s, f]) =>
-                            (v as NotePosition[]).some(
-                                n => n.string === s && n.fret === f,
-                            ),
-                        ),
-                    );
-                    if (hit) {
-                        picked = (hit as NotePosition[])
-                            .slice()
-                            .sort(
-                                (a, b) =>
-                                    a.string - b.string ||
-                                    (a.fret ?? 0) - (b.fret ?? 0),
-                            );
-                        break;
-                    }
-                }
-                setDrawBrowsedVoicing(picked);
+                // drawSelectedAsMap is stale here, so hand the fresh map in
+                applyDrawAnchorMatch(matches[0], newMap);
             } else {
                 setDrawPickedChord(null);
                 setDrawBrowsedVoicing(null);
@@ -2033,52 +1890,26 @@ export default function ChordsScreen() {
         );
     }, [drawSelected, drawFretboardMap, drawEffectiveRoot, drawBrowsedVoicing]);
 
-    const applyDrawAnchorMatch = (match: FlatChordMatch) => {
-        setDrawPickedChord({
-            finalFormulas: match.finalFormulas,
-            posKey: match.posKey,
-            label: match.displayLabel,
-        });
+    const applyDrawAnchorMatch = (
+        match: DrawMatch,
+        positions: Map<number, number> = drawSelectedAsMap,
+    ) => {
+        // a scale match has no chord behind it, so there is no picked chord or alt shapes
+        setDrawPickedChord(
+            match.tab === "Chords"
+                ? {
+                      finalFormulas: match.finalFormulas,
+                      posKey: match.posKey,
+                      label: match.displayLabel,
+                  }
+                : null,
+        );
         setDrawSelectedPosition(match.posKey);
-        setDrawSelectedAltShape(0);
+        setDrawSelectedAltShape(match.altIndex);
         setDrawOctaveUp(false);
-
-        const posData = match.finalFormulas[match.posKey] as any;
-        const variants = [
-            posData,
-            ...(Array.isArray(posData.altShapes) ? posData.altShapes : []),
-        ];
-        for (const formula of variants) {
-            const raw =
-                generateAllVoicingsForShape(
-                    drawEffectiveRoot,
-                    formula,
-                    drawFretboardMap,
-                ) || [];
-            const voicings: NotePosition[][] = Array.isArray(raw[0])
-                ? (raw as any)
-                : [raw as any];
-            const hit = voicings.find(v =>
-                [...drawSelectedAsMap.entries()].every(([s, f]) =>
-                    (v as NotePosition[]).some(
-                        n => n.string === s && n.fret === f,
-                    ),
-                ),
-            );
-            if (hit) {
-                setDrawBrowsedVoicing(
-                    (hit as NotePosition[])
-                        .slice()
-                        .sort(
-                            (a, b) =>
-                                a.string - b.string ||
-                                (a.fret ?? 0) - (b.fret ?? 0),
-                        ),
-                );
-                return;
-            }
-        }
-        setDrawBrowsedVoicing(null);
+        setDrawBrowsedVoicing(
+            shapeForMatch(match, positions, drawEffectiveRoot, drawFretboardMap),
+        );
     };
 
     const handleDrawAnchor = () => {
@@ -2095,13 +1926,15 @@ export default function ChordsScreen() {
         const drawnSemis = [
             ...new Set(drawChordShape.map(n => n.semitones ?? 0)),
         ].sort((a, b) => a - b);
-        const matches = findChordsAtPositions(
+        const matches = findDrawMatches({
             drawnSemis,
-            drawSelectedAsMap,
-            allChordShapes,
-            drawEffectiveRoot,
-            drawFretboardMap,
-        );
+            drawnPositions: drawSelectedAsMap,
+            drawnKeys: drawSelected,
+            chordShapes: allChordShapes,
+            root: drawEffectiveRoot,
+            fretboardMap: drawFretboardMap,
+            tuning: drawTuning,
+        });
         setDrawAnchorMatches(matches);
         setDrawAnchorIndex(0);
         setDrawAnchored(true);
@@ -2134,13 +1967,15 @@ export default function ChordsScreen() {
                     .filter(v => v >= 0),
             ),
         ].sort((a, b) => a - b);
-        const matches = findChordsAtPositions(
-            newSemis,
-            drawSelectedAsMap,
-            allChordShapes,
-            drawEffectiveRoot,
-            drawFretboardMap,
-        );
+        const matches = findDrawMatches({
+            drawnSemis: newSemis,
+            drawnPositions: drawSelectedAsMap,
+            drawnKeys: drawSelected,
+            chordShapes: allChordShapes,
+            root: drawEffectiveRoot,
+            fretboardMap: drawFretboardMap,
+            tuning: drawTuning,
+        });
         setDrawAnchorMatches(matches);
         setDrawAnchorIndex(0);
         setDrawAnchored(true);
@@ -3048,8 +2883,8 @@ export default function ChordsScreen() {
                             style={styles.pickerSheet}
                             onPress={() => {}}>
                             <Text style={styles.pickerHeader}>
-                                {drawAnchorMatches.length} chord
-                                {drawAnchorMatches.length !== 1 ? "s" : ""}{" "}
+                                {drawAnchorMatches.length} match
+                                {drawAnchorMatches.length !== 1 ? "es" : ""}{" "}
                                 found
                             </Text>
                             <ScrollView>
@@ -4180,10 +4015,12 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     },
     anchorLabelWrap: {
         minWidth: 96,
+        maxWidth: 230,
         alignItems: "center",
     },
     anchorContext: {
         fontSize: 10,
+        textAlign: "center",
         color: `${colors.ink}99`,
     },
     anchorCount: {
